@@ -272,6 +272,8 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 | 1 Supporter per turn, also on the first player's turn 1 | App (turn 1); assumed (1 per turn) | ✓ |
 | Items: any number per turn | Assumed | ✓ |
 | A Trainer can only be played when its effect has something to do: no Potion without damage, no Rare Candy without a Stage 2 to put down | App | ✓ Each effect block checks this |
+| The same goes for "once during your turn" abilities: no Psy Shadow without a Psychic Active | Remco | ✓ |
+| When a Pokémon has more than one type of energy, the player picks which type is paid for a retreat, discarded or moved | Remco | ✗ the engine picks; step 4 in PROGRESS.md |
 | An effect that starts something can always be played, even if it can never pay off: Blaine without Ninetales, X Speed after retreating or with a Retreat Cost of 0 | App | ✓ timed effects always count as something to do |
 | 1 Tool per Pokémon | App | ✓ |
 | 1 Stadium per turn; it replaces the one in play; a Stadium with the same name can't be played | Card (Mesagoza), App | ✓ |
