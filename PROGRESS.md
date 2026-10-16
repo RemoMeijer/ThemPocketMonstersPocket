@@ -4,14 +4,14 @@ Updated 2026-10-16.
 
 ## Where we are
 
-The **game engine** is most of the way there. It plays Pocket games by the rules Remco confirmed, for 80% of all cards, and an independent checker watches every move. The **simulator around it** hasn't started yet: playing many games at once, stats, finding decks and a better player.
+The **game engine** is most of the way there. It plays Pocket games by the rules Remco confirmed, for 81% of all cards, and an independent checker watches every move. The **simulator around it** hasn't started yet: playing many games at once, stats, finding decks and a better player.
 
 | Part | State |
 |---|---|
 | Rules core: setup, turns, Energy Zone, attacking, retreating, evolving, Trainers, Tools, Stadiums (always-on effects), abilities, Special Conditions, Checkup, damage, winning | Built and checked. Missing: Stadium actions (R5), and the player choosing which energy to pay or discard |
 | Card data | Every set up to B4b: 2,319 unique cards from Limitless, cross-checked against deckgym-core |
-| Card effects | 1,871 of 2,319 cards (80%) playable. Trainers lag behind (table below) |
-| Checks | 21 rule tests, 31 effect tests, `check_states` (8.0M moves, 0 violations), and the memory and undefined-behaviour checker build is clean after the review fixes (the tests plus `check_states` on 4 decks) |
+| Card effects | 1,892 of 2,319 cards (81%) playable. Trainers lag behind and are being added in batches (table below, Next step 1) |
+| Checks | 21 rule tests, 33 effect tests, 35 compiler self-test examples, `check_states` (13.4M moves over 9 decks, 0 violations), and the memory and undefined-behaviour checker build is clean after coverage batch 1 (the tests plus `check_states` on 4 decks, the two coverage decks among them) |
 | Replayable games (seeds) | Not yet: every game seeds itself from `random_device` |
 | Simulation runner (many games, threads, stats) | Not started |
 | Finding decks (generate, play, rank) | Not started |
@@ -27,13 +27,13 @@ Code size: about 4,500 lines of C++ (engine and tests) and 900 lines of Python (
 
 | Kind | Playable |
 |---|---|
-| Pokémon | 1,808 / 2,167 |
-| Supporters | 40 / 82 |
-| Items | 14 / 31 |
-| Tools | 6 / 26 |
-| Stadiums | 3 / 13 |
+| Pokémon | 1,809 / 2,167 |
+| Supporters | 54 / 82 |
+| Items | 16 / 31 |
+| Tools | 9 / 26 |
+| Stadiums | 4 / 13 |
 
-Trainers matter most for deck finding because they go into most decks. The missing ones include Mars, Lusamine, Penny, Rescue Scarf, Lum Berry, Pokémon Flute, Electrical Cord and most of the new Stadiums.
+Trainers matter most for deck finding because they go into most decks. They're being added in batches (Next, step 1). `decks/coverage-a.txt` and `coverage-b.txt` hold the batch 1 Trainers, so `check_states` plays them.
 
 The rest are mostly one-of-a-kind mechanics we chose to skip for now:
 - memory of last turn (Sweets Relay, "knocked out last turn");
@@ -124,15 +124,27 @@ Weak spots the review found, not fixed:
 
 ## Next
 
-In order. Each step gets a plan first, then tests, `check_states` at 0 violations and a commit. Remco still has to choose whether step 1 or step 2 goes first.
+In order. Each step gets a plan first, then tests, `check_states` at 0 violations and a commit. Remco chose coverage first and golden tests later (2026-10-16).
 
-1. **Effect-script checks:** real-card golden tests (card text plus its expected script, a few per sentence family), a review of the `effects.tsv` diff for each new set, and `data/effects_manual.tsv` for odd cards.
-2. **R5, Stadium actions:** a "use the Stadium" move, once per player per turn and per Stadium card; a new Stadium can be used again. Also the Stadium's "at the end of each player's turn" trigger, and compiler patterns for both sentence shapes. This unlocks Mesagoza, Fragrant Forest, Area Zero, Arcade, Hiking Trail and Soothing Shore, as far as their effects have blocks. It completes the rules milestone.
+1. **Card coverage, Trainers first**, in batches. The rule answers batches 4–6 need are in DESIGN.md §10.
+   - Done 2026-10-16:
+     - **Batch 0:** effect words check how many arguments they get.
+     - **Batch 1:** 20 Trainers from new patterns and small filters: Mars, Lisia, Serena, Calem, Korrina, Cabbie, Juliana, Arven, Skyla, Irida, Diantha, Cheren, Order Pad, Team Rocket's Goo-zooka, Researcher and Master Plan, Arena of Antiquity, Small Balloon, Elegant Cape, Deceptive Needle.
+   - **Batch 2:** "You can use this card only if…" and small one-offs: Lana, Piers, Juggler, Psychic, Kiawe, Big Malasada, Nasty Notice, Team Star Grunt, Field Blower.
+   - **Batch 3:** the discard pile: Celestic Town Elder, Fishing Net, Fisher, Flame Patch, Volkner, Pokémon Flute, Team Rocket's Thieving Machine.
+   - **Batch 4 (R5):** the "use the Stadium" move, once per player per turn and per Stadium card. Also the end-of-each-turn Stadium trigger and Weakness ×2. Cards: Mesagoza, Fragrant Forest, Area Zero, Kid's Room, Rainbow Cave, Arcade, Hiking Trail, Soothing Shore, Bounded Field. That makes all 13 Stadiums playable and completes the rules milestone.
+   - **Batch 5:** Tools that react to something: Lum Berry, Sitrus Berry, Poison Barb, Dark Pendant, Steel Apron, Clear Veil, Metal Core Barrier, Protective Poncho, Heavy Helmet.
+   - **Batch 6:** back to the hand: Koga, Budding Expeditioner, Ilima, Parasol Lady, Elesa.
+   - **After batch 6:** 122 of 152 Trainers. Left out:
+     - knock-out triggers;
+     - Ultra Beast, Ancient and Future cards: the data doesn't mark those traits;
+     - one-offs: Penny, Will, Drayden and others.
+   - **Then:** the most common missing attack texts from `tcgp --coverage`.
+2. **Effect-script checks:** real-card golden tests (card text plus its expected script, a few per sentence family), a review of the `effects.tsv` diff for each new set, and `data/effects_manual.tsv` for odd cards.
 3. **Seeds:** one seed per game, from which the shuffles, coins and random player all follow. Then a failure found by `check_states` can be replayed, and two decks can be compared on the same luck.
 4. **Player choices the engine makes today:** which energy to pay for a retreat, to discard or to move (the player picks the type, Remco), and discarding a Fossil.
 5. **The simulation runner (milestone 3):** many games over threads; win, draw and loss per pairing, with a confidence interval; the first player alternates. About 2,400 games per pairing give ±2%.
-6. **Card coverage, Trainers first:** the missing Supporters, Items and Tools, then the most common missing attack texts from `tcgp --coverage`.
-7. **Finding decks (milestone 4):** generate legal decks around Pokémon lines, play them against each other, rank them, and list the top ones to try in the game.
-8. **A minimal player:** attach energy and attack when possible, if the random player's draws and bias get in the way of step 7. Remco said not to build real bots yet.
+6. **Finding decks (milestone 4):** generate legal decks around Pokémon lines, play them against each other, rank them, and list the top ones to try in the game.
+7. **A minimal player:** attach energy and attack when possible, if the random player's draws and bias get in the way of step 6. Remco said not to build real bots yet.
 
 Dropped: R6, source tags on each constant in `rules.h`. DESIGN.md §10 already says where each rule comes from, and that's enough.

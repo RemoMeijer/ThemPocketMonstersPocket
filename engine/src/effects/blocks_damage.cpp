@@ -96,8 +96,9 @@ public:
         for (uint16_t uid : targets) {
             int owner = 0;
             PokemonSlot* p = ctx.game.find(uid, &owner);
-            if (!p || !p->damage) continue;
+            if (!p || !p->damage || n <= 0) continue;
             p->damage = std::max(0, p->damage - n);
+            ctx.healed = true;
             if (ctx.game.logging()) ctx.game.say("  healed -> ", ctx.game.show(*p, owner));
         }
     }
@@ -133,6 +134,11 @@ private:
     uint8_t mask_;
 };
 
+class Healed : public Cond {  // (healed)
+public:
+    bool test(EffectCtx& ctx) const override { return ctx.healed; }
+};
+
 class Cure : public Stmt {  // (cure TARGET [S…]): remove those Special Conditions, or all of them
 public:
     Cure(const Target* t, uint8_t mask) : t_(t), mask_(mask) {}
@@ -163,6 +169,7 @@ void addDamageWords(Words& w) {
     }};
     w.stmt["heal"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Heal>(b.target(arg(e, 0)), b.num(arg(e, 1))); }};
     w.stmt["status"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) { return b.make<SetStatus>(b.target(arg(e, 0)), parseStatuses(e, 1)); }};
+    w.cond["healed"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Healed>(); }};
     w.stmt["cure"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<Cure>(b.target(arg(e, 0)), argCount(e) > 1 ? parseStatuses(e, 1) : uint8_t(0xFF));
     }};

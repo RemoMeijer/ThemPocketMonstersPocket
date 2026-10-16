@@ -529,6 +529,65 @@ static void wrongArgumentCountsDontLoad() {
     stmt("(cure self asleep paralyzed)");  // a word that takes a list still loads
 }
 
+// The pieces coverage batch 1 added: card filters, the has-energy filter, (points-needed), (healed), :from-ex.
+static void coverageBatchOneBlocks() {
+    {   // Serena, Lisia, Team Rocket's Researcher, Cabbie: what a search may take
+        Table t;
+        t.cards[5].ex = t.cards[5].mega = true;
+        t.cards[6].hp = 40;
+        CardDef stadium = trainer(TrainerKind::Stadium, "Plaza");
+        GameState& s = t.position();
+        PlayerState& p = s.players[0];
+        auto searchGets = [&](const char* script, std::vector<const CardDef*> deck) {
+            p.deck.clear();
+            p.hand.clear();
+            for (const CardDef* c : deck) p.deck.push_back(c);
+            EffectCtx ctx{t.game, 0};
+            stmt(script)->run(ctx);
+            return p.hand.size() == 1 ? p.hand[0] : nullptr;
+        };
+        CHECK(searchGets("(search 1 hand mega)", {&t.cards[4], &t.cards[5]}) == &t.cards[5]);
+        CHECK(searchGets("(search 1 hand basic (max-hp 50))", {&t.cards[6], &t.cards[7]}) == &t.cards[6]);
+        CHECK(searchGets("(search 1 hand pokemon (name-has \"on9\"))", {&t.cards[8], &t.cards[9]}) == &t.cards[9]);
+        CHECK(searchGets("(search 1 hand stadium)", {&t.cards[8], &stadium}) == &stadium);
+    }
+    {   // Irida: only Pokémon with Water energy; Diantha: heal, and then discard because it healed
+        Table t;
+        GameState& s = t.position();
+        PlayerState& p = s.players[0];
+        t.bench(0, t.cards[3]).damage = 30;
+        p.active.damage = 50;
+        EffectCtx ctx{t.game, 0};
+        stmt("(heal (each my all (has-energy 1 water) damaged) 40)")->run(ctx);
+        CHECK(p.active.damage == 10 && p.bench[0].damage == 30);
+        p.active.energy[int(Type::Water)] = 2;
+        EffectCtx ctx2{t.game, 0};
+        stmt("(pick (choose my all (has-energy 2 water) damaged) (seq (heal picked 90) (if (healed) (discard-energy picked water 2))))")->run(ctx2);
+        CHECK(p.active.damage == 0 && p.active.energyCount() == 0);
+    }
+    {   // Mars: draw as many as the opponent still needs points
+        Table t;
+        GameState& s = t.position();
+        s.players[1].points = 1;
+        EffectCtx ctx{t.game, 0};
+        stmt("(shuffle-hand-draw opp (points-needed opp))")->run(ctx);
+        CHECK(s.players[1].hand.size() == 2);
+    }
+    {   // Cheren: −100 only against a Pokémon ex
+        Table t;
+        GameState& s = t.position();
+        TimedEffect cheren;
+        cheren.mod = mod("(damage-taken -100 :scope my-all :from-ex)", ModScope::MyAll);
+        cheren.player = 0;
+        cheren.lastTurn = s.turn + 1;
+        s.timed.push_back(cheren);
+        uint16_t attacker = s.players[1].active.uid, target = s.players[0].active.uid;
+        CHECK(t.game.dealAttackDamage(1, attacker, target, 30) == 30);
+        t.cards[1].ex = true;
+        CHECK(t.game.dealAttackDamage(1, attacker, target, 30) == 0);
+    }
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -562,5 +621,6 @@ int main() {
     abilitiesNeedSomethingToDo();
     randomHitsAddUpBeforeWeakness();
     wrongArgumentCountsDontLoad();
+    coverageBatchOneBlocks();
     return report("effects");
 }

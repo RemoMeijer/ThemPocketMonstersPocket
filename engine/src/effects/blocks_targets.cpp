@@ -7,16 +7,22 @@
 #include "game/game.h"
 
 namespace {
-// Which Pokémon in a pool qualify: (type T…), (stage S…), (name "A" …), basic, evolution, damaged, ex, not-self.
+// Which Pokémon in a pool qualify: (type T…), (name "A" …), (has-energy N T…), basic, stage1, stage2,
+// evolution, damaged, ex, mega, not-self.
 struct Filter {
-    uint16_t types = 0;
+    uint16_t types = 0, energyTypes = 0;
     uint8_t stages = 0;
-    bool damaged = false, ex = false, evolution = false, notSelf = false;
+    int energy = 0;  // at least this much energy of energyTypes (0 = no test)
+    bool damaged = false, ex = false, mega = false, evolution = false, notSelf = false;
     std::vector<std::string> names;
 
     bool matches(const PokemonSlot& p, const EffectCtx& ctx) const {
+        int n = 0;
+        for (int t = 0; t < TypeCount; ++t)
+            if (!energyTypes || (energyTypes & typeBit(Type(t)))) n += p.energy[t];
         return p.card->hasType(types) && (!stages || (stages & stageBit(p.card->stage))) && (!damaged || p.damage > 0) &&
-               (!ex || p.card->ex) && (!evolution || p.card->isEvolution()) && (!notSelf || p.uid != ctx.self) &&
+               (!ex || p.card->ex) && (!mega || p.card->mega) && (!evolution || p.card->isEvolution()) &&
+               (!notSelf || p.uid != ctx.self) && n >= energy &&
                (names.empty() || std::find(names.begin(), names.end(), p.card->name) != names.end());
     }
 };
@@ -28,12 +34,14 @@ Filter parseFilter(const SExpr& e, std::size_t from) {
         const std::string& w = a.list ? a.head() : a.atom;
         if (w == "damaged") f.damaged = true;
         else if (w == "ex") f.ex = true;
+        else if (w == "mega") f.mega = true;
         else if (w == "evolution") f.evolution = true;
         else if (w == "not-self") f.notSelf = true;
         else if (w == "basic") f.stages |= stageBit(Stage::Basic);
         else if (w == "stage1") f.stages |= stageBit(Stage::Stage1);
         else if (w == "stage2") f.stages |= stageBit(Stage::Stage2);
         else if (w == "type" && a.list) f.types |= typeMask(a, 0);
+        else if (w == "has-energy" && a.list) f.energy = intArg(arg(a, 0)), f.energyTypes = typeMask(a, 1);
         else if (w == "name" && a.list)
             for (std::size_t n = 0; n < argCount(a); ++n) f.names.push_back(arg(a, n).atom);
         else scriptFail("unknown filter '" + a.text() + "'", e);

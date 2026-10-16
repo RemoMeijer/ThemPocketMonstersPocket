@@ -1,0 +1,20 @@
+# Coverage batch 1, Fighting: Mega ex for Serena and Calem, Bonsly for Lisia, Stage 1s for Skyla and Elegant Cape, Watchog for Cheren.
+energy: Fighting
+
+2 B3-079   # Riolu
+1 B3-081   # Mega Lucario ex (from Riolu)
+1 B3-078   # Bonsly, 30 HP: something for Lisia to find
+2 B1-199   # Patrat
+2 B1-200   # Watchog (from Patrat)
+1 A2-155   # Mars
+1 B1-226   # Lisia
+1 B1a-069  # Serena
+1 B2b-068  # Calem
+1 B3-149   # Korrina
+1 B3-150   # Cabbie
+1 B3-154   # Arena of Antiquity
+1 B3b-065  # Elegant Cape
+1 B4-152   # Skyla
+1 B3-151   # Cheren
+1 B2a-091  # Arven
+1 B4-145   # Order Pad

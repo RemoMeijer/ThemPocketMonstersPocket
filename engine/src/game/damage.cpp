@@ -35,7 +35,7 @@ int Game::dealAttackDamage(int attacker, uint16_t attackerUid, uint16_t targetUi
     bool weak = weakness && active && base > 0 && target->card->weakness && source->card->type == target->card->weakness;
     if (weak) damage += rules::WeaknessBonus;
     forEachMod(ModKind::DamageTaken, target, owner, [&](const Modifier& m) {
-        if (source->card->hasType(m.fromTypes)) damage += m.amount;
+        if (source->card->hasType(m.fromTypes) && (!m.fromEx || source->card->ex)) damage += m.amount;
     });
     bool prevented = hasMod(ModKind::PreventAll, *target, owner);
     forEachMod(ModKind::PreventDamage, target, owner, [&](const Modifier& m) { prevented |= !m.amount || damage <= m.amount; });

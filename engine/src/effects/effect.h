@@ -27,6 +27,7 @@ struct EffectCtx {
     int heads = 0, tails = 0;  // the last coin flips
     bool stopped = false;      // "this attack does nothing": the rest is skipped
     uint16_t picked = 0;       // the Pokémon chosen by (pick …)
+    bool healed = false;       // (heal …) removed some damage
 };
 
 using Uids = FixedVec<uint16_t, 2 * (1 + rules::BenchSize)>;  // at most every Pokémon in play

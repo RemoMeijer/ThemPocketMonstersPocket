@@ -134,6 +134,7 @@ CONDITIONS = [
     (r"this Pokemon moved from your Bench to the Active Spot this turn", lambda m, c: "(moved-to-active self)"),
     (r"this Pokemon evolved during this turn", lambda m, c: "(evolved-this-turn self)"),
     (r"you played a Supporter card from your hand during this turn", lambda m, c: "(played-supporter)"),
+    (r"you healed any damage in this way", lambda m, c: "(healed)"),
     (r"you have (\w[\w' ]*?) or (\w[\w' ]*?) in play",
      lambda m, c: f'(exists my all (name "{m.group(1)}" "{m.group(2)}"))'),
     (r"your opponent has (\d+) or more cards in their hand", lambda m, c: f"(>= (hand-size opp) {m.group(1)})"),
@@ -223,7 +224,7 @@ CLAUSES = [
     # Healing and Special Conditions
     (r"heal (?:(?P<n>\d+) damage|(?P<all>all damage)) from " + REF,
      lambda m, c: ("post", f"(heal {target(m, prefer_damaged=True)} {heal_amount(m)})")),
-    (REF + r" is now " + r"((?:Asleep|Burned|Confused|Paralyzed|Poisoned)(?:(?:, | and )(?:Asleep|Burned|Confused|Paralyzed|Poisoned))*)",
+    (REF + r" is now (?:also )?" + r"((?:Asleep|Burned|Confused|Paralyzed|Poisoned)(?:(?:, | and )(?:Asleep|Burned|Confused|Paralyzed|Poisoned))*)",
      lambda m, c: ("post", f"(status {target(m)} {status_list(m.group(len(m.groups())))})")),
     (r"(?:you may )?make your opponent's Active Pokemon " + STATUS, lambda m, c: ("post", f"(status opp-active {m.group(1).lower()})")),
     (r"heal (\d+) damage from " + REF + r", and it recovers from all Special Conditions",
@@ -231,6 +232,11 @@ CLAUSES = [
     (r"heal (\d+) damage from " + REF + r", and it recovers from being ((?:Asleep|Burned|Confused|Paralyzed|Poisoned)(?:,? (?:and )?(?:Asleep|Burned|Confused|Paralyzed|Poisoned))*)",
      lambda m, c: ("post", f"(pick {target(m)} (seq (heal picked {m.group(1)}) (cure picked {status_list(m.group(len(m.groups())).replace(', and ', ', '))})))")),
     (REF + r" recovers from all Special Conditions", lambda m, c: ("post", f"(cure {target(m)})")),
+    (r"heal (\d+) damage from each of your Pokemon that has any " + E + r" Energy attached",
+     lambda m, c: ("post", f"(heal (each my all (has-energy 1 {t(m.group(2))}) damaged) {m.group(1)})")),
+    (r"heal (\d+) damage from 1 of your (?:" + E + r" )?Pokemon that has (\d+) or more " + E + r" Energy attached",
+     lambda m, c: ("post", f"(heal (choose my all{' (type ' + t(m.group(2)) + ')' if m.group(2) else ''}"
+                           f" (has-energy {m.group(3)} {t(m.group(4))}) damaged) {m.group(1)})")),
     (r"move (an?|all|\d+) ((?:" + E.replace("(", "(?:") + r"(?:, |, or | or )?)*)\s?Energy from " + REF.replace("?P<", "?P<f_") + r" to " + REF,
      lambda m, c: ("post", move_energy(m))),
     # Energy
@@ -273,15 +279,19 @@ CLAUSES = [
      lambda m, c: ("post", "(effect opp-next-turn opp (cant-supporter))")),
     (OPP_NEXT + r", they can't take any Energy from their Energy Zone to attach to their Active Pokemon",
      lambda m, c: ("post", f"(effect {timed(m.group('d'))} opp (cant-attach-to-active))")),
+    (r"until the end of your opponent's next turn, your opponent's Active Pokemon's Retreat Cost is (\d+) more",
+     lambda m, c: ("post", f"(effect opp-next-turn opp-active (retreat-cost {m.group(1)}))")),
     (r"During this turn, the Retreat Cost of your Active Pokemon is (\d+) less",
      lambda m, c: ("post", f"(effect this-turn me (retreat-cost -{m.group(1)} :scope my-active))")),
-    (r"During this turn, attacks used by your (Pokemon|" + NAMES + r") do \+(\d+) damage to your opponent's Active Pokemon( ex)?",
-     lambda m, c: ("post", f"(effect this-turn me (damage-dealt {m.group(2)} :scope my-all{names_opt(m.group(1))}{' :vs-ex' if m.group(3) else ''}))")),
+    (r"During this turn, attacks used by your (?:" + E + r" )?(Pokemon|" + NAMES + r") do \+(\d+) damage to your opponent's Active Pokemon( ex)?",
+     lambda m, c: ("post", f"(effect this-turn me (damage-dealt {m.group(3)} :scope my-all{type_opt(m.group(1))}"
+                           f"{names_opt(m.group(2))}{' :vs-ex' if m.group(4) else ''}))")),
     (r"During this turn, attacks used by your (" + NAMES + r") cost (\d+) less \{C\} Energy",
      lambda m, c: ("post", f"(effect this-turn me (attack-cost -{m.group(2)} :scope my-all{names_opt(m.group(1))}))")),
-    (OPP_NEXT + r", all of your (?:(?P<ty>" + E.replace("(", "(?:") + r") )?(?P<who>Pokemon|" + NAMES + r") take -(?P<n>\d+) damage from attacks(?: from your opponent's Pokemon)?",
+    (OPP_NEXT + r", all of your (?:(?P<ty>" + E.replace("(", "(?:") + r") )?(?P<who>Pokemon|" + NAMES + r") take -(?P<n>\d+) damage from attacks(?: from your opponent's Pokemon(?P<fex> ex)?)?",
      lambda m, c: ("post", f"(effect {timed(m.group('d'))} me (damage-taken -{m.group('n')} :scope my-all"
-                           f"{type_opt(m.group('ty')[1]) if m.group('ty') else ''}{names_opt(m.group('who'))}))")),
+                           f"{type_opt(m.group('ty')[1]) if m.group('ty') else ''}{names_opt(m.group('who'))}"
+                           f"{' :from-ex' if m.group('fex') else ''}))")),
     # Switching
     (r"switch this Pokemon with (?:1|one) of your Benched Pokemon", lambda m, c: ("post", "(switch-in (choose my bench))")),
     (r"switch out your opponent's Active Pokemon to the Bench", lambda m, c: ("post", "(switch-in (owner-chooses opp bench))")),
@@ -291,21 +301,29 @@ CLAUSES = [
      lambda m, c: ("post", "(if (is-basic opp-active) (switch-in (owner-chooses opp bench)))")),
     (r"switch your Active Pokemon that has damage on it with (?:1|one) of your Benched Pokemon",
      lambda m, c: ("post", "(if (has-damage my-active) (switch-in (choose my bench)))")),
+    (r"switch your Active (Basic|Stage 1|Stage 2) Pokemon with (?:1|one) of your Benched Pokemon",
+     lambda m, c: ("post", f"(if (exists my active {card_kind(m.group(1) + ' ')}) (switch-in (choose my bench)))")),
     (r"switch in (?:1|one) of your opponent's Benched (Basic )?Pokemon( that has damage on it)? to the Active Spot",
      lambda m, c: ("post", f"(switch-in (choose opp bench{' basic' if m.group(1) else ''}{' damaged' if m.group(2) else ''}))")),
     # Cards
     (r"draw (a|\d+) cards?", lambda m, c: ("post", f"(draw {num(m.group(1))})")),
     (r"draw a card for each card in your opponent's hand", lambda m, c: ("post", "(draw (hand-size opp))")),
-    (r"put (a|\d+) random (Basic )?(?:" + E + r" )?Pokemon from your deck (into your hand|onto your Bench)",
-     lambda m, c: ("post", f"(search {num(m.group(1))} {'hand' if 'hand' in m.group(4) else 'bench'}"
-                           f"{' basic' if m.group(2) else ' pokemon'}{' (type ' + t(m.group(3)) + ')' if m.group(3) else ''})")),
+    (r"draw a card for each Mega Evolution Pokemon ex in play \(both yours and your opponent's\)",
+     lambda m, c: ("post", "(draw (count both all mega))")),
+    (r"put (a|\d+) random (Basic |Stage 1 |Stage 2 )?(?:" + E + r" )?Pokemon(?: with (\d+) HP or less)? from your deck (into your hand|onto your Bench)",
+     lambda m, c: ("post", f"(search {num(m.group(1))} {'hand' if 'hand' in m.group(5) else 'bench'} {card_kind(m.group(2))}"
+                           f"{' (type ' + t(m.group(3)) + ')' if m.group(3) else ''}{' (max-hp ' + m.group(4) + ')' if m.group(4) else ''})")),
+    (r"put a random Mega Evolution Pokemon ex from your deck into your hand", lambda m, c: ("post", "(search 1 hand mega)")),
+    (r'put a random Pokemon that has "([^"]+)" in its name from your deck into your hand',
+     lambda m, c: ("post", f'(search 1 hand pokemon (name-has "{m.group(1)}"))')),
     (r"put (a|\d+) random (" + NAMES + r") from your deck (into your hand|onto your Bench)",
      lambda m, c: ("post", f'(search {num(m.group(1))} {"hand" if "hand" in m.group(3) else "bench"} (name {name_list(m.group(2))}))')),
     (r"put (a|\d+) random cards from among (" + NAMES + r") from your deck into your hand",
      lambda m, c: ("post", f'(search {num(m.group(1))} hand (name {name_list(m.group(2))}))')),
     (r"put a random card that evolves from ([\w' -]+?) from your deck into your hand",
      lambda m, c: ("post", f'(search 1 hand (evolves-from "{m.group(1)}"))')),
-    (r"put a random Supporter card from your deck into your hand", lambda m, c: ("post", "(search 1 hand supporter)")),
+    (r"put a random (Supporter|Item|Pokemon Tool|Stadium) card from your deck into your hand",
+     lambda m, c: ("post", "(search 1 hand " + {"Supporter": "supporter", "Item": "item", "Pokemon Tool": "tool", "Stadium": "stadium"}[m.group(1)] + ")")),
     (r"discard the top (card|\d+ cards) of (your opponent's|your|each player's) deck",
      lambda m, c: ("post", f"(mill {dict(zip(['your opponent' + chr(39) + 's', 'your', 'each player' + chr(39) + 's'], ['opp', 'my', 'both']))[m.group(2)]} "
                            f"{1 if m.group(1) == 'card' else m.group(1).split()[0]})")),
@@ -314,6 +332,8 @@ CLAUSES = [
      lambda m, c: ("post", "(hand-to-deck-random opp 1)")),
     (r"your opponent shuffles their hand into their deck and draws (a card|\d+ cards)",
      lambda m, c: ("post", f"(shuffle-hand-draw opp {1 if m.group(1) == 'a card' else m.group(1).split()[0]})")),
+    (r"your opponent shuffles their hand into their deck and draws a card for each of their remaining points needed to win",
+     lambda m, c: ("post", "(shuffle-hand-draw opp (points-needed opp))")),
     (r"each player shuffles the cards in their hand into their deck, then draws that many cards",
      lambda m, c: ("post", "(shuffle-hand-draw both same)")),
     (r"shuffle your hand into your deck", lambda m, c: ("post", "(shuffle-hand-draw my 0)")),
@@ -507,8 +527,8 @@ CONDITIONAL_PASSIVES = [
 ]
 
 TOOLS = [
-    (r"The Pokemon this card is attached to gets \+(\d+) HP", lambda m: f"(hp {m.group(1)})"),
-    (r"The " + E + r" Pokemon this card is attached to gets \+(\d+) HP", lambda m: f"(hp {m.group(2)} :type {t(m.group(1))})"),
+    (r"The (Basic |Stage 1 |Stage 2 )?(?:" + E + r" )?Pokemon this card is attached to gets \+(\d+) HP",
+     lambda m: f"(hp {m.group(3)}{stage_opt(m.group(1))}{type_opt(m.group(2))})"),
     (r"If the Pokemon this card is attached to is in the Active Spot and is damaged by an attack from your opponent's Pokemon, "
      r"do (\d+) damage to the Attacking Pokemon", lambda m: f"(reflect {m.group(1)})"),
     (r"The Pokemon this card is attached to takes -(\d+) damage from attacks", lambda m: f"(damage-taken -{m.group(1)})"),
@@ -518,8 +538,8 @@ TOOLS = [
      lambda m: f"(damage-dealt {m.group(1)})"),
     (r"The (Stage 2 )?Pokemon this card is attached to has no Retreat Cost",
      lambda m: "(no-retreat-cost" + (" :stage stage2)" if m.group(1) else ")")),
-    (r"The Retreat Cost of the (?:" + E + r" )?Pokemon this card is attached to is (\d+) less",
-     lambda m: f"(retreat-cost -{m.group(2)}{type_opt(m.group(1))})"),
+    (r"The Retreat Cost of the (Basic |Stage 1 |Stage 2 )?(?:" + E + r" )?Pokemon this card is attached to is (\d+) less",
+     lambda m: f"(retreat-cost -{m.group(3)}{stage_opt(m.group(1))}{type_opt(m.group(2))})"),
 ]
 
 STADIUMS = [
@@ -527,13 +547,18 @@ STADIUMS = [
      lambda m: f"(hp {m.group(3)}{stage_opt(m.group(1))}{type_opt(m.group(2))})"),
     (r"The Retreat Cost of each (Basic |Stage 1 |Stage 2 )?(?:" + E + r" )?Pokemon in play \(both yours and your opponent's\) is (\d+) less",
      lambda m: f"(retreat-cost -{m.group(3)}{stage_opt(m.group(1))}{type_opt(m.group(2))})"),
-    (r"Attacks used by (Basic |Stage 1 |Stage 2 )?(?:" + E + r" )?Pokemon in play \(both yours and your opponent's\) do \+(\d+) damage to the opponent's Active Pokemon",
-     lambda m: f"(damage-dealt {m.group(3)}{stage_opt(m.group(1))}{type_opt(m.group(2))})"),
+    (r"Attacks used by (?:each )?(Basic |Stage 1 |Stage 2 )?(?:" + E + r" )?Pokemon in play \(both yours and your opponent's\) do \+(\d+) damage to the opponent's Active Pokemon( ex)?",
+     lambda m: f"(damage-dealt {m.group(3)}{stage_opt(m.group(1))}{type_opt(m.group(2))}{' :vs-ex' if m.group(4) else ''})"),
 ]
 
 
 def stage_opt(s):
     return {"Basic ": " :stage basic", "Stage 1 ": " :stage stage1", "Stage 2 ": " :stage stage2"}.get(s or "", "")
+
+
+def card_kind(stage):
+    """"Basic " → basic … for search filters; no stage → any Pokémon."""
+    return {"Basic ": "basic", "Stage 1 ": "stage1", "Stage 2 ": "stage2"}.get(stage or "", "pokemon")
 
 
 def type_opt(letter):
@@ -552,9 +577,11 @@ def compile_card(kind, text, ctx):
     if re.fullmatch(FOSSIL, text):
         # shortcut: a Fossil can't be discarded from play by choice; add that once a player would want to.
         return "(passive (cant-retreat))"
-    m = re.fullmatch(r"At the end of your turn, if the Pokemon this card is attached to is in the Active Spot, (.+)", text)
+    m = re.fullmatch(r"At the end of your turn, if the (?:" + E + r" )?Pokemon this card is attached to is in the Active Spot, (.+)", text)
     if kind == "Tool" and m:
-        body = seq([s for _, s in statements(m.group(1).replace("that Pokemon", "this Pokemon"), ctx)])
+        body = seq([s for _, s in statements(m.group(2).replace("that Pokemon", "this Pokemon"), ctx)])
+        if m.group(1):
+            body = f"(if (is-type self {t(m.group(1))}) {body})"
         return f"(at-end-of-turn :active {body})"
     if kind == "Tool":
         for rx, fn in TOOLS:
@@ -663,6 +690,20 @@ EXAMPLES = [
      "(at-end-of-turn :active (heal self 10))"),
     ("ability", "", "Once during your turn, when you play this Pokémon from your hand to evolve 1 of your Pokémon, you may draw 2 cards.",
      "(on-evolve (draw 2))"),
+    ("Supporter", "", "During this turn, attacks used by your {F} Pokémon do +30 damage to your opponent's Active Pokémon ex.",
+     "(play (effect this-turn me (damage-dealt 30 :scope my-all :type fighting :vs-ex)))"),
+    ("Supporter", "", "Put 2 random Basic Pokémon with 50 HP or less from your deck into your hand.",
+     "(play (search 2 hand basic (max-hp 50)))"),
+    ("Supporter", "", "Heal 90 damage from 1 of your {P} Pokémon that has 2 or more {P} Energy attached. If you healed any damage "
+     "in this way, discard 2 {P} Energy from that Pokémon.",
+     "(play (pick (choose my all (type psychic) (has-energy 2 psychic) damaged) (seq (heal picked 90) (if (healed) (discard-energy picked psychic 2)))))"),
+    ("Item", "", "Until the end of your opponent's next turn, your opponent's Active Pokémon's Retreat Cost is 1 more.",
+     "(play (effect opp-next-turn opp-active (retreat-cost 1)))"),
+    ("Tool", "", "At the end of your turn, if the {D} Pokémon this card is attached to is in the Active Spot, do 10 damage to your opponent's Active Pokémon.",
+     "(at-end-of-turn :active (if (is-type self darkness) (damage opp-active 10)))"),
+    ("Tool", "", "The Retreat Cost of the Basic Pokémon this card is attached to is 1 less.", "(tool (retreat-cost -1 :stage basic))"),
+    ("Stadium", "", "Attacks used by each {F} Pokémon in play (both yours and your opponent's) do +20 damage to the opponent's Active Pokémon ex.",
+     "(stadium (damage-dealt 20 :type fighting :vs-ex))"),
     ("ability", "", "If you have Arceus or Arceus ex in play, this Pokémon takes −30 damage from attacks.",
      '(passive (damage-taken -30 :needs "Arceus" "Arceus ex"))'),
 ]

@@ -1,0 +1,20 @@
+# Coverage batch 1, Psychic/Darkness/Water: a Stage 2 for Juliana, Team Rocket's Pokémon, a Darkness Pokémon for Deceptive Needle.
+energy: Psychic, Darkness, Water
+
+2 A1-130   # Ralts
+1 A1-131   # Kirlia (from Ralts)
+1 A1-132   # Gardevoir (from Kirlia)
+2 B4a-027  # Team Rocket's Drowzee
+2 B4a-038  # Team Rocket's Ekans
+1 A1-053   # Squirtle
+1 A2a-072  # Irida
+1 B2-149   # Diantha
+1 B4-148   # Deceptive Needle
+1 B3a-071  # Juliana
+1 B4a-068  # Team Rocket's Goo-zooka
+1 B4a-070  # Team Rocket's Master Plan
+1 B2a-091  # Arven
+1 B4a-069  # Team Rocket's Researcher
+1 B4-145   # Order Pad
+1 B3b-064  # Small Balloon
+1 B4-152   # Skyla

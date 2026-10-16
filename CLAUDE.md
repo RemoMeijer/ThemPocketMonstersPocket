@@ -12,15 +12,16 @@ The current focus is a correct engine: the right cards and the right rules. Stat
 
 - **Read first:** [PROGRESS.md](PROGRESS.md) for the current state, shortcuts and next options, and [DESIGN.md](DESIGN.md) for how card effects are structured.
 - **Done:**
-  - the rules core: milestones 1–2, the cleanup, rule fixes R1–R4, Trainers that need something to do before they can be played, and the 4 bug fixes from the 2026-10-16 review;
+  - the rules core: milestones 1–2, the cleanup, rule fixes R1–R4, Trainers and abilities that need something to do before they can be used, and the 4 bug fixes from the 2026-10-16 review;
   - the effect system;
-  - card data from Limitless, every set up to B4b: 1,871 of 2,319 cards (80%) are playable.
+  - card data from Limitless, every set up to B4b: 1,892 of 2,319 cards (81%) are playable;
+  - coverage batches 0–1 (argument-count check, 20 Trainers).
 - **Next** (PROGRESS.md, "Next"):
-  - effect-script checks or R5 (Stadium actions), Remco's choice;
+  - Trainer coverage, batches 2–6 (batch 4 is R5, Stadium actions);
+  - effect-script checks (golden tests);
   - seeds;
   - player choices;
   - the simulation runner (milestone 3);
-  - Trainer coverage;
   - finding decks (milestone 4).
 
 ## Layout

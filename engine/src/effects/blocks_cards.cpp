@@ -10,23 +10,25 @@
 namespace {
 int sidePlayer(const EffectCtx& ctx, bool opp) { return opp ? 1 - ctx.player : ctx.player; }
 
-// Which cards in a deck qualify: pokemon, basic, stage1, stage2, trainer, supporter, item, tool, (type T…),
-// (name "A" …), (evolves-from "A").
+// Which cards in a deck qualify: pokemon, basic, stage1, stage2, mega, trainer, supporter, item, tool, stadium,
+// (type T…), (name "A" …), (name-has "A"), (evolves-from "A"), (max-hp N).
 struct CardFilter {
-    bool pokemon = false, basic = false, trainer = false;
+    bool pokemon = false, basic = false, trainer = false, mega = false;
     uint8_t stages = 0;
     TrainerKind kind = TrainerKind::None;
     uint16_t types = 0;
     std::vector<std::string> names;
-    std::string evolvesFrom;
+    std::string nameHas, evolvesFrom;
+    int maxHp = 0;
 
     bool matches(const CardDef* c) const {
         return (!pokemon || c->isPokemon()) && (!basic || c->isBasic()) &&
-               (!stages || (c->isPokemon() && (stages & stageBit(c->stage)))) &&
+               (!stages || (c->isPokemon() && (stages & stageBit(c->stage)))) && (!mega || c->mega) &&
                (!trainer || c->category == Category::Trainer) && (kind == TrainerKind::None || c->isTrainer(kind)) &&
                (!types || (c->isPokemon() && c->hasType(types))) &&
                (names.empty() || std::find(names.begin(), names.end(), c->name) != names.end()) &&
-               (evolvesFrom.empty() || c->evolvesFrom == evolvesFrom);
+               (nameHas.empty() || c->name.find(nameHas) != std::string::npos) &&
+               (evolvesFrom.empty() || c->evolvesFrom == evolvesFrom) && (!maxHp || (c->isPokemon() && c->hp <= maxHp));
     }
 };
 
@@ -43,6 +45,10 @@ CardFilter parseCardFilter(const SExpr& e, std::size_t from) {
         else if (w == "supporter") f.kind = TrainerKind::Supporter;
         else if (w == "item") f.kind = TrainerKind::Item;
         else if (w == "tool") f.kind = TrainerKind::Tool;
+        else if (w == "stadium") f.kind = TrainerKind::Stadium;
+        else if (w == "mega") f.mega = true, f.pokemon = true;
+        else if (w == "max-hp" && a.list) f.maxHp = intArg(arg(a, 0)), f.pokemon = true;
+        else if (w == "name-has" && a.list) f.nameHas = arg(a, 0).atom;
         else if (w == "type" && a.list) f.types = typeMask(a, 0), f.pokemon = true;
         else if (w == "name" && a.list)
             for (std::size_t n = 0; n < argCount(a); ++n) f.names.push_back(arg(a, n).atom);
@@ -337,6 +343,17 @@ private:
     bool opp_;
 };
 
+class PointsNeeded : public Num {  // (points-needed my|opp)
+public:
+    explicit PointsNeeded(bool opp) : opp_(opp) {}
+    int eval(EffectCtx& ctx) const override {
+        return std::max(0, rules::PointsToWin - ctx.game.state().players[sidePlayer(ctx, opp_)].points);
+    }
+
+private:
+    bool opp_;
+};
+
 int sideOf(const SExpr& e) {
     if (e.atom == "both") return 2;
     return oppArg(e) ? 1 : 0;
@@ -380,4 +397,5 @@ void addCardWords(Words& w) {
     }};
     w.cond["played-supporter"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<PlayedSupporter>(); }};
     w.num["hand-size"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<HandSize>(oppArg(arg(e, 0))); }};
+    w.num["points-needed"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<PointsNeeded>(oppArg(arg(e, 0))); }};
 }

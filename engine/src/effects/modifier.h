@@ -36,6 +36,7 @@ struct Modifier {
     uint16_t types = 0;        // affected Pokémon must have one of these types (bit per Type; 0 = any)
     uint8_t stages = 0;        // affected Pokémon must be one of these stages (bit per Stage; 0 = any)
     uint16_t fromTypes = 0;    // DamageTaken: only damage from attackers of these types (0 = any)
+    bool fromEx = false;       // DamageTaken: only damage from a Pokémon ex
     const NameList* names = nullptr;  // affected Pokémon must have one of these names (nullptr = any)
     bool vsEx = false;         // DamageDealt: only against a Pokémon ex
     const NameList* needs = nullptr;  // only while its owner has one of these Pokémon in play ("If you have Arceus…")

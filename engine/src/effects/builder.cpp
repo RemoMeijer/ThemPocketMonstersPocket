@@ -52,7 +52,7 @@ const Num* ScriptBuilder::num(const SExpr& e) {
     return build(words().num, e, *this, "number");
 }
 
-// (KIND [amount] [:active] [:scope S] [:type T…] [:from T…] [:stage S…] [:name "A"…] [:needs "A"…] [:vs-ex])
+// (KIND [amount] [:active] [:scope S] [:type T…] [:from T…] [:stage S…] [:name "A"…] [:needs "A"…] [:vs-ex] [:from-ex])
 Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
     static const std::unordered_map<std::string, ModKind> kinds = {
         {"damage-taken", ModKind::DamageTaken},     {"damage-dealt", ModKind::DamageDealt},
@@ -88,6 +88,8 @@ Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
             m.whileActive = true;
         } else if (a.atom == ":vs-ex") {
             m.vsEx = true;
+        } else if (a.atom == ":from-ex") {
+            m.fromEx = true;
         } else if (a.atom == ":name" || a.atom == ":needs") {
             auto list = std::make_shared<NameList>();
             values([&](const SExpr& n) { list->names.push_back(n.atom); });
