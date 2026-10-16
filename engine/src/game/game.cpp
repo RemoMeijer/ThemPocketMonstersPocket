@@ -218,6 +218,14 @@ void Game::putIntoPlay(PokemonSlot& slot, const CardDef* card) {
     slot.enteredTurn = s_.turn;
 }
 
+void Game::evolve(PokemonSlot& slot, const CardDef* card) {
+    slot.below.push_back(slot.card);
+    slot.card = card;
+    slot.enteredTurn = s_.turn;
+    slot.abilityTurn = -1;  // "once during your turn" belongs to the card: the new one may use its own (App)
+    clearConditions(slot);  // evolving ends Special Conditions and effects on it
+}
+
 void Game::movedToActive(int player) { s_.players[player].active.becameActiveTurn = s_.turn; }
 
 void Game::clearConditions(PokemonSlot& slot) {

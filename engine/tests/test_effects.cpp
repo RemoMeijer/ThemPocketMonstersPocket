@@ -212,6 +212,25 @@ static void activatedAbilityOncePerTurn() {
     CHECK(!t.can(ActionKind::UseAbility));
 }
 
+// "Once during your turn" belongs to the card (App): after evolving, the new card may use its own ability.
+static void evolvedCardUsesItsOwnAbility() {
+    Table t;
+    t.cards[0].activated = stmt("(heal (each my all) 10)");
+    t.cards[10].activated = stmt("(heal (each my all) 10)");
+    GameState& s = t.position();
+    PlayerState& p = s.players[0];
+    p.active.damage = 40;
+    p.hand.clear();
+    p.hand.push_back(&t.cards[10]);  // Evo1, from Mon0
+    t.play(ActionKind::UseAbility, 0, -1);
+    CHECK(!t.can(ActionKind::UseAbility));
+    t.play(ActionKind::Evolve, 0, -1);
+    CHECK(t.can(ActionKind::UseAbility));
+    t.play(ActionKind::UseAbility, 0, -1);
+    CHECK(p.active.damage == 20);
+    CHECK(!t.can(ActionKind::UseAbility));
+}
+
 static void reflectHitsTheAttacker() {
     Table t;
     t.cards[1].passive.push_back(mod("(reflect 20 :active)"));
@@ -313,6 +332,7 @@ int main() {
     passiveAbilities();
     needsNamedPokemonInPlay();
     activatedAbilityOncePerTurn();
+    evolvedCardUsesItsOwnAbility();
     reflectHitsTheAttacker();
     switchInClearsConditions();
     poisonKnockOutAtCheckup();

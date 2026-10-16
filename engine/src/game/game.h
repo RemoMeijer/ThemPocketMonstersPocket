@@ -47,6 +47,7 @@ public:
     // --- Board ---
     PokemonSlot& slot(int player, int target) { return target < 0 ? s_.players[player].active : s_.players[player].bench[target]; }
     void putIntoPlay(PokemonSlot& slot, const CardDef* card);  // a new Pokémon: fresh identity
+    void evolve(PokemonSlot& slot, const CardDef* card);       // puts card on top; damage, energy and Tool stay
     void movedToActive(int player);        // bookkeeping after a new Pokémon moved into the Active Spot
     void clearConditions(PokemonSlot& slot);  // its Special Conditions and timed effects end (moved to Bench, evolved, gone)
     PokemonSlot* find(uint16_t uid, int* owner = nullptr);  // a Pokémon in play by identity

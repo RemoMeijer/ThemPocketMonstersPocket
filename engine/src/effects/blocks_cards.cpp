@@ -198,10 +198,7 @@ public:
         if (options.empty()) return;
         auto [t, h] = options[ctx.game.choose(ctx.player, int(options.size()))];
         PokemonSlot& target = ctx.game.slot(ctx.player, t);
-        target.below.push_back(target.card);
-        target.card = p.hand.take(h);
-        target.enteredTurn = s.turn;
-        ctx.game.clearConditions(target);
+        ctx.game.evolve(target, p.hand.take(h));
         ctx.game.say("  ", target.below.back()->name, " evolves straight into ", target.card->name);
         if (target.card->onEvolve) {
             EffectCtx inner{ctx.game, ctx.player};

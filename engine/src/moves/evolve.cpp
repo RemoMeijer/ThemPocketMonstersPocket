@@ -28,10 +28,7 @@ public:
         int me = game.state().current;
         PlayerState& p = game.state().players[me];
         PokemonSlot& target = game.slot(me, a.target);
-        target.below.push_back(target.card);  // damage, energy and Tool stay
-        target.card = p.hand.take(a.index);
-        target.enteredTurn = game.state().turn;
-        game.clearConditions(target);  // evolving ends Special Conditions and effects on it
+        game.evolve(target, p.hand.take(a.index));
         game.say("P", me + 1, " evolves ", target.below.back()->name, a.target < 0 ? " (Active)" : " (bench)",
                  " into ", target.card->name);
         if (target.card->onEvolve) {

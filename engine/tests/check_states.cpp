@@ -208,6 +208,7 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
             EXPECT(to.below.size() == from.below.size() + 1 && to.below.back() == from.card);
             if (!to.card->onEvolve) EXPECT(to.damage == from.damage && to.energy == from.energy);  // damage and energy stay
             EXPECT(to.enteredTurn == before.turn && to.status == 0);
+            EXPECT(to.abilityTurn != before.turn);  // a new card: its "once during your turn" is unused (App)
             st.evolutions[stageOf(to.card)]++;
             break;
         }
