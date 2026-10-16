@@ -72,12 +72,21 @@ class ScriptBuilder;
 template <class T>
 using Word = std::function<const T*(const SExpr&, ScriptBuilder&)>;
 
+// One word: how many arguments it takes, and how to build it. A script with another number of
+// arguments doesn't load, so nothing in it is silently ignored.
+constexpr std::size_t AnyCount = 99;
+template <class T>
+struct Entry {
+    std::size_t min = 0, max = 0;
+    Word<T> build;
+};
+
 // Every word of the language, by kind. Each blocks_*.cpp file adds its own.
 struct Words {
-    std::unordered_map<std::string, Word<Stmt>> stmt;
-    std::unordered_map<std::string, Word<Num>> num;
-    std::unordered_map<std::string, Word<Cond>> cond;
-    std::unordered_map<std::string, Word<Target>> target;
+    std::unordered_map<std::string, Entry<Stmt>> stmt;
+    std::unordered_map<std::string, Entry<Num>> num;
+    std::unordered_map<std::string, Entry<Cond>> cond;
+    std::unordered_map<std::string, Entry<Target>> target;
 };
 void addFlowWords(Words&);
 void addTargetWords(Words&);

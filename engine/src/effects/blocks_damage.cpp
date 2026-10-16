@@ -153,17 +153,17 @@ private:
 }  // namespace
 
 void addDamageWords(Words& w) {
-    w.stmt["hit"] = [](const SExpr&, ScriptBuilder& b) { return b.make<Hit>(); };
-    w.stmt["bonus"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<AttackDamage>(false, b.num(arg(e, 0))); };
-    w.stmt["set-damage"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<AttackDamage>(true, b.num(arg(e, 0))); };
-    w.stmt["cancel"] = [](const SExpr&, ScriptBuilder& b) { return b.make<Cancel>(); };
-    w.stmt["damage"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<Damage>(b.target(arg(e, 0)), b.num(arg(e, 1))); };
-    w.stmt["hits"] = [](const SExpr& e, ScriptBuilder& b) {
+    w.stmt["hit"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Hit>(); }};
+    w.stmt["bonus"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<AttackDamage>(false, b.num(arg(e, 0))); }};
+    w.stmt["set-damage"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<AttackDamage>(true, b.num(arg(e, 0))); }};
+    w.stmt["cancel"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Cancel>(); }};
+    w.stmt["damage"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Damage>(b.target(arg(e, 0)), b.num(arg(e, 1))); }};
+    w.stmt["hits"] = {3, 3, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<Hits>(b.num(arg(e, 0)), b.target(arg(e, 1)), b.num(arg(e, 2)));
-    };
-    w.stmt["heal"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<Heal>(b.target(arg(e, 0)), b.num(arg(e, 1))); };
-    w.stmt["status"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<SetStatus>(b.target(arg(e, 0)), parseStatuses(e, 1)); };
-    w.stmt["cure"] = [](const SExpr& e, ScriptBuilder& b) {
+    }};
+    w.stmt["heal"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Heal>(b.target(arg(e, 0)), b.num(arg(e, 1))); }};
+    w.stmt["status"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) { return b.make<SetStatus>(b.target(arg(e, 0)), parseStatuses(e, 1)); }};
+    w.stmt["cure"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<Cure>(b.target(arg(e, 0)), argCount(e) > 1 ? parseStatuses(e, 1) : uint8_t(0xFF));
-    };
+    }};
 }

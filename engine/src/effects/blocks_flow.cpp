@@ -183,36 +183,36 @@ private:
 }  // namespace
 
 void addFlowWords(Words& w) {
-    w.stmt["seq"] = [](const SExpr& e, ScriptBuilder& b) {
+    w.stmt["seq"] = {0, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         std::vector<const Stmt*> parts;
         for (std::size_t i = 0; i < argCount(e); ++i) parts.push_back(b.stmt(arg(e, i)));
         return b.make<Seq>(std::move(parts));
-    };
-    w.stmt["if"] = [](const SExpr& e, ScriptBuilder& b) {
+    }};
+    w.stmt["if"] = {2, 3, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<If>(b.cond(arg(e, 0)), b.stmt(arg(e, 1)), argCount(e) > 2 ? b.stmt(arg(e, 2)) : nullptr);
-    };
-    w.stmt["flip"] = [](const SExpr& e, ScriptBuilder& b) {
+    }};
+    w.stmt["flip"] = {0, 1, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<Flip>(argCount(e) ? b.num(arg(e, 0)) : b.num(atomExpr("1")), false);
-    };
-    w.stmt["flip-until-tails"] = [](const SExpr&, ScriptBuilder& b) { return b.make<Flip>(nullptr, true); };
-    w.stmt["repeat"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<Repeat>(b.num(arg(e, 0)), b.stmt(arg(e, 1))); };
-    w.stmt["pick"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<Pick>(b.target(arg(e, 0)), b.stmt(arg(e, 1))); };
-    w.stmt["nothing"] = [](const SExpr&, ScriptBuilder& b) { return b.make<Nothing>(); };
+    }};
+    w.stmt["flip-until-tails"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Flip>(nullptr, true); }};
+    w.stmt["repeat"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Repeat>(b.num(arg(e, 0)), b.stmt(arg(e, 1))); }};
+    w.stmt["pick"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Pick>(b.target(arg(e, 0)), b.stmt(arg(e, 1))); }};
+    w.stmt["nothing"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Nothing>(); }};
 
-    w.num["heads"] = [](const SExpr&, ScriptBuilder& b) { return b.make<Coins>(true); };
-    w.num["tails"] = [](const SExpr&, ScriptBuilder& b) { return b.make<Coins>(false); };
+    w.num["heads"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Coins>(true); }};
+    w.num["tails"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Coins>(false); }};
     for (const char* op : {"*", "+", "-"})
-        w.num[op] = [](const SExpr& e, ScriptBuilder& b) {
+        w.num[op] = {2, 2, [](const SExpr& e, ScriptBuilder& b) {
             return b.make<Arith>(e.head()[0], b.num(arg(e, 0)), b.num(arg(e, 1)));
-        };
+        }};
 
     const char* coins[] = {"heads", "tails", "all-heads", "all-tails"};
-    for (int i = 0; i < 4; ++i) w.cond[coins[i]] = [i](const SExpr&, ScriptBuilder& b) { return b.make<CoinTest>(i); };
-    w.cond["not"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<Logic>('!', b.cond(arg(e, 0)), nullptr); };
-    w.cond["and"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<Logic>('&', b.cond(arg(e, 0)), b.cond(arg(e, 1))); };
-    w.cond["or"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<Logic>('|', b.cond(arg(e, 0)), b.cond(arg(e, 1))); };
+    for (int i = 0; i < 4; ++i) w.cond[coins[i]] = {0, 0, [i](const SExpr&, ScriptBuilder& b) { return b.make<CoinTest>(i); }};
+    w.cond["not"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<Logic>('!', b.cond(arg(e, 0)), nullptr); }};
+    w.cond["and"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Logic>('&', b.cond(arg(e, 0)), b.cond(arg(e, 1))); }};
+    w.cond["or"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Logic>('|', b.cond(arg(e, 0)), b.cond(arg(e, 1))); }};
     for (const char* op : {">=", "<=", "="})
-        w.cond[op] = [](const SExpr& e, ScriptBuilder& b) {
+        w.cond[op] = {2, 2, [](const SExpr& e, ScriptBuilder& b) {
             return b.make<Compare>(e.head(), b.num(arg(e, 0)), b.num(arg(e, 1)));
-        };
+        }};
 }

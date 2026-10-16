@@ -131,23 +131,23 @@ private:
 }  // namespace
 
 void addEnergyWords(Words& w) {
-    w.stmt["move-energy"] = [](const SExpr& e, ScriptBuilder& b) {
+    w.stmt["move-energy"] = {4, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         const SExpr& count = arg(e, argCount(e) - 1);
         uint16_t types = 0;
         for (std::size_t i = 2; i + 1 < argCount(e); ++i)
             if (arg(e, i).atom != "any") types |= typeBit(typeArg(arg(e, i)));
         return b.make<MoveEnergy>(b.target(arg(e, 0)), b.target(arg(e, 1)), types, count.atom == "all" ? -1 : intArg(count));
-    };
-    w.stmt["attach-energy"] = [](const SExpr& e, ScriptBuilder& b) {
+    }};
+    w.stmt["attach-energy"] = {2, 3, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<AttachEnergy>(b.target(arg(e, 0)), typeArg(arg(e, 1)), argCount(e) > 2 ? b.num(arg(e, 2)) : b.num(atomExpr("1")));
-    };
-    w.stmt["discard-energy"] = [](const SExpr& e, ScriptBuilder& b) {
+    }};
+    w.stmt["discard-energy"] = {3, 3, [](const SExpr& e, ScriptBuilder& b) {
         const SExpr& type = arg(e, 1);
         const SExpr& count = arg(e, 2);
         uint16_t types = type.atom == "any" ? 0 : typeBit(typeArg(type));
         return b.make<DiscardEnergy>(b.target(arg(e, 0)), types, count.atom == "all" ? -1 : intArg(count), false);
-    };
-    w.stmt["discard-random-energy"] = [](const SExpr& e, ScriptBuilder& b) {
+    }};
+    w.stmt["discard-random-energy"] = {1, 2, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<DiscardEnergy>(b.target(arg(e, 0)), 0, argCount(e) > 1 ? intArg(arg(e, 1)) : 1, true);
-    };
+    }};
 }

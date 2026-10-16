@@ -515,6 +515,20 @@ static void randomHitsAddUpBeforeWeakness() {
     CHECK(damageOn(t, 1) == 150 + 10 + 20);
 }
 
+// A word with too many or too few arguments doesn't load, so nothing is silently ignored.
+static void wrongArgumentCountsDontLoad() {
+    for (const char* bad : {"(heal self 30 40)", "(heal self)", "(hit 5)", "(effect opp-next-turn self)"}) {
+        bool failed = false;
+        try {
+            stmt(bad);
+        } catch (const ScriptError&) {
+            failed = true;
+        }
+        CHECK(failed);
+    }
+    stmt("(cure self asleep paralyzed)");  // a word that takes a list still loads
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -547,5 +561,6 @@ int main() {
     movedToActiveBelongsToTheCard();
     abilitiesNeedSomethingToDo();
     randomHitsAddUpBeforeWeakness();
+    wrongArgumentCountsDontLoad();
     return report("effects");
 }

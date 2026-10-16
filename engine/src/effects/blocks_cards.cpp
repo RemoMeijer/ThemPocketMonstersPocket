@@ -344,31 +344,31 @@ int sideOf(const SExpr& e) {
 }  // namespace
 
 void addCardWords(Words& w) {
-    w.stmt["draw"] = [](const SExpr& e, ScriptBuilder& b) {
+    w.stmt["draw"] = {1, 2, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<Draw>(b.num(arg(e, 0)), argCount(e) > 1 && oppArg(arg(e, 1)));
-    };
-    w.stmt["search"] = [](const SExpr& e, ScriptBuilder& b) {
+    }};
+    w.stmt["search"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         const std::string& dest = arg(e, 1).atom;
         if (dest != "hand" && dest != "bench") scriptFail("expected hand or bench", e);
         return b.make<Search>(b.num(arg(e, 0)), dest == "bench", parseCardFilter(e, 2));
-    };
+    }};
     const std::pair<const char*, Cards::What> cards[] = {{"mill", Cards::Mill},
                                                          {"discard-hand-random", Cards::DiscardHandRandom},
                                                          {"hand-to-deck-random", Cards::HandToDeckRandom},
                                                          {"shuffle-hand-draw", Cards::ShuffleHandDraw}};
     for (auto [name, what] : cards) {
         auto whatCopy = what;
-        w.stmt[name] = [whatCopy](const SExpr& e, ScriptBuilder& b) {
+        w.stmt[name] = {1, 2, [whatCopy](const SExpr& e, ScriptBuilder& b) {
             bool same = argCount(e) > 1 && arg(e, 1).atom == "same";
             return b.make<Cards>(whatCopy, sideOf(arg(e, 0)), argCount(e) > 1 && !same ? b.num(arg(e, 1)) : nullptr);
-        };
+        }};
     }
-    w.stmt["switch-in"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<SwitchIn>(b.target(arg(e, 0))); };
-    w.stmt["discard-tools"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<DiscardTools>(b.target(arg(e, 0))); };
-    w.stmt["rare-candy"] = [](const SExpr&, ScriptBuilder& b) { return b.make<RareCandy>(); };
-    w.stmt["swap-pokemon"] = [](const SExpr&, ScriptBuilder& b) { return b.make<SwapPokemon>(); };
-    w.stmt["dig"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<Dig>(intArg(arg(e, 0)), parseCardFilter(e, 1)); };
-    w.stmt["effect"] = [](const SExpr& e, ScriptBuilder& b) {
+    w.stmt["switch-in"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<SwitchIn>(b.target(arg(e, 0))); }};
+    w.stmt["discard-tools"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<DiscardTools>(b.target(arg(e, 0))); }};
+    w.stmt["rare-candy"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<RareCandy>(); }};
+    w.stmt["swap-pokemon"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<SwapPokemon>(); }};
+    w.stmt["dig"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) { return b.make<Dig>(intArg(arg(e, 0)), parseCardFilter(e, 1)); }};
+    w.stmt["effect"] = {3, 3, [](const SExpr& e, ScriptBuilder& b) {
         const std::string& d = arg(e, 0).atom;
         int turns = d == "this-turn" ? 0 : d == "opp-next-turn" ? 1 : d == "my-next-turn" ? 2 : -1;
         if (turns < 0) scriptFail("unknown duration '" + d + "'", e);
@@ -377,7 +377,7 @@ void addCardWords(Words& w) {
         if (std::none_of(std::begin(whos), std::end(whos), [&](const char* x) { return who == x; }))
             scriptFail("unknown target '" + who + "'", e);
         return b.make<Timed>(turns, who, b.modifier(arg(e, 2), who == "me" || who == "opp" ? ModScope::MyAll : ModScope::Self));
-    };
-    w.cond["played-supporter"] = [](const SExpr&, ScriptBuilder& b) { return b.make<PlayedSupporter>(); };
-    w.num["hand-size"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<HandSize>(oppArg(arg(e, 0))); };
+    }};
+    w.cond["played-supporter"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<PlayedSupporter>(); }};
+    w.num["hand-size"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<HandSize>(oppArg(arg(e, 0))); }};
 }

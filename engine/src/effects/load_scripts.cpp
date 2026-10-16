@@ -79,8 +79,10 @@ void readAbility(CardDef& c, const SExpr& e, ScriptBuilder& b) {
 
 void readCardText(CardDef& c, const SExpr& e, ScriptBuilder& b) {
     const std::string& form = e.head();
-    if (form == "play" && (c.isTrainer(TrainerKind::Item) || c.isTrainer(TrainerKind::Supporter)))
+    if (form == "play" && (c.isTrainer(TrainerKind::Item) || c.isTrainer(TrainerKind::Supporter))) {
+        if (argCount(e) != 1) scriptFail("expected one statement", e);
         c.play = b.stmt(arg(e, 0));
+    }
     else if (form == "tool" && c.isTrainer(TrainerKind::Tool))
         modifiers(c, e, b, ModScope::Self);
     else if (form == "at-end-of-turn" && c.isTrainer(TrainerKind::Tool))

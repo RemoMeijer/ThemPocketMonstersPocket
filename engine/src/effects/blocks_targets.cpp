@@ -224,63 +224,63 @@ void addTargetWords(Words& w) {
                                                            {"picked", Single::Picked}};
     for (auto [name, who] : singles) {
         auto whoCopy = who;
-        w.target[name] = [whoCopy](const SExpr&, ScriptBuilder& b) { return b.make<Single>(whoCopy); };
+        w.target[name] = {0, 0, [whoCopy](const SExpr&, ScriptBuilder& b) { return b.make<Single>(whoCopy); }};
     }
     const std::pair<const char*, Pool::Mode> pools[] = {
         {"choose", Pool::Choose}, {"owner-chooses", Pool::OwnerChooses}, {"random", Pool::Random}, {"each", Pool::Each}};
     for (auto [name, mode] : pools) {
         auto modeCopy = mode;
-        w.target[name] = [modeCopy](const SExpr& e, ScriptBuilder& b) {
+        w.target[name] = {2, AnyCount, [modeCopy](const SExpr& e, ScriptBuilder& b) {
             const std::string& side = arg(e, 0).atom;
             const std::string& zone = arg(e, 1).atom;
             int s = side == "my" ? 0 : side == "opp" ? 1 : side == "both" ? 2 : -1;
             int z = zone == "active" ? 0 : zone == "bench" ? 1 : zone == "all" ? 2 : -1;
             if (s < 0 || z < 0) scriptFail("expected SIDE ZONE", e);
             return b.make<Pool>(modeCopy, s, z, parseFilter(e, 2));
-        };
+        }};
     }
 
-    w.num["energy"] = [](const SExpr& e, ScriptBuilder& b) {
+    w.num["energy"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<PokemonNum>(PokemonNum::Energy, b.target(arg(e, 0)), typeMask(e, 1));
-    };
-    w.num["damage-on"] = [](const SExpr& e, ScriptBuilder& b) {
+    }};
+    w.num["damage-on"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<PokemonNum>(PokemonNum::DamageOn, b.target(arg(e, 0)), 0);
-    };
-    w.num["retreat-cost"] = [](const SExpr& e, ScriptBuilder& b) {
+    }};
+    w.num["retreat-cost"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<PokemonNum>(PokemonNum::RetreatCost, b.target(arg(e, 0)), 0);
-    };
-    w.num["count"] = [](const SExpr& e, ScriptBuilder& b) {  // (count SIDE ZONE FILTER…)
+    }};
+    w.num["count"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {  // (count SIDE ZONE FILTER…)
         SExpr pool = e;
         pool.items[0].atom = "each";
         return b.make<PokemonNum>(PokemonNum::Count, b.target(pool), 0);
-    };
+    }};
 
-    auto test = [&w](const char* name, PokemonTest::What what) {
-        w.cond[name] = [what](const SExpr& e, ScriptBuilder& b) {
+    auto test = [&w](const char* name, PokemonTest::What what, std::size_t min = 1, std::size_t max = 1) {
+        w.cond[name] = {min, max, [what](const SExpr& e, ScriptBuilder& b) {
             return b.make<PokemonTest>(what, b.target(arg(e, 0)), 0, typeMask(e, 1));
-        };
+        }};
     };
     test("has-damage", PokemonTest::HasDamage);
     test("has-tool", PokemonTest::HasTool);
-    test("is-type", PokemonTest::IsType);
+    test("is-type", PokemonTest::IsType, 2, AnyCount);
     test("is-ex", PokemonTest::IsEx);
     test("is-basic", PokemonTest::IsBasic);
     test("is-evolution", PokemonTest::IsEvolution);
     test("moved-to-active", PokemonTest::MovedToActive);
     test("evolved-this-turn", PokemonTest::EvolvedThisTurn);
-    w.cond["has-status"] = [](const SExpr& e, ScriptBuilder& b) {
+    w.cond["has-status"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<PokemonTest>(PokemonTest::HasStatus, b.target(arg(e, 0)), statusMask(e, 1), 0);
-    };
+    }};
     // (energy-at-least T N [type…]) and (extra-energy T N type…)
-    w.cond["energy-at-least"] = [](const SExpr& e, ScriptBuilder& b) {
+    w.cond["energy-at-least"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<PokemonTest>(PokemonTest::EnergyAtLeast, b.target(arg(e, 0)), intArg(arg(e, 1)), typeMask(e, 2));
-    };
-    w.cond["extra-energy"] = [](const SExpr& e, ScriptBuilder& b) {
+    }};
+    w.cond["extra-energy"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<PokemonTest>(PokemonTest::ExtraEnergy, b.target(arg(e, 0)), intArg(arg(e, 1)), typeMask(e, 2));
-    };
-    w.cond["exists"] = [](const SExpr& e, ScriptBuilder& b) {  // (exists SIDE ZONE FILTER…)
+    }};
+    w.cond["exists"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {  // (exists SIDE ZONE FILTER…)
         SExpr pool = e;
         pool.items[0].atom = "each";
         return b.make<PokemonTest>(PokemonTest::Exists, b.target(pool), 0, 0);
-    };
+    }};
 }

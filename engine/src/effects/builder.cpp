@@ -24,11 +24,13 @@ bool isInteger(const std::string& s) {
 }
 
 template <class T>
-const T* build(const std::unordered_map<std::string, Word<T>>& map, const SExpr& e, ScriptBuilder& b, const char* kind) {
+const T* build(const std::unordered_map<std::string, Entry<T>>& map, const SExpr& e, ScriptBuilder& b, const char* kind) {
     const std::string& word = e.list ? e.head() : e.atom;
     auto it = map.find(word);
     if (it == map.end()) scriptFail(std::string("unknown ") + kind + " '" + word + "'", e);
-    return it->second(e, b);
+    std::size_t n = argCount(e);
+    if (n < it->second.min || n > it->second.max) scriptFail("wrong number of arguments for '" + word + "'", e);
+    return it->second.build(e, b);
 }
 
 class Literal : public Num {
