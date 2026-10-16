@@ -45,8 +45,9 @@ The rest are mostly one-of-a-kind mechanics we chose to skip for now:
 The short version: the design works and needs no rework now. Details, and how other engines do it, are in DESIGN.md §12.
 
 - **Card effects as data.** Card text compiles into small scripts built from about 60 blocks, and no card is handled by name in C++. That gave 80% coverage with a 700-line compiler. deckgym-core, the closest existing Pocket simulator, writes Rust code per card instead (a 7,000-line file of attack handlers) and covers about 89%.
-  - The risk is that a sentence pattern mistranslates a card without anyone noticing. Against that we have the compiler's self-test, sample checks against card text, and the coverage report.
-  - The long tail gets harder: the planned `data/effects_manual.tsv` for hand-written scripts isn't built yet.
+  - Building effects from shared blocks is normal: MTG Arena writes each card's abilities as small scripts in a rules language, and Forge uses a text script per card. What's unusual is that sentence patterns write our scripts from card text.
+  - The risk: a pattern that matches but means something slightly different makes a card play wrong without anyone noticing. Against that we have the git diff of `effects.tsv`, the compiler's self-test, the coverage report and the block tests. Proposed: real-card golden tests, a diff review for each new set, and `effects_manual.tsv` for odd cards (DESIGN.md §4, "How fragile is this?").
+  - The long tail gets harder as the patterns grow.
 - **One damage pipeline, and modifiers that answer fixed questions.** This matches the official damage order and kept every rule fix in this round small: R1–R4 each touched a few places.
 - **Plain, copyable game state.** It's ready for threads and for a search player later.
 - **Choices inside effects call the player directly** (`choose()`), as Forge and XMage do. That's fine for random and simple players. A search player needs the pending choice stored in the state instead, as deckgym-core and SabberStone do. Only 8 places call `choose()`, so this can wait until a search player is planned.
@@ -88,7 +89,6 @@ Also answered on 2026-10-16:
 - A Trainer can only be played when its effect has something to do. Each effect block now checks this.
 - Energy paid for a retreat or discarded by an effect goes to the discard pile.
 - When one attack knocks out both Active Pokémon, the defending player picks a new Active first, then the attacking player, then Pokémon Checkup. The engine already did this; a test now holds it.
-
 - An effect that starts something can always be played, even if it can never pay off. That covers Blaine without Ninetales, and X Speed after you've already retreated: the Retreat Cost is still 1 less. The engine already did this.
 
 **Open questions:** none right now.
@@ -99,17 +99,19 @@ Also answered on 2026-10-16:
 - A Fossil can't be discarded from play by choice.
 - Effects that look at the deck and put the cards back in any order do nothing.
 - Clemont's Backpack's "+20 to your opponent's Pokémon" isn't supported (our damage bonuses only count against the Active).
+- At most 16 timed effects at once; past that the oldest is dropped. Never seen in a game so far.
 
 ## Next
 
-In order. Each step gets a plan first, then tests, `check_states` at 0 violations and a commit.
+In order. Each step gets a plan first, then tests, `check_states` at 0 violations and a commit. Remco still has to choose whether step 1 or step 2 goes first.
 
-1. **R5, Stadium actions:** a "use the Stadium" move, once per player per turn and per Stadium card; a new Stadium can be used again. Also the Stadium's "at the end of each player's turn" trigger, and compiler patterns for both sentence shapes. This unlocks Mesagoza, Fragrant Forest, Area Zero, Arcade, Hiking Trail and Soothing Shore, as far as their effects have blocks. It completes the rules milestone.
-2. **Seeds:** one seed per game, from which the shuffles, coins and random player all follow. Then a failure found by `check_states` can be replayed, and two decks can be compared on the same luck.
-3. **Player choices the engine makes today:** which energy to pay for a retreat or to discard, and discarding a Fossil.
-4. **The simulation runner (milestone 3):** many games over threads; win, draw and loss per pairing, with a confidence interval; the first player alternates. About 2,400 games per pairing give ±2%.
-5. **Card coverage, Trainers first:** the missing Supporters, Items and Tools, then the most common missing attack texts from `tcgp --coverage`.
-6. **Finding decks (milestone 4):** generate legal decks around Pokémon lines, play them against each other, rank them, and list the top ones to try in the game.
-7. **A minimal player:** attach energy and attack when possible, if the random player's draws and bias get in the way of step 6. Remco said not to build real bots yet.
+1. **Effect-script checks:** real-card golden tests (card text plus its expected script, a few per sentence family), a review of the `effects.tsv` diff for each new set, and `data/effects_manual.tsv` for odd cards.
+2. **R5, Stadium actions:** a "use the Stadium" move, once per player per turn and per Stadium card; a new Stadium can be used again. Also the Stadium's "at the end of each player's turn" trigger, and compiler patterns for both sentence shapes. This unlocks Mesagoza, Fragrant Forest, Area Zero, Arcade, Hiking Trail and Soothing Shore, as far as their effects have blocks. It completes the rules milestone.
+3. **Seeds:** one seed per game, from which the shuffles, coins and random player all follow. Then a failure found by `check_states` can be replayed, and two decks can be compared on the same luck.
+4. **Player choices the engine makes today:** which energy to pay for a retreat or to discard, and discarding a Fossil.
+5. **The simulation runner (milestone 3):** many games over threads; win, draw and loss per pairing, with a confidence interval; the first player alternates. About 2,400 games per pairing give ±2%.
+6. **Card coverage, Trainers first:** the missing Supporters, Items and Tools, then the most common missing attack texts from `tcgp --coverage`.
+7. **Finding decks (milestone 4):** generate legal decks around Pokémon lines, play them against each other, rank them, and list the top ones to try in the game.
+8. **A minimal player:** attach energy and attack when possible, if the random player's draws and bias get in the way of step 7. Remco said not to build real bots yet.
 
 Dropped: R6, source tags on each constant in `rules.h`. DESIGN.md §10 already says where each rule comes from, and that's enough.

@@ -65,8 +65,8 @@ That gives 1,078 effect texts, split into 1,445 sentences. Blanking out the numb
 - **Stadiums:** one in play, shared by both players. The placement rules are printed on Mesagoza: one per turn, it replaces the old one, and a Stadium with the same name can't be played.
 - **Tools:** attached to a Pokémon. Guzma, Starly and Purrloin discard them.
 - **Effects of other cards:** Penny uses another Supporter's effect, so an effect must be usable on its own, apart from its card.
-- **Groups the data doesn't mark:** Ultra Beasts, and "Arceus or Arceus ex". TCGdex has no field for these.
-- **ex:** TCGdex has `suffix: "EX"` on 414 cards. Use that instead of the name trick the loader uses now. Mega is still only visible from the name ("Mega … ex").
+- **Groups the data doesn't mark:** Ultra Beasts, and "Arceus or Arceus ex". `cards.tsv` has no field for these.
+- **ex:** set by `export_cards.py` from the name ending in " ex" (Limitless leaves the ex rule box off some cards); Mega from "Mega … ex".
 
 ## 2. Principles
 
@@ -136,6 +136,22 @@ Each effect text becomes a short script in a small language with nested brackets
 1. **`compile_effects.py`:** a table of sentence patterns, each a regular expression with blanks for numbers, types and targets, mapped to a script template. It handles the common shapes automatically and grows the exporter we already have.
 2. **`data/effects_manual.tsv`:** hand-written scripts for the long tail. An LLM could draft these and a person reviews them, which fits the LLM plans for later. (Not built yet.)
 3. **A coverage report:** which cards are fully supported, which pattern covers how many cards, and which sentences match nothing.
+
+**How fragile is this?** (2026-10-16) Effects built from shared blocks are the normal way, for example MTG Arena and Forge (§12). What's unusual here is that sentence patterns write the scripts from card text. That can go wrong in three ways:
+- **New wording matches no pattern.** The card is unsupported and shows in `--coverage`. That's safe.
+- **A pattern matches but the meaning is slightly off.** The card plays wrong and nobody notices. This is the real risk. For example, TCGdex's Pachirisu text was missing "{L}", and the script copied the mistake.
+- **A pattern change for one card quietly changes others.**
+
+What guards against it today:
+- `data/effects.tsv` is in git, so every regenerated script shows as a diff;
+- the compiler has a self-test (27 examples);
+- the coverage report;
+- unit tests for the blocks.
+
+`check_states` doesn't help: it checks the rules, not whether a script matches its card. Proposed additions:
+- real-card golden tests (actual card text and its expected script, a few per sentence family);
+- a review of the `effects.tsv` diff for each new set;
+- `effects_manual.tsv` for odd cards, so the patterns don't grow ever more specific.
 
 **C++ side:** each script is parsed once when the cards load, into a tree of small block objects, one class per word. An unknown word makes the card unsupported and names the word. Nothing gets parsed during a game.
 
@@ -322,6 +338,7 @@ Research from 2026-10-16. Details and links come from the sources named below. T
 
 | Engine | Card effects | Choices inside effects | Search |
 |---|---|---|---|
+| MTG Arena (Magic, official) | A C++ rules core; each card's abilities are small scripts in CLIPS, a rules language ([Wizards dev blog](https://magic.wizards.com/en/news/mtg-arena/on-whiteboards-naps-and-living-breakthrough)) | Not public | Not public |
 | Forge (Magic) | Text scripts per card | Calls the player directly | Copies the game for its simulation AI |
 | XMage (Magic) | A Java class per card, built from a shared effect library | Calls the player directly | Copies the game; minimax and MCTS players |
 | SabberStone (Hearthstone) | Card definitions built from task objects | Pending choice in the state | Copies the game; hides the opponent's hand behind dummy cards |
