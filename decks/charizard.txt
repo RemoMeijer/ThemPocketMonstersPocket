@@ -1,0 +1,15 @@
+# Fire with a Stage 2 ex line, Rare Candy, energy acceleration and Blaine.
+energy: Fire
+
+2 A1-033   # Charmander
+2 A1-034   # Charmeleon (from Charmander)
+2 A1-036   # Charizard ex (from Charmeleon, Stage 2)
+2 A1-047   # Moltres ex: flip 3, attach that many Fire to benched Pokémon
+2 A1-044   # Magmar
+2 A3-144   # Rare Candy
+2 P-A-007  # Professor's Research
+2 P-A-005  # Poké Ball
+1 A1-221   # Blaine: Ninetales, Rapidash or Magmar +30 this turn
+1 A2-148   # Rocky Helmet: 20 back to the attacker
+1 P-A-006  # Red Card: opponent shuffles their hand and draws 3
+1 P-A-001  # Potion

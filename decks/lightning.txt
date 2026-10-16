@@ -1,0 +1,13 @@
+# Lightning Basics and their Stage 1 evolutions. Water is weak to Lightning.
+energy: Lightning
+
+2 A1-099   # Voltorb 60 HP, L 20
+2 A1-100   # Electrode 80 HP, LL 70, retreat 0   (from Voltorb)
+2 A1-105   # Blitzle 60 HP, L 20
+2 A3a-017  # Zebstrika 90 HP, LL 70             (from Blitzle)
+2 A4-067   # Mareep 60 HP, L 20
+2 A4-068   # Flaaffy 90 HP, LL 50, retreat 2    (from Mareep)
+2 A4a-030  # Yamper 60 HP, L 20
+2 B1-096   # Boltund 110 HP, LC 60              (from Yamper)
+2 A2b-026  # Pawmi 60 HP, L 20
+2 A2b-027  # Pawmo 90 HP, LL 40                 (from Pawmi)

@@ -1,0 +1,16 @@
+# Psychic with a Stage 2 that accelerates energy, Mewtwo ex, a Stadium, Cyrus and Pokémon Communication.
+energy: Psychic
+
+2 B2-063   # Ralts: Confuse Ray
+2 B2-064   # Kirlia (from Ralts): Psybeam, confuses
+2 B2-065   # Gardevoir (from Kirlia): Psy Turbo, attach 2 Psychic
+2 A1-129   # Mewtwo ex: Psydrive 150, discard 2 Psychic
+2 P-A-007  # Professor's Research
+2 P-A-005  # Poké Ball
+2 A3-144   # Rare Candy
+1 A2-150   # Cyrus: pull a damaged benched Pokémon into the Active Spot
+1 A1a-068  # Leaf: retreat cost 2 less this turn
+1 A2-146   # Pokémon Communication
+1 B2-154   # Starting Plains: Basic Pokémon get +20 HP
+1 A2-147   # Giant Cape
+1 P-A-002  # X Speed

@@ -1,0 +1,14 @@
+# Lightning with effects: Pikachu ex, Zapdos ex, a bench sniper, and the common Trainers.
+energy: Lightning
+
+2 A1-096   # Pikachu ex: 30 damage for each benched Lightning Pokémon
+2 A1-104   # Zapdos ex: 4 coins, 50 each
+2 A1a-027  # Electabuzz: 40 to 1 of the opponent's Pokémon
+2 A1-099   # Voltorb
+2 A1-100   # Electrode (from Voltorb)
+2 P-A-007  # Professor's Research: draw 2
+2 P-A-005  # Poké Ball: a random Basic from the deck
+2 P-A-001  # Potion: heal 20
+2 A1-225   # Sabrina: switch out the opponent's Active
+1 P-A-002  # X Speed: retreat cost 1 less this turn
+1 A2-147   # Giant Cape: +20 HP

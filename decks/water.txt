@@ -1,0 +1,13 @@
+# Plain Water Basics only.
+energy: Water
+
+2 A1-053   # Squirtle 60 HP, Water Gun W 20
+2 A1-062   # Tentacool 60 HP, Gentle Slap W 20
+2 A1-064   # Seel 80 HP, Headbutt CC 30
+2 A1-066   # Shellder 60 HP, Tongue Slap W 20
+2 A1-068   # Krabby 70 HP, Vise Grip WC 40
+2 A1-090   # Pyukumuku 70 HP, Rain Splash W 30
+2 A1a-022  # Chewtle 80 HP, Bite WC 30
+2 A2-047   # Wash Rotom 80 HP, Wave Splash W 30
+2 A3-044   # Lapras 110 HP, Surf WWC 70
+2 A3a-010  # Mantine 90 HP, Surf WC 50

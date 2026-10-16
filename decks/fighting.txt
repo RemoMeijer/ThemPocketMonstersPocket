@@ -1,0 +1,13 @@
+# Fighting with a Stage 2 ex line (Machop -> Machoke -> Machamp ex). Lightning is weak to Fighting.
+energy: Fighting
+
+2 A1-143   # Machop 70 HP, F 20, retreat 2
+2 A1-144   # Machoke 100 HP, FF 50           (from Machop)
+2 A1-146   # Machamp ex 180 HP, FFF 120      (from Machoke, worth 2 points)
+2 A1-137   # Sandshrew 70 HP, F 10
+2 A1-138   # Sandslash 100 HP, FF 70         (from Sandshrew)
+2 A1-147   # Geodude 70 HP, F 20
+2 A1-148   # Graveler 100 HP, FCC 70, retreat 3 (from Geodude)
+2 A1-155   # Hitmonchan 80 HP, F 30
+2 A1-141   # Mankey 60 HP, F 20
+2 A1-150   # Onix 110 HP, FFF 70, retreat 4

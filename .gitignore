@@ -1,0 +1,9 @@
+# build output
+engine/build*/
+__pycache__/
+# the unpacked APK (unused, ~1.5 GB)
+apkm/
+x/
+# raw downloads; the generated TSVs are committed so changes show up as diffs
+data/cards.json
+data/raw/

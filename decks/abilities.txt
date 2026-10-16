@@ -1,0 +1,14 @@
+# Psychic with abilities: Gardevoir's Psy Shadow, Hypno's sleep coin, Cresselia ex's heal on attach.
+energy: Psychic
+
+2 A1-130   # Ralts
+2 A1-131   # Kirlia (from Ralts)
+2 A1-132   # Gardevoir (from Kirlia): once a turn, 1 Psychic onto the Psychic Active
+2 A1-129   # Mewtwo ex
+2 P-A-037  # Cresselia ex: heals 20 whenever you attach a Psychic from the Energy Zone
+2 A1-124   # Drowzee
+2 A1-125   # Hypno (from Drowzee): once a turn, flip; heads puts the opponent's Active to sleep
+2 P-A-007  # Professor's Research
+2 P-A-005  # Poké Ball
+1 A3-144   # Rare Candy
+1 A2-147   # Giant Cape
