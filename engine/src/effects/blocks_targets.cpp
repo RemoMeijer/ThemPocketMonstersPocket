@@ -48,8 +48,7 @@ public:
     enum Mode { Choose, OwnerChooses, Random, Each };
     Pool(Mode mode, int side, int zone, Filter filter) : mode_(mode), side_(side), zone_(zone), filter_(std::move(filter)) {}
 
-    void select(EffectCtx& ctx, Uids& out) const override {
-        Uids pool;
+    void candidates(EffectCtx& ctx, Uids& pool) const override {
         for (int k = 0; k < 2; ++k) {
             if ((side_ == 0 && k == 1) || (side_ == 1 && k == 0)) continue;
             const PlayerState& p = ctx.game.state().players[k == 0 ? ctx.player : 1 - ctx.player];
@@ -58,6 +57,11 @@ public:
                 for (const PokemonSlot& b : p.bench)
                     if (filter_.matches(b, ctx)) pool.push_back(b.uid);
         }
+    }
+
+    void select(EffectCtx& ctx, Uids& out) const override {
+        Uids pool;
+        candidates(ctx, pool);
         if (pool.empty()) return;
         if (mode_ == Each) {
             for (uint16_t uid : pool) out.push_back(uid);
@@ -89,6 +93,7 @@ public:
                                            : players[1 - ctx.player].active.uid;
         if (ctx.game.find(uid)) out.push_back(uid);
     }
+    void candidates(EffectCtx& ctx, Uids& out) const override { select(ctx, out); }  // no choice involved
 
 private:
     Who who_;

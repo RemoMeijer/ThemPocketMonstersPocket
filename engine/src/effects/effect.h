@@ -13,6 +13,7 @@
 #include "effects/script.h"
 
 class Game;
+struct PokemonSlot;
 
 // Everything a running effect needs.
 struct EffectCtx {
@@ -48,6 +49,9 @@ struct NameList : Node {
 class Stmt : public Node {  // does something
 public:
     virtual void run(EffectCtx&) const = 0;
+    // Whether it has something to act on right now. A Trainer can only be played when its effect does (App,
+    // DESIGN.md §10). Blocks with nothing to check say yes.
+    virtual bool possible(EffectCtx&) const { return true; }
 };
 class Num : public Node {  // a number: 30, heads, (energy self)
 public:
@@ -56,10 +60,12 @@ public:
 class Cond : public Node {  // a test: heads, (has-damage opp-active)
 public:
     virtual bool test(EffectCtx&) const = 0;
+    virtual bool usesCoins() const { return false; }  // decided by coins that haven't been flipped yet
 };
 class Target : public Node {  // which Pokémon: self, (choose opp bench)
 public:
     virtual void select(EffectCtx&, Uids& out) const = 0;
+    virtual void candidates(EffectCtx&, Uids& out) const = 0;  // every Pokémon it could pick, without asking anyone
 };
 
 class ScriptBuilder;
@@ -112,3 +118,5 @@ bool oppArg(const SExpr& e);  // `my` → false, `opp` → true
 uint8_t parseStatuses(const SExpr& e, std::size_t from);  // asleep, paralyzed, confused, poisoned, burned, any
 void hit(EffectCtx& ctx);                 // the attack's main damage to the opponent's Active Pokémon
 bool affects(EffectCtx& ctx, uint16_t uid);  // false when an attack's effects are prevented on that Pokémon
+// Whether some Pokémon that t could pick passes test (for Stmt::possible).
+bool anyCandidate(EffectCtx& ctx, const Target* t, const std::function<bool(const PokemonSlot&)>& test);

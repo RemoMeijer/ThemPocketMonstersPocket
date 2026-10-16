@@ -312,6 +312,40 @@ static void confusedAttacksSometimesFail() {
     CHECK(hits > 120 && hits < 280);  // about half
 }
 
+// A Trainer needs something to do before it can be played (App): no Potion without damage.
+static void trainersNeedSomethingToDo() {
+    Table t;
+    CardDef potion = trainer(TrainerKind::Item, "Potion", "(heal (choose my all damaged) 20)");
+    CardDef candy = trainer(TrainerKind::Item, "Candy", "(rare-candy)");
+    CardDef generator = trainer(TrainerKind::Item, "Generator", "(seq (flip 1) (if heads (attach-energy (choose my bench) water 1)))");
+    CardDef sabrina = trainer(TrainerKind::Supporter, "Sabrina", "(switch-in (owner-chooses opp bench))");
+    CardDef research = trainer(TrainerKind::Supporter, "Research", "(draw 2)");
+    CardDef giovanni = trainer(TrainerKind::Supporter, "Giovanni", "(effect this-turn me (damage-dealt 10 :scope my-all))");
+    GameState& s = t.position();
+    PlayerState& p = s.players[0];
+    p.hand.clear();
+    for (const CardDef* c : {&potion, &candy, &generator, &sabrina, &research, &giovanni}) p.hand.push_back(c);
+    auto offered = [&](const CardDef& card) {
+        for (const Action& a : t.game.legalActions())
+            if (a.kind == ActionKind::PlayTrainer && p.hand[a.index] == &card) return true;
+        return false;
+    };
+    CHECK(!offered(potion));     // nothing to heal
+    CHECK(!offered(candy));      // no Stage 2 in the hand
+    CHECK(!offered(generator));  // no Benched Pokémon to take the energy, whatever the coin says
+    CHECK(offered(sabrina));     // P2 has a Benched Pokémon
+    CHECK(offered(research));
+    CHECK(offered(giovanni));  // an effect for this turn always does something
+    p.active.damage = 10;
+    t.bench(0, t.cards[3]);
+    s.players[1].bench.clear();
+    p.deck.clear();
+    CHECK(offered(potion));
+    CHECK(offered(generator));
+    CHECK(!offered(sabrina));
+    CHECK(!offered(research));  // nothing left to draw
+}
+
 static void moveEnergyAndSearch() {
     Table t;
     CardDef dawn = trainer(TrainerKind::Supporter, "Dawn", "(move-energy (choose my bench) my-active any 1)");
@@ -351,6 +385,7 @@ int main() {
     attackCostChanges();
     rareCandyAndOnEvolve();
     confusedAttacksSometimesFail();
+    trainersNeedSomethingToDo();
     moveEnergyAndSearch();
     return report("effects");
 }

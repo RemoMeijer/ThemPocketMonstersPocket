@@ -158,3 +158,11 @@ bool affects(EffectCtx& ctx, uint16_t uid) {
     }
     return true;
 }
+
+bool anyCandidate(EffectCtx& ctx, const Target* t, const std::function<bool(const PokemonSlot&)>& test) {
+    Uids pool;
+    t->candidates(ctx, pool);
+    for (uint16_t uid : pool)
+        if (const PokemonSlot* p = ctx.game.find(uid); p && test(*p)) return true;
+    return false;
+}

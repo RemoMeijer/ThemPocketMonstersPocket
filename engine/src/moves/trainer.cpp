@@ -15,12 +15,15 @@ public:
         bool supporters = p.supporterTurn != s.turn && !game.playerHas(ModKind::CantPlaySupporter, me) &&
                           (rules::SupporterOnFirstTurn || !game.firstTurnOfGame());
         bool stadiums = p.stadiumTurn != s.turn;
-        // shortcut: a Trainer is playable even when it would do nothing (Rare Candy without a target); check
-        // its effect first once a smarter player would be misled by that.
+        // A Trainer needs something to do before it can be played: no Potion without damage (App).
+        auto doable = [&](const CardDef* c) {
+            EffectCtx ctx{game, me};
+            return c->play && c->play->possible(ctx);
+        };
         for (std::size_t h = 0; h < p.hand.size(); ++h) {
             const CardDef* c = p.hand[h];
-            bool ok = (c->isTrainer(TrainerKind::Item) && items && c->play) ||
-                      (c->isTrainer(TrainerKind::Supporter) && supporters && c->play) ||
+            bool ok = (c->isTrainer(TrainerKind::Item) && items && doable(c)) ||
+                      (c->isTrainer(TrainerKind::Supporter) && supporters && doable(c)) ||
                       (c->isTrainer(TrainerKind::Stadium) && stadiums && (!s.stadium || s.stadium->name != c->name));
             if (ok) out.push_back({ActionKind::PlayTrainer, int8_t(h)});
         }

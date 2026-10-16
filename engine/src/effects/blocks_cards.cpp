@@ -58,6 +58,9 @@ public:
     void run(EffectCtx& ctx) const override {
         for (int i = n_->eval(ctx); i > 0; --i) ctx.game.draw(sidePlayer(ctx, opp_));
     }
+    bool possible(EffectCtx& ctx) const override {
+        return n_->eval(ctx) > 0 && !ctx.game.state().players[sidePlayer(ctx, opp_)].deck.empty();
+    }
 
 private:
     const Num* n_;
@@ -87,6 +90,13 @@ public:
                 ctx.game.say("  ", card->name, " from the deck into the hand");
             }
         }
+    }
+    bool possible(EffectCtx& ctx) const override {  // a matching card in the deck (playing the card made room)
+        const PlayerState& p = ctx.game.state().players[ctx.player];
+        if (bench_ && p.bench.full()) return false;
+        for (const CardDef* c : p.deck)
+            if (f_.matches(c) && (!bench_ || c->isBasic())) return true;
+        return false;
     }
 
 private:
@@ -154,6 +164,10 @@ public:
         ctx.game.movedToActive(owner);
         ctx.game.say("  P", owner + 1, "'s ", p.active.card->name, " is now Active, ", in->card->name, " goes to the Bench");
     }
+    bool possible(EffectCtx& ctx) const override {  // a Benched Pokémon to switch in
+        const auto& players = ctx.game.state().players;
+        return anyCandidate(ctx, t_, [&](const PokemonSlot& p) { return &p != &players[0].active && &p != &players[1].active; });
+    }
 
 private:
     const Target* t_;
@@ -174,6 +188,9 @@ public:
             p->tool = nullptr;
         }
     }
+    bool possible(EffectCtx& ctx) const override {
+        return anyCandidate(ctx, t_, [](const PokemonSlot& p) { return p.tool != nullptr; });
+    }
 
 private:
     const Target* t_;
@@ -184,17 +201,8 @@ private:
 class RareCandy : public Stmt {
 public:
     void run(EffectCtx& ctx) const override {
-        GameState& s = ctx.game.state();
-        PlayerState& p = s.players[ctx.player];
-        if (ctx.game.ownFirstTurn(ctx.player)) return;
-        std::vector<std::pair<int, std::size_t>> options;  // (target, hand position)
-        for (int t = -1; t < int(p.bench.size()); ++t) {
-            const PokemonSlot& basic = ctx.game.slot(ctx.player, t);
-            if (!basic.card || basic.card->stage != Stage::Basic || basic.enteredTurn >= s.turn) continue;
-            for (std::size_t h = 0; h < p.hand.size(); ++h)
-                if (p.hand[h]->stage == Stage::Stage2 && p.hand[h]->evolvesFromBasic == basic.card->name)
-                    options.push_back({t, h});
-        }
+        PlayerState& p = ctx.game.state().players[ctx.player];
+        auto options = optionsFor(ctx);
         if (options.empty()) return;
         auto [t, h] = options[ctx.game.choose(ctx.player, int(options.size()))];
         PokemonSlot& target = ctx.game.slot(ctx.player, t);
@@ -205,6 +213,24 @@ public:
             inner.self = target.uid;
             target.card->onEvolve->run(inner);
         }
+    }
+    bool possible(EffectCtx& ctx) const override { return !optionsFor(ctx).empty(); }
+
+private:
+    // Every (target, hand position) it could evolve: not on your first turn, nor on a Basic put down this turn.
+    static std::vector<std::pair<int, std::size_t>> optionsFor(EffectCtx& ctx) {
+        const GameState& s = ctx.game.state();
+        const PlayerState& p = s.players[ctx.player];
+        std::vector<std::pair<int, std::size_t>> options;
+        if (ctx.game.ownFirstTurn(ctx.player)) return options;
+        for (int t = -1; t < int(p.bench.size()); ++t) {
+            const PokemonSlot& basic = ctx.game.slot(ctx.player, t);
+            if (!basic.card || basic.card->stage != Stage::Basic || basic.enteredTurn >= s.turn) continue;
+            for (std::size_t h = 0; h < p.hand.size(); ++h)
+                if (p.hand[h]->stage == Stage::Stage2 && p.hand[h]->evolvesFromBasic == basic.card->name)
+                    options.push_back({t, h});
+        }
+        return options;
     }
 };
 
@@ -261,6 +287,7 @@ public:
         }
         std::shuffle(p.deck.begin(), p.deck.end(), ctx.game.rng());
     }
+    bool possible(EffectCtx& ctx) const override { return !ctx.game.state().players[ctx.player].deck.empty(); }
 
 private:
     int n_;
@@ -286,6 +313,11 @@ public:
         p.hand.push_back(got);
         std::shuffle(p.deck.begin(), p.deck.end(), ctx.game.rng());
         ctx.game.say("  ", gave->name, " into the deck, ", got->name, " into the hand");
+    }
+    bool possible(EffectCtx& ctx) const override {  // a Pokémon in the hand and one in the deck
+        const PlayerState& p = ctx.game.state().players[ctx.player];
+        auto pokemon = [](const CardDef* c) { return c->isPokemon(); };
+        return std::any_of(p.hand.begin(), p.hand.end(), pokemon) && std::any_of(p.deck.begin(), p.deck.end(), pokemon);
     }
 };
 

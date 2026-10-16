@@ -6,6 +6,12 @@
 #include "game/game.h"
 
 namespace {
+bool hasEnergy(const PokemonSlot& p, uint16_t types) {  // any energy of these types (0 = any type)
+    for (int t = 0; t < TypeCount; ++t)
+        if (p.energy[t] && (!types || (types & typeBit(Type(t))))) return true;
+    return false;
+}
+
 // (attach-energy TARGET TYPE N): N new energy of TYPE from the Energy Zone, onto each target.
 class AttachEnergy : public Stmt {
 public:
@@ -15,6 +21,9 @@ public:
         t_->select(ctx, targets);
         int n = n_->eval(ctx);
         for (uint16_t uid : targets) ctx.game.attachFromZone(ctx.player, uid, type_, n);
+    }
+    bool possible(EffectCtx& ctx) const override {
+        return anyCandidate(ctx, t_, [](const PokemonSlot&) { return true; });
     }
 
 private:
@@ -44,6 +53,9 @@ public:
             }
             if (removed && ctx.game.logging()) ctx.game.say("  ", removed, " energy discarded -> ", ctx.game.show(*p, owner));
         }
+    }
+    bool possible(EffectCtx& ctx) const override {
+        return anyCandidate(ctx, t_, [this](const PokemonSlot& p) { return hasEnergy(p, types_); });
     }
 
 private:
@@ -96,6 +108,18 @@ public:
             }
         }
         if (moved && ctx.game.logging()) ctx.game.say("  ", moved, " energy moved -> ", ctx.game.show(*to, owner));
+    }
+    bool possible(EffectCtx& ctx) const override {  // a source with matching energy, and somewhere else to put it
+        Uids sources, dest;
+        from_->candidates(ctx, sources);
+        to_->candidates(ctx, dest);
+        for (uint16_t s : sources) {
+            const PokemonSlot* from = ctx.game.find(s);
+            if (!from || !hasEnergy(*from, types_)) continue;
+            for (uint16_t d : dest)
+                if (d != s) return true;
+        }
+        return false;
     }
 
 private:

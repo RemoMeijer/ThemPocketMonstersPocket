@@ -71,6 +71,9 @@ public:
             if (ctx.game.logging()) ctx.game.say("  healed -> ", ctx.game.show(*p, owner));
         }
     }
+    bool possible(EffectCtx& ctx) const override {
+        return anyCandidate(ctx, t_, [](const PokemonSlot& p) { return p.damage > 0; });
+    }
 
 private:
     const Target* t_;
@@ -108,6 +111,9 @@ public:
         t_->select(ctx, targets);
         for (uint16_t uid : targets)
             if (PokemonSlot* p = ctx.game.find(uid)) p->status = 0;
+    }
+    bool possible(EffectCtx& ctx) const override {
+        return anyCandidate(ctx, t_, [](const PokemonSlot& p) { return p.status != 0; });
     }
 
 private:

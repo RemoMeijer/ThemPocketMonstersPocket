@@ -14,6 +14,11 @@ public:
             p->run(ctx);
         }
     }
+    bool possible(EffectCtx& ctx) const override {  // some part has something to do
+        for (const Stmt* p : parts_)
+            if (p->possible(ctx)) return true;
+        return false;
+    }
 
 private:
     std::vector<const Stmt*> parts_;
@@ -27,6 +32,10 @@ public:
             then_->run(ctx);
         else if (else_)
             else_->run(ctx);
+    }
+    bool possible(EffectCtx& ctx) const override {
+        if (c_->usesCoins()) return then_->possible(ctx) || (else_ && else_->possible(ctx));  // the coins decide later
+        return c_->test(ctx) ? then_->possible(ctx) : else_ && else_->possible(ctx);
     }
 
 private:
@@ -48,6 +57,7 @@ public:
             for (int i = n_->eval(ctx); i > 0; --i) ++(ctx.game.flip() ? ctx.heads : ctx.tails);
         }
     }
+    bool possible(EffectCtx&) const override { return false; }  // a coin on its own does nothing
 
 private:
     const Num* n_;
@@ -60,6 +70,7 @@ public:
     void run(EffectCtx& ctx) const override {
         for (int i = n_->eval(ctx); i > 0 && !ctx.stopped; --i) body_->run(ctx);
     }
+    bool possible(EffectCtx& ctx) const override { return body_->possible(ctx); }
 
 private:
     const Num* n_;
@@ -76,6 +87,18 @@ public:
         if (chosen.empty()) return;
         ctx.picked = chosen[0];
         body_->run(ctx);
+    }
+    bool possible(EffectCtx& ctx) const override {  // some Pokémon it could pick gives STMT something to do
+        Uids pool;
+        t_->candidates(ctx, pool);
+        uint16_t saved = ctx.picked;
+        bool ok = false;
+        for (std::size_t i = 0; i < pool.size() && !ok; ++i) {
+            ctx.picked = pool[i];
+            ok = body_->possible(ctx);
+        }
+        ctx.picked = saved;
+        return ok;
     }
 
 private:
@@ -123,6 +146,7 @@ public:
             default: return ctx.tails > 0 && ctx.heads == 0;
         }
     }
+    bool usesCoins() const override { return true; }
 
 private:
     int kind_;
@@ -135,6 +159,7 @@ public:
         if (op_ == '!') return !a_->test(ctx);
         return op_ == '&' ? a_->test(ctx) && b_->test(ctx) : a_->test(ctx) || b_->test(ctx);
     }
+    bool usesCoins() const override { return a_->usesCoins() || (b_ && b_->usesCoins()); }
 
 private:
     char op_;
