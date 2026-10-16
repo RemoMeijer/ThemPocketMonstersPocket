@@ -12,11 +12,16 @@ The current focus is a correct engine: the right cards and the right rules. Stat
 
 - **Read first:** [PROGRESS.md](PROGRESS.md) for the current state, shortcuts and next options, and [DESIGN.md](DESIGN.md) for how card effects are structured.
 - **Done:**
-  - base rules (milestones 1–2);
-  - core cleanup;
+  - the rules core: milestones 1–2, the cleanup, and rule fixes R1–R4;
   - the effect system;
   - card data from Limitless, every set up to B4b: 1,871 of 2,319 cards (80%) are playable.
-- **Next:** milestone 3 (simulation runner: threads, seeds, stats), or more card coverage.
+- **Next** (PROGRESS.md, "Next"):
+  - R5 (Stadium actions);
+  - seeds;
+  - player choices;
+  - the simulation runner (milestone 3);
+  - Trainer coverage;
+  - finding decks (milestone 4).
 
 ## Layout
 
@@ -93,9 +98,10 @@ For memory and undefined-behaviour checks, `engine/build-debug` is configured wi
   - a new mechanic is a new block or modifier, used by every card with that text;
   - rare one-off mechanics are skipped on purpose: they stay unsupported and show up in `--coverage`.
 - **Rules:**
+  - never change a game rule on a guess: ask Remco first, since he can check in the app, and write his answer in DESIGN.md §10;
   - rule numbers live in `core/rules.h`;
-  - guesses are marked "unconfirmed" or "assumed" there and listed in DESIGN.md §10;
-  - don't present them as facts.
+  - DESIGN.md §10 lists every rule; anything still guessed is marked "assumed" there and is an open question in PROGRESS.md;
+  - don't present guesses as facts.
 - **Players:** the random player, or at most a minimal one, is enough for now. No real bots yet: games only have to follow the rules and use the right actions.
 - **Ignore Star, Crown and Shiny cards.** They're alt-art reprints.
 - **Card data:**

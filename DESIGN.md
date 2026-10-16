@@ -134,7 +134,7 @@ Each effect text becomes a short script in a small language with nested brackets
 
 **Where scripts come from:**
 1. **`compile_effects.py`:** a table of sentence patterns, each a regular expression with blanks for numbers, types and targets, mapped to a script template. It handles the common shapes automatically and grows the exporter we already have.
-2. **`data/effects_manual.tsv`:** hand-written scripts for the long tail. An LLM could draft these and a person reviews them, which fits the LLM plans for later.
+2. **`data/effects_manual.tsv`:** hand-written scripts for the long tail. An LLM could draft these and a person reviews them, which fits the LLM plans for later. (Not built yet.)
 3. **A coverage report:** which cards are fully supported, which pattern covers how many cards, and which sentences match nothing.
 
 **C++ side:** each script is parsed once when the cards load, into a tree of small block objects, one class per word. An unknown word makes the card unsupported and names the word. Nothing gets parsed during a game.
@@ -165,7 +165,7 @@ An effect asks the game `choose(player, options)`. The game turns the options in
 
 Promoting after a knock-out moves onto this same mechanism, which removes the special `Promote` phase. Random outcomes such as coins and random cards stay inside the engine and are never a player's choice.
 
-The trade-off is that the game doesn't pause mid-effect. That keeps it simple and fast. A future lookahead player branches on its main moves and makes these smaller choices with its own policy.
+The trade-off is that the game doesn't pause mid-effect. That keeps it simple and fast. A future lookahead player branches on its main moves and makes these smaller choices with its own policy. If a search player has to branch on choices inside effects, the pending choice moves into the state instead (§12). Only 8 places call `choose()`.
 
 ## 7. What the state needs to remember
 
@@ -288,6 +288,8 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 
 Each step adds tests for its blocks, adds rules to the state checker (`check_states`), and reports the new card coverage.
 
+Status 2026-10-16: steps 0–6 are built, and step 7 is ongoing (80% of cards playable). Stadium actions, "once during each player's turn", are still missing from step 6: that's R5 in PROGRESS.md.
+
 | Step | What | Unlocks |
 |---|---|---|
 | 0 | **Core cleanup:** move rules as classes, enums, ex from `suffix`, named rules, `choose()`, player view. No behaviour change: 0 violations before and after. | foundation |
@@ -298,3 +300,49 @@ Each step adds tests for its blocks, adds rules to the state checker (`check_sta
 | 5 | Timed effects, damage reduction, locks | 145 + 68 + 70 |
 | 6 | Abilities (activated, passive, triggers), Tools, Stadiums | 140 + 19 + 4 |
 | 7 | The long tail, card by card, as scripts | rest |
+
+## 12. Other engines, and what we take from them
+
+Research from 2026-10-16. Details and links come from the sources named below. This section reports what they say; we didn't verify it all ourselves.
+
+### Pokémon TCG Pocket simulators
+
+- **[deckgym-core](https://github.com/bcollazo/deckgym-core)**: Rust, AGPL licence, actively maintained. It's the closest one to ours.
+  - Card effects are Rust code per card, mostly in one 7,000-line file of attack handlers; there's no script language. It covers about 3,340 of 3,761 prints (89%; prints include reprints, so the numbers don't compare directly with ours).
+  - Choices inside effects are stored in the state as a pending decision, and the game loop offers them as normal moves. The state can be copied and hashed, so search players can copy it.
+  - Players: random, weighted random, attach-and-attack, evolution rusher, a value-function player, expectiminimax, MCTS. Its search players see hidden cards.
+  - About 3,300 random games/s. An `optimize` command completes a partial deck by testing candidate cards against a folder of opponent decks.
+  - Its rule tests quote the in-app Tips panel and the official "Detailed battle FAQ" word for word. We used them as a source in §10, and its `database.json` is our second card source (`check_cards.py`).
+- **Others:** small hobby projects (a Python simulator with a few cards; another covering set A1 only, inactive).
+- **Pokémon's own CPU player** (DeNA, CEDEC 2026 talk): it splits multi-step choices into atomic decisions and bundles them into one action. It's trained with reinforcement learning (a small Transformer, about 50M games), and uses no tree search because of the hidden information.
+
+### Engines for other card games
+
+| Engine | Card effects | Choices inside effects | Search |
+|---|---|---|---|
+| Forge (Magic) | Text scripts per card | Calls the player directly | Copies the game for its simulation AI |
+| XMage (Magic) | A Java class per card, built from a shared effect library | Calls the player directly | Copies the game; minimax and MCTS players |
+| SabberStone (Hearthstone) | Card definitions built from task objects | Pending choice in the state | Copies the game; hides the opponent's hand behind dummy cards |
+| MetaStone / Spellsource (Hearthstone-like) | JSON data per card | Calls the player directly | Greedy and flat Monte Carlo players |
+| RyuuPlay (Pokémon TCG) | A TypeScript class per card; every effect passes through every card in play | Prompts with a callback | A simple bot with tactics and state scoring |
+| TCG ONE (Pokémon TCG) | A small Groovy language per card | Calls the player directly | Not public |
+
+**What that means for us:**
+- **Effects as data** puts us with Forge, MetaStone and TCG ONE. It's the right fit for a fixed card pool that grows every month: a new card is a data change.
+- **Calling the player directly** is the simplest choice, and Forge and XMage do it too. It stops a search player from copying the game in the middle of an effect. Moving the choice into the state is the known fix, if we ever need it.
+- **Hidden information:** search players should guess the hidden cards (determinization), or use information-set MCTS (Cowling et al. 2012), not look at the real state.
+
+### Judging decks by simulation
+
+- **Every player has a bias.** Research on Hearthstone deck search (Fontaine et al. 2019) found that any AI player favours certain kinds of decks. A random player rewards simple decks with cheap attackers and punishes evolution lines and Supporters that need good timing (our reading, not a sourced finding). So decks found with the random player are ideas to try, not proof.
+- **Games needed** for a win rate at 95% confidence (worst case):
+
+  | Within | Games |
+  |---|---|
+  | ±5% | 385 |
+  | ±3% | 1,068 |
+  | ±2% | 2,401 |
+  | ±1% | 9,604 |
+
+- **Comparing two decks** roughly doubles the variance. Give both the same seeds and the same opponents, and alternate who goes first.
+- **Draws:** about 70% of our random-vs-random games end at the turn cap, so stats should report wins, draws and losses separately.
