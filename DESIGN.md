@@ -177,7 +177,7 @@ The trade-off is that the game doesn't pause mid-effect. That keeps it simple an
 
 Timed effects are small records: what it is, who it's on, and when it ends. The game removes them at the right turn boundary. Effects on a Pokémon also end when it goes to the Bench (official FAQ) or evolves (assumed, see §10).
 
-**Energy in the discard pile.** Energy that leaves play lands in its owner's discard pile, as a count per type. Remco checked this in the app for unused Energy Zone energy at the end of the turn. For energy spent on retreating, energy discarded by an effect and energy on a knocked-out Pokémon it's assumed. Cards such as Flame Patch, Professor Sada and some abilities attach energy from the discard pile, which only makes sense if it collects there. Energy isn't a card, so it doesn't go in the discard card list.
+**Energy in the discard pile.** Energy that leaves play lands in its owner's discard pile, as a count per type. Remco checked this in the app for all of these. Cards such as Flame Patch, Professor Sada and some abilities attach energy from the discard pile, which only makes sense if it collects there. Energy isn't a card, so it doesn't go in the discard card list.
 
 **Once per turn belongs to the card.** "Once during your turn" is tracked per card, not per spot on the board (Remco checked this in the app):
 - A Pokémon uses its ability, evolves, and the evolved card can use its own ability in the same turn. Evolving resets the "used this turn" mark.
@@ -250,10 +250,11 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 | The Energy Zone makes 1 energy per turn, from the types picked for the deck | pokemon.com | ✓ Which type comes up is random and even across those types (assumed) |
 | The next energy is known in advance | Card (Porygon-Z, Rainbow Cave) | ✓ both players' next energy is rolled at the start of the game (R4) |
 | Unused energy goes to the discard pile at the end of the turn; a new one is made at the start of the next | App | ✓ (R4) The exact moment, before the end-of-turn triggers, is assumed |
-| Energy paid for a retreat, discarded by an effect, or on a knocked-out Pokémon goes to its owner's discard pile | Assumed | ✓ (R4) |
+| Energy paid for a retreat, discarded by an effect, or on a knocked-out Pokémon goes to its owner's discard pile | App | ✓ (R4) |
 | Hand limit 10: no draws while the hand is full | App | ✓ |
 | 1 Supporter per turn, also on the first player's turn 1 | App (turn 1); assumed (1 per turn) | ✓ |
 | Items: any number per turn | Assumed | ✓ |
+| A Trainer can only be played when its effect has something to do: no Potion without damage, no Rare Candy without a Stage 2 to put down | App | ✓ Each effect block checks this. "This turn" effects, such as Blaine without Ninetales, count as always doing something (open question) |
 | 1 Tool per Pokémon | App | ✓ |
 | 1 Stadium per turn; it replaces the one in play; a Stadium with the same name can't be played | Card (Mesagoza), App | ✓ |
 | Retreat once per turn, paying the Retreat Cost | App | ✓ Which energy is paid is picked automatically (shortcut) |
@@ -282,7 +283,7 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 | Both reach 3 points at once, both with Pokémon in play: a tie | Tips | ✓ |
 | An empty deck doesn't lose; there's just no draw | Tips | ✓ |
 | Only knock-outs score; a Pokémon discarded by an effect gives no points | FAQ | ✓ |
-| Both Active Pokémon knocked out together: the player whose turn it isn't picks a new Active first | Assumed | ✓ |
+| Both Active Pokémon knocked out by one attack: the defending player picks a new Active first, then the attacking player, then Pokémon Checkup | App | ✓ |
 
 ## 11. Build order
 

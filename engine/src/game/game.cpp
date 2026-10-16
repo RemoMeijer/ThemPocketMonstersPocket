@@ -201,7 +201,7 @@ void Game::knockOut(int player, PokemonSlot& slot) {
     for (const CardDef* c : slot.below) owner.discard.push_back(c);
     owner.discard.push_back(slot.card);
     if (slot.tool) owner.discard.push_back(slot.tool);
-    for (int t = 0; t < TypeCount; ++t) owner.discardEnergy[t] += slot.energy[t];  // assumed, see DESIGN.md §7
+    for (int t = 0; t < TypeCount; ++t) owner.discardEnergy[t] += slot.energy[t];  // its energy too (App)
     clearConditions(slot);
 }
 

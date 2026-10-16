@@ -11,7 +11,7 @@ The **game engine** is most of the way there. It plays Pocket games by the rules
 | Rules core: setup, turns, Energy Zone, attacking, retreating, evolving, Trainers, Tools, Stadiums (always-on effects), abilities, Special Conditions, Checkup, damage, winning | Built and checked. Missing: Stadium actions (R5), and the player choosing which energy to pay or discard |
 | Card data | Every set up to B4b: 2,319 unique cards from Limitless, cross-checked against deckgym-core |
 | Card effects | 1,871 of 2,319 cards (80%) playable. Trainers lag behind (table below) |
-| Checks | 21 rule tests, 22 effect tests, `check_states` (8.3M moves, 0 violations), and the memory and undefined-behaviour checker build is clean after R4 (the tests plus `check_states` on 4 decks) |
+| Checks | 21 rule tests, 24 effect tests, `check_states` (8.0M moves, 0 violations), and the memory and undefined-behaviour checker build is clean after R4 (the tests plus `check_states` on 4 decks) |
 | Replayable games (seeds) | Not yet: every game seeds itself from `random_device` |
 | Simulation runner (many games, threads, stats) | Not started |
 | Finding decks (generate, play, rank) | Not started |
@@ -53,7 +53,7 @@ The short version: the design works and needs no rework now. Details, and how ot
 - **Hidden information:** players only see a `PlayerView`, so a smarter player can't cheat. deckgym's search players do see hidden cards.
 - **Weak spots:**
   - games can't be replayed (no seeds);
-  - two shortcuts change which moves are legal (see Shortcuts below);
+  - the engine still picks which energy to pay or discard, which is the player's choice in the game (see Shortcuts below);
   - the random player's results are biased toward simple decks (DESIGN.md §12).
 
 ## Card data (2026-10-16)
@@ -84,15 +84,18 @@ Done on 2026-10-16, each with a test and its own commit:
 - **R3:** evolving resets "used its ability this turn", because the use belongs to the card.
 - **R4:** the Energy Zone has a current and a next energy. Unused energy, energy paid for a retreat, discarded energy and energy on knocked-out Pokémon go to the discard pile, counted per type.
 
+Also answered on 2026-10-16:
+- A Trainer can only be played when its effect has something to do. Each effect block now checks this.
+- Energy paid for a retreat or discarded by an effect goes to the discard pile.
+- When one attack knocks out both Active Pokémon, the defending player picks a new Active first, then the attacking player, then Pokémon Checkup. The engine already did this; a test now holds it.
+
 **Open questions for Remco.** These are guesses in the engine today:
-1. Can you play a Trainer that would do nothing, such as Potion with no damage on your Pokémon or Rare Candy with no target? The engine allows it. If the game greys these out, the engine should too.
-2. Does energy paid for a retreat, or discarded by an attack, also land in the discard pile? The engine assumes yes, the same as unused energy.
-3. When both Active Pokémon are knocked out at once, who picks their new Active first? The engine lets the player whose turn it isn't pick first.
+1. Can you play a "this turn" Supporter whose named Pokémon you don't have, such as Blaine without Ninetales, Rapidash or Magmar, or Cynthia without Garchomp or Togekiss? The engine allows it.
+2. Can you play X Speed or Leaf when your Active's Retreat Cost is already 0? The engine allows it.
 
 ## Shortcuts (marked `shortcut:` in the code)
 
 - Which energy gets discarded (retreat, "discard an Energy") is picked automatically, not chosen by the player.
-- Trainers are playable even when they would do nothing (Rare Candy with no target, Potion with no damage). See open question 1.
 - A Fossil can't be discarded from play by choice.
 - Effects that look at the deck and put the cards back in any order do nothing.
 - Clemont's Backpack's "+20 to your opponent's Pokémon" isn't supported (our damage bonuses only count against the Active).
@@ -103,7 +106,7 @@ In order. Each step gets a plan first, then tests, `check_states` at 0 violation
 
 1. **R5, Stadium actions:** a "use the Stadium" move, once per player per turn and per Stadium card; a new Stadium can be used again. Also the Stadium's "at the end of each player's turn" trigger, and compiler patterns for both sentence shapes. This unlocks Mesagoza, Fragrant Forest, Area Zero, Arcade, Hiking Trail and Soothing Shore, as far as their effects have blocks. It completes the rules milestone.
 2. **Seeds:** one seed per game, from which the shuffles, coins and random player all follow. Then a failure found by `check_states` can be replayed, and two decks can be compared on the same luck.
-3. **Player choices the engine makes today:** which energy to pay for a retreat or to discard, and discarding a Fossil. Plus the answer to open question 1.
+3. **Player choices the engine makes today:** which energy to pay for a retreat or to discard, and discarding a Fossil.
 4. **The simulation runner (milestone 3):** many games over threads; win, draw and loss per pairing, with a confidence interval; the first player alternates. About 2,400 games per pairing give ±2%.
 5. **Card coverage, Trainers first:** the missing Supporters, Items and Tools, then the most common missing attack texts from `tcgp --coverage`.
 6. **Finding decks (milestone 4):** generate legal decks around Pokémon lines, play them against each other, rank them, and list the top ones to try in the game.
