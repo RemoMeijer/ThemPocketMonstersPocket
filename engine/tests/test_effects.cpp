@@ -74,6 +74,24 @@ static void benchDamageHasNoWeakness() {
     CHECK(s.players[1].bench[0].damage == 20);         // the Bench: none
 }
 
+// Official battle FAQ: base → the attacker's effects → Weakness → the defender's effects, floor at 0 only
+// at the end. Mon0's 30 against a Mon1 that is weak to Water.
+static void weaknessBeforeTheFloor() {
+    auto hitFor = [](int attackerMod, int defenderMod) {
+        Table t;
+        t.cards[1].weakness = Type::Water;
+        GameState& s = t.position();
+        // On the attacker, like "the Defending Pokémon's attacks do −40"; on the defender, "takes −20".
+        s.timed.push_back({{ModKind::DamageDealt, int16_t(attackerMod)}, 0, s.players[0].active.uid, s.turn});
+        t.cards[1].passive.push_back({ModKind::DamageTaken, int16_t(defenderMod)});
+        t.play(ActionKind::Attack);
+        return damageOn(t, 1);
+    };
+    CHECK(hitFor(-40, 0) == 10);   // 30 − 40 + 20: Weakness still counts after a minus
+    CHECK(hitFor(10, -20) == 40);  // 30 + 10 + 20 − 20
+    CHECK(hitFor(0, -60) == 0);    // 30 + 20 − 60, floored once at the end
+}
+
 static void statusesReplaceAndAddUp() {
     Table t;
     attackScript(t, "(seq (hit) (status opp-active poisoned asleep) (status opp-active paralyzed) (status (each opp bench) burned))");
@@ -285,6 +303,7 @@ int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
     benchDamageHasNoWeakness();
+    weaknessBeforeTheFloor();
     statusesReplaceAndAddUp();
     timedDamageReductionLastsOneOpponentTurn();
     preventAllStopsDamageAndEffects();
