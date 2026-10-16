@@ -381,6 +381,18 @@ static void moveEnergyAndSearch() {
     CHECK(p.deck.size() == deck - 1 && p.hand.size() == 1 && p.hand[0]->isBasic());
 }
 
+// "This attack does 20 damage for each Energy attached to all of your opponent's Pokémon" (Espeon):
+// the energy on the Bench counts too.
+static void energyOnAllPokemon() {
+    Table t;
+    attackScript(t, "(seq (set-damage (* (energy (each opp all)) 10)) (hit))");
+    GameState& s = t.position();
+    s.players[1].active.energy[int(Type::Water)] = 1;
+    s.players[1].bench[0].energy[int(Type::Water)] = 2;
+    t.play(ActionKind::Attack);
+    CHECK(damageOn(t, 1) == 30);
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -406,5 +418,6 @@ int main() {
     confusedAttacksSometimesFail();
     trainersNeedSomethingToDo();
     moveEnergyAndSearch();
+    energyOnAllPokemon();
     return report("effects");
 }

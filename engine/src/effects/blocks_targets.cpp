@@ -107,26 +107,27 @@ const PokemonSlot* first(EffectCtx& ctx, const Target* t) {
 }
 
 // Numbers about a Pokémon: (energy T [type]), (damage-on T), (retreat-cost T), and (count SIDE ZONE FILTER…).
+// (energy …) adds up every Pokémon T picks: "for each Energy attached to all of your Pokémon".
 class PokemonNum : public Num {
 public:
     enum What { Energy, DamageOn, RetreatCost, Count };
     PokemonNum(What what, const Target* t, uint16_t types) : what_(what), t_(t), types_(types) {}
     int eval(EffectCtx& ctx) const override {
-        if (what_ == Count) {
-            Uids u;
-            t_->select(ctx, u);
-            return int(u.size());
+        Uids u;
+        t_->select(ctx, u);
+        if (what_ == Count) return int(u.size());
+        if (what_ == Energy) {
+            int n = 0;
+            for (uint16_t uid : u)
+                if (const PokemonSlot* p = ctx.game.find(uid))
+                    for (int t = 0; t < TypeCount; ++t)
+                        if (!types_ || (types_ & typeBit(Type(t)))) n += p->energy[t];
+            return n;
         }
         int owner = 0;
-        const PokemonSlot* p = first(ctx, t_);
+        const PokemonSlot* p = u.empty() ? nullptr : ctx.game.find(u[0], &owner);
         if (!p) return 0;
-        ctx.game.find(p->uid, &owner);
-        if (what_ == DamageOn) return p->damage;
-        if (what_ == RetreatCost) return ctx.game.retreatCost(*p, owner);
-        int n = 0;
-        for (int t = 0; t < TypeCount; ++t)
-            if (!types_ || (types_ & typeBit(Type(t)))) n += p->energy[t];
-        return n;
+        return what_ == DamageOn ? p->damage : ctx.game.retreatCost(*p, owner);
     }
 
 private:
