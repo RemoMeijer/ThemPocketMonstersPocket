@@ -20,7 +20,11 @@ public:
         PlayerState& p = game.state().players[me];
         // shortcut: retreat pays with the most plentiful energy type, no choice; make it a choice once multi-type decks matter.
         int cost = game.retreatCost(p.active, me);
-        for (int i = 0; i < cost; ++i) --*std::max_element(p.active.energy.begin(), p.active.energy.end());
+        for (int i = 0; i < cost; ++i) {
+            int t = int(std::max_element(p.active.energy.begin(), p.active.energy.end()) - p.active.energy.begin());
+            --p.active.energy[t];
+            ++p.discardEnergy[t];  // assumed: paid energy goes to the discard pile (DESIGN.md §7)
+        }
         std::swap(p.active, p.bench[a.index]);
         p.retreated = true;
         game.clearConditions(p.bench[a.index]);  // moving to the Bench ends Special Conditions and effects

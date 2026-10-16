@@ -13,10 +13,12 @@ public:
 
     const decltype(PlayerState::hand)& hand() const { return s_.players[me_].hand; }  // own hand only
     std::optional<Type> zoneEnergy() const { return s_.players[me_].energy; }
+    std::optional<Type> nextEnergy() const { return s_.players[me_].nextEnergy; }
 
     const PokemonSlot& active(int player) const { return s_.players[player].active; }
     const decltype(PlayerState::bench)& bench(int player) const { return s_.players[player].bench; }
     const decltype(PlayerState::discard)& discard(int player) const { return s_.players[player].discard; }
+    const EnergyCounts& discardEnergy(int player) const { return s_.players[player].discardEnergy; }
     int points(int player) const { return s_.players[player].points; }
     std::size_t handSize(int player) const { return s_.players[player].hand.size(); }
     std::size_t deckSize(int player) const { return s_.players[player].deck.size(); }

@@ -92,6 +92,17 @@ static void weaknessBeforeTheFloor() {
     CHECK(hitFor(0, -60) == 0);    // 30 + 20 − 60, floored once at the end
 }
 
+// Discarded energy goes to its owner's discard pile, also when it's the opponent's.
+static void discardedEnergyGoesToItsOwnersPile() {
+    Table t;
+    attackScript(t, "(seq (hit) (discard-energy self any 1) (discard-energy opp-active any 1))");
+    GameState& s = t.position();
+    s.players[1].active.energy[int(Type::Fire)] = 1;
+    t.play(ActionKind::Attack);
+    CHECK(s.players[0].active.energyCount() == 0 && s.players[0].discardEnergy[int(Type::Water)] == 1);
+    CHECK(s.players[1].active.energyCount() == 0 && s.players[1].discardEnergy[int(Type::Fire)] == 1);
+}
+
 static void statusesReplaceAndAddUp() {
     Table t;
     attackScript(t, "(seq (hit) (status opp-active poisoned asleep) (status opp-active paralyzed) (status (each opp bench) burned))");
@@ -323,6 +334,7 @@ int main() {
     recoilKnockOutScoresForTheOpponent();
     benchDamageHasNoWeakness();
     weaknessBeforeTheFloor();
+    discardedEnergyGoesToItsOwnersPile();
     statusesReplaceAndAddUp();
     timedDamageReductionLastsOneOpponentTurn();
     preventAllStopsDamageAndEffects();

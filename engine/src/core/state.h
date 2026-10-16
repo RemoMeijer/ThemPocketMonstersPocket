@@ -48,8 +48,10 @@ struct PlayerState {
     PokemonSlot active;
     FixedVec<PokemonSlot, rules::BenchSize> bench;
     FixedVec<Type, rules::MaxEnergyTypes> energyTypes;
-    std::optional<Type> energy;  // in the Energy Zone, not attached yet
-    bool retreated = false;      // already retreated this turn
+    std::optional<Type> energy;      // in the Energy Zone, not attached yet
+    std::optional<Type> nextEnergy;  // shown in the Energy Zone; becomes `energy` at the start of the next turn
+    EnergyCounts discardEnergy{};    // energy in the discard pile, per type (energy isn't a card)
+    bool retreated = false;          // already retreated this turn
     int supporterTurn = -1;      // turn a Supporter was last played
     int stadiumTurn = -1;        // turn a Stadium was last played
     int points = 0;

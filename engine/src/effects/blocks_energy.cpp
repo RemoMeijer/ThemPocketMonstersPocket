@@ -39,6 +39,7 @@ public:
                 int t = pick(ctx, *p);
                 if (t < 0) break;
                 --p->energy[t];
+                ++ctx.game.state().players[owner].discardEnergy[t];  // to its owner's discard pile
                 ++removed;
             }
             if (removed && ctx.game.logging()) ctx.game.say("  ", removed, " energy discarded -> ", ctx.game.show(*p, owner));

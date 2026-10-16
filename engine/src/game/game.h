@@ -91,6 +91,7 @@ public:
 private:
     void deal(int player);
     void startTurn();
+    Type rollEnergy(const PlayerState& p);  // a random energy type from p's deck, for the Energy Zone
     void showBoard();
     void knockOut(int player, PokemonSlot& slot);
     void promote(int player);

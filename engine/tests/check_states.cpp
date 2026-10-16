@@ -28,8 +28,14 @@ std::string where;  // which game and turn, for the error messages
 
 struct Stats {
     long moves = 0, evolutions[3] = {}, retreats = 0, weaknessHits = 0, knockOuts = 0, exKnockOuts = 0;
-    long energyKept = 0, trainers = 0, supporters = 0, tools = 0, abilities = 0, scriptedAttacks = 0;
+    long energyDiscarded = 0, trainers = 0, supporters = 0, tools = 0, abilities = 0, scriptedAttacks = 0;
 };
+
+int total(const EnergyCounts& e) {
+    int n = 0;
+    for (auto x : e) n += x;
+    return n;
+}
 
 // Picks any legal action, ending the turn early too, to reach more kinds of states than RandomPolicy.
 class AnyPolicy : public Policy {
@@ -125,7 +131,8 @@ void checkOpening(const GameState& s) {
     EXPECT(s.phase == Phase::Main && s.turn == 1 && s.current == s.first);
     const PlayerState& first = s.players[s.current];
     const PlayerState& second = s.players[1 - s.current];
-    EXPECT(!first.energy);  // no energy on the first turn of the game
+    EXPECT(!first.energy && !second.energy);  // no energy on the first turn of the game
+    EXPECT(first.nextEnergy && second.nextEnergy);  // both Energy Zones show their next energy from the start
     // Five cards dealt (always with a Basic, so an Active exists), plus the first turn's draw.
     EXPECT(first.hand.size() + inPlay(first).size() ==
            std::size_t(rules::OpeningHand + (rules::FirstPlayerDrawsTurn1 ? 1 : 0)));
@@ -220,6 +227,8 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
             EXPECT(out.card == pb.active.card && out.damage == pb.active.damage && out.status == 0);
             EXPECT(out.energyCount() <= pb.active.energyCount());
             if (plain) EXPECT(out.energyCount() == pb.active.energyCount() - pb.active.card->retreat);
+            // the energy paid goes to the discard pile
+            EXPECT(total(pa.discardEnergy) == total(pb.discardEnergy) + pb.active.energyCount() - out.energyCount());
             st.retreats++;
             break;
         }
@@ -261,6 +270,7 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
             st.weaknessHits += weak;
             if (db.active.damage + damage >= target->hp) {
                 EXPECT(pa.points >= pb.points + target->points);
+                EXPECT(total(da.discardEnergy) == total(db.discardEnergy) + db.active.energyCount());  // its energy too
                 st.knockOuts++;
                 st.exKnockOuts += target->points > 1;
             } else if (!db.active.status) {
@@ -273,18 +283,28 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
         default:
             break;
     }
-    // A new turn after End turn: the player draws if they can, and gets energy unless their unused energy is
-    // still waiting. (After an attack, its effects may have changed that player's hand.)
-    if (a.kind == ActionKind::EndTurn && after.phase == Phase::Main && after.turn == before.turn + 1) {
+    // Energy only goes into the discard pile, for both players. (Until cards that take it back from there, such
+    // as Flame Patch, are supported.)
+    for (int p = 0; p < 2; ++p)
+        for (int t = 0; t < TypeCount; ++t) EXPECT(after.players[p].discardEnergy[t] >= before.players[p].discardEnergy[t]);
+    // The turn passed to the other player, after End turn or an attack.
+    if (before.phase == Phase::Main && after.phase == Phase::Main && after.turn == before.turn + 1) {
+        // The player whose turn ended: unused energy went to the discard pile (App).
+        const PlayerState& eb = before.players[me];
+        const PlayerState& ea = after.players[me];
+        EXPECT(!ea.energy);
+        if (eb.energy) {
+            EXPECT(ea.discardEnergy[int(*eb.energy)] > eb.discardEnergy[int(*eb.energy)]);
+            st.energyDiscarded++;
+        }
+        // The new player: their next energy came up, and a new one was rolled from their deck's types.
         const PlayerState& nb = before.players[after.current];
         const PlayerState& na = after.players[after.current];
+        EXPECT(!na.retreated && na.energy && na.energy == nb.nextEnergy);
+        EXPECT(na.nextEnergy && std::find(na.energyTypes.begin(), na.energyTypes.end(), *na.nextEnergy) != na.energyTypes.end());
+        // They draw if they can. (After an attack, its effects may have changed that player's hand.)
         bool canDraw = !nb.deck.empty() && nb.hand.size() < std::size_t(rules::HandLimit);
-        EXPECT(na.hand.size() == nb.hand.size() + (canDraw ? 1 : 0));
-        EXPECT(!na.retreated && na.energy);
-        if (nb.energy) {
-            EXPECT(na.energy == nb.energy);
-            st.energyKept++;
-        }
+        if (a.kind == ActionKind::EndTurn) EXPECT(na.hand.size() == nb.hand.size() + (canDraw ? 1 : 0));
     }
 }
 
@@ -348,7 +368,7 @@ int main(int argc, char** argv) {
                   << " (Supporters " << st.supporters << "), Tools attached: " << st.tools
                   << ", abilities used: " << st.abilities << "\nattacks with effects: " << st.scriptedAttacks
                   << "\nweakness hits (plain board): " << st.weaknessHits << "\nknock-outs (plain board): " << st.knockOuts
-                  << " (ex: " << st.exKnockOuts << ")\nturns starting with unused energy kept: " << st.energyKept
+                  << " (ex: " << st.exKnockOuts << ")\nturns ending with unused energy discarded: " << st.energyDiscarded
                   << "\nrule violations: " << violations << '\n';
         return violations ? 1 : 0;
     } catch (const std::exception& e) {

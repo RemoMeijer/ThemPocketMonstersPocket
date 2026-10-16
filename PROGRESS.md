@@ -30,8 +30,8 @@ Updated 2026-10-16. DESIGN.md's foundation is built: card effects work through s
   - `effects/` (script parser, builder, blocks for flow, targets, damage, energy, cards);
   - `players/`.
 - **Checks:**
-  - `test_rules` (20 tests) and `test_effects` (21 tests) pass.
-  - `check_states` ran 8.3M moves over all 7 decks with 0 violations, including 934k Trainers, 111k Tools, 383k abilities and 165k attacks with effects (on the Limitless data, after R1–R3).
+  - `test_rules` (21 tests) and `test_effects` (22 tests) pass.
+  - `check_states` ran 8.3M moves over all 7 decks with 0 violations, including 934k Trainers, 111k Tools, 383k abilities and 165k attacks with effects (on the Limitless data, after R1–R4). Its own reading of the rules includes the Energy Zone and discard-pile energy; breaking either on purpose gives thousands of violations.
   - Clean under the memory and undefined-behaviour checkers: the tests, plus `check_states` on 4 decks, after R1–R3.
 - **Decks:** `decks/` holds water, lightning, fighting (plain), and pikachu, charizard, gardevoir, abilities (with Trainers and effects).
 
@@ -71,18 +71,18 @@ Every rule now has a source in DESIGN.md §10. On 2026-10-16 Remco checked the o
 - Unused energy goes to the discard pile.
 - "Once during your turn" counts per card (abilities and Stadium actions).
 
-Three rows in §10 are still marked ✗ or ○, and the plan below covers them: two Energy Zone rows (R4) and Stadium actions (R5). R1–R3 are done.
+One row in §10 is still marked ○, Stadium actions, and R5 below covers it. R1–R4 are done.
 
 ## Next: the rules milestone
 
-Planned 2026-10-16. R1–R3 are done (2026-10-16); R4–R6 are still to come. One step at a time, each with tests, `check_states` at 0 violations (its own reading of the rules updated where needed) and a commit.
+Planned 2026-10-16. R1–R4 are done (2026-10-16); R5 and R6 are still to come. One step at a time, each with tests, `check_states` at 0 violations (its own reading of the rules updated where needed) and a commit.
 
 | Step | What | Where |
 |---|---|---|
 | R1 ✓ | **Win condition:** a player with no Pokémon in play loses, whatever the points; both without Pokémon is a tie. Today, reaching 3 points together is always a draw. | `game.cpp` (knock-out check), `test_rules`, `check_states` |
 | R2 ✓ | **Damage order:** Weakness applies whenever the attack does damage, even if the attacker's effects took it to 0 or below; floor at 0 once, at the end. | `damage.cpp`, `test_effects` |
 | R3 ✓ | **Abilities per card:** evolving resets "used its ability this turn", so the evolved card can use its own. | `evolve.cpp`, `test_effects` |
-| R4 | **Energy Zone and discard-pile energy:** store the current and the next energy. At the end of the turn, unused energy goes to the discard pile, and a new one comes at the start of the next turn. Energy in the discard pile is counted per type; energy from retreating, discard effects and knocked-out Pokémon goes there too. `PlayerView` shows your own next energy and both discard piles. | `state.h`, `game.cpp`, `retreat.cpp`, `blocks_energy.cpp`, `view.h`, `check_states` |
+| R4 ✓ | **Energy Zone and discard-pile energy:** store the current and the next energy. At the end of the turn, unused energy goes to the discard pile, and a new one comes at the start of the next turn. Energy in the discard pile is counted per type; energy from retreating, discard effects and knocked-out Pokémon goes there too. `PlayerView` shows your own next energy and both discard piles. | `state.h`, `game.cpp`, `retreat.cpp`, `blocks_energy.cpp`, `view.h`, `check_states` |
 | R5 | **Stadium actions:** a "use the Stadium" move, once per player per turn, per Stadium card. A new Stadium starts fresh, so playing one after using the old one allows a second use. Also the Stadium's "at the end of each player's turn" trigger. Needs compiler patterns for both sentence shapes. | `moves/` (new move), `state.h`, `game.cpp`, `load_scripts.cpp`, `compile_effects.py` |
 | R6 | **Source tags:** each constant in `rules.h` gets a short tag pointing at §10 (App, FAQ, Card, Tips, Fan, Assumed). | `rules.h` |
 

@@ -248,8 +248,9 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 | The first player draws on turn 1 | App | ✓ |
 | The first player gets no energy on turn 1 | FAQ (free attacks are "usable on the first turn of the player that goes first") | ✓ |
 | The Energy Zone makes 1 energy per turn, from the types picked for the deck | pokemon.com | ✓ Which type comes up is random and even across those types (assumed) |
-| The next energy is known in advance | Card (Porygon-Z, Rainbow Cave) | ✗ only the current one is stored |
-| Unused energy goes to the discard pile at the end of the turn; a new one is made at the start of the next | App | ✗ the engine keeps unused energy and makes no new one |
+| The next energy is known in advance | Card (Porygon-Z, Rainbow Cave) | ✓ both players' next energy is rolled at the start of the game (R4) |
+| Unused energy goes to the discard pile at the end of the turn; a new one is made at the start of the next | App | ✓ (R4) The exact moment, before the end-of-turn triggers, is assumed |
+| Energy paid for a retreat, discarded by an effect, or on a knocked-out Pokémon goes to its owner's discard pile | Assumed | ✓ (R4) |
 | Hand limit 10: no draws while the hand is full | App | ✓ |
 | 1 Supporter per turn, also on the first player's turn 1 | App (turn 1); assumed (1 per turn) | ✓ |
 | Items: any number per turn | Assumed | ✓ |

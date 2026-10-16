@@ -79,7 +79,13 @@ void Game::beginPlay() {
     s_.current = s_.first;
     s_.phase = Phase::Main;
     say("Coin flip: P", s_.first + 1, " goes first");
+    for (PlayerState& p : s_.players) p.nextEnergy = rollEnergy(p);
     startTurn();
+}
+
+Type Game::rollEnergy(const PlayerState& p) {
+    // assumed: each of the deck's energy types is equally likely
+    return p.energyTypes[std::uniform_int_distribution<std::size_t>(0, p.energyTypes.size() - 1)(rng_)];
 }
 
 void Game::startTurn() {
@@ -90,21 +96,25 @@ void Game::startTurn() {
     say("\n=== Turn ", s_.turn, ": P", s_.current + 1, "   points P1 ", s_.players[0].points, " - P2 ",
         s_.players[1].points, " ===");
     if (!firstTurnOfGame() || rules::FirstPlayerDrawsTurn1) draw(s_.current);
-    // The player going first gets no energy on their first turn. Unused energy stays in the Energy Zone,
-    // and then no new one is generated (Serebii, "Battle Mechanics").
-    if (firstTurnOfGame()) {
-    } else if (p.energy) {
-        say("P", s_.current + 1, "'s unused ", typeName(*p.energy), " energy is still in the Energy Zone");
-    } else {
-        auto pick = std::uniform_int_distribution<std::size_t>(0, p.energyTypes.size() - 1)(rng_);
-        p.energy = p.energyTypes[pick];
-        say("P", s_.current + 1, " gets ", typeName(*p.energy), " energy from the Energy Zone");
+    // The player going first gets no energy on their first turn. Otherwise the next energy comes up and a
+    // new next one is rolled. (Unused energy went to the discard pile at the end of the last turn, App.)
+    if (!firstTurnOfGame()) {
+        p.energy = p.nextEnergy;
+        p.nextEnergy = rollEnergy(p);
+        say("P", s_.current + 1, " gets ", typeName(*p.energy), " energy from the Energy Zone (next: ",
+            typeName(*p.nextEnergy), ")");
     }
     showBoard();
 }
 
 void Game::endTurn() {
     int me = s_.current;
+    // Unused Energy Zone energy goes to the discard pile (App; the exact moment in the turn is assumed).
+    if (PlayerState& p = s_.players[me]; p.energy) {
+        ++p.discardEnergy[int(*p.energy)];
+        say("P", me + 1, "'s unused ", typeName(*p.energy), " energy goes to the discard pile");
+        p.energy.reset();
+    }
     // "At the end of your turn…" abilities of the player whose turn it was.
     Uids owners;
     if (s_.players[me].active.card) owners.push_back(s_.players[me].active.uid);
@@ -190,6 +200,7 @@ void Game::knockOut(int player, PokemonSlot& slot) {
     for (const CardDef* c : slot.below) owner.discard.push_back(c);
     owner.discard.push_back(slot.card);
     if (slot.tool) owner.discard.push_back(slot.tool);
+    for (int t = 0; t < TypeCount; ++t) owner.discardEnergy[t] += slot.energy[t];  // assumed, see DESIGN.md §7
     clearConditions(slot);
 }
 

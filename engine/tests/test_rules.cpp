@@ -5,10 +5,12 @@ static void knockOutScoresAPoint() {
     Table t;
     GameState& s = t.position();
     s.players[1].active.damage = 30;  // 30 more knocks out the 60 HP Mon1
+    s.players[1].active.energy[int(Type::Fire)] = 2;
     t.play(ActionKind::Attack);
     CHECK(s.players[0].points == 1);
     CHECK(s.players[1].active.card == &t.cards[2]);  // the only benched Pokémon moved up
     CHECK(s.players[1].bench.empty());
+    CHECK(s.players[1].discardEnergy[int(Type::Fire)] == 2);  // its energy went to the discard pile
     CHECK(s.current == 1 && s.turn == 6);
 }
 
@@ -102,6 +104,7 @@ static void firstPlayerGetsNoEnergyOnTurnOne() {
     GameState& s = t.game.state();
     CHECK(s.turn == 1 && s.current == s.first);
     CHECK(!s.players[s.current].energy);
+    CHECK(s.players[0].nextEnergy == Type::Water && s.players[1].nextEnergy == Type::Water);  // both shown from the start
     CHECK(!t.can(ActionKind::AttachEnergy));
     CHECK(s.players[s.current].hand.size() == 6 - s.players[s.current].bench.size() - 1);  // 5 + 1 draw, minus placed
     t.play(ActionKind::EndTurn);
@@ -109,15 +112,28 @@ static void firstPlayerGetsNoEnergyOnTurnOne() {
     CHECK(s.players[s.current].energy == Type::Water);
 }
 
-static void unusedEnergyStays() {
+// The next energy is known in advance; at the start of the turn it comes up and a new next one is rolled.
+static void nextEnergyComesUp() {
     Table t;
     GameState& s = t.position();
-    s.players[0].energy = Type::Water;
-    s.players[0].energyTypes.clear();
-    s.players[0].energyTypes.push_back(Type::Fire);  // a new energy would be Fire
-    t.play(ActionKind::EndTurn);                     // P1 keeps the Water
-    t.play(ActionKind::EndTurn);                     // P2's turn
-    CHECK(s.current == 0 && s.players[0].energy == Type::Water);
+    PlayerState& p = s.players[1];
+    p.nextEnergy = Type::Fire;
+    t.play(ActionKind::EndTurn);  // P2's turn starts
+    CHECK(s.current == 1 && p.energy == Type::Fire);
+    CHECK(p.nextEnergy == Type::Water);  // rolled from the deck's energy types
+}
+
+// Unused energy goes to the discard pile at the end of the turn; a new one comes next turn (App).
+static void unusedEnergyGoesToTheDiscardPile() {
+    Table t;
+    GameState& s = t.position();
+    PlayerState& p = s.players[0];
+    p.energy = Type::Water;
+    p.nextEnergy = Type::Fire;
+    t.play(ActionKind::EndTurn);
+    CHECK(!p.energy && p.discardEnergy[int(Type::Water)] == 1);
+    t.play(ActionKind::EndTurn);  // P2's turn ends, P1's starts
+    CHECK(s.current == 0 && p.energy == Type::Fire);
 }
 
 static void benchHoldsThree() {
@@ -170,6 +186,7 @@ static void retreatPaysAndSwaps() {
     t.play(ActionKind::Retreat, 0);
     CHECK(p.active.card == &t.cards[3]);
     CHECK(p.bench[0].card == &t.cards[0] && p.bench[0].energyCount() == 0);  // paid 1 Water
+    CHECK(p.discardEnergy[int(Type::Water)] == 1);                            // into the discard pile
     CHECK(!t.can(ActionKind::Retreat));  // once per turn
     CHECK(t.can(ActionKind::EndTurn));   // the turn goes on after retreating
 
@@ -313,7 +330,8 @@ int main() {
     nothingLeftToPromoteLoses();
     noPokemonLeftLosesWhateverThePoints();
     firstPlayerGetsNoEnergyOnTurnOne();
-    unusedEnergyStays();
+    nextEnergyComesUp();
+    unusedEnergyGoesToTheDiscardPile();
     benchHoldsThree();
     threeCopiesRejected();
     weaknessAddsTwenty();
