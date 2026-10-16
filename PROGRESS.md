@@ -11,7 +11,7 @@ The **game engine** is most of the way there. It plays Pocket games by the rules
 | Rules core: setup, turns, Energy Zone, attacking, retreating, evolving, Trainers, Tools, Stadiums (always-on effects), abilities, Special Conditions, Checkup, damage, winning | Built and checked. Missing: Stadium actions (R5), and the player choosing which energy to pay or discard |
 | Card data | Every set up to B4b: 2,319 unique cards from Limitless, cross-checked against deckgym-core |
 | Card effects | 1,871 of 2,319 cards (80%) playable. Trainers lag behind (table below) |
-| Checks | 21 rule tests, 22 effect tests, `check_states` (8.3M moves, 0 violations), memory and undefined-behaviour checker builds |
+| Checks | 21 rule tests, 22 effect tests, `check_states` (8.3M moves, 0 violations), and the memory and undefined-behaviour checker build is clean after R4 (the tests plus `check_states` on 4 decks) |
 | Replayable games (seeds) | Not yet: every game seeds itself from `random_device` |
 | Simulation runner (many games, threads, stats) | Not started |
 | Finding decks (generate, play, rank) | Not started |
