@@ -12,7 +12,7 @@ The current focus is a correct engine: the right cards and the right rules. Stat
 
 - **Read first:** [PROGRESS.md](PROGRESS.md) for the current state, shortcuts and next options, and [DESIGN.md](DESIGN.md) for how card effects are structured.
 - **Done:**
-  - the rules core: milestones 1–2, the cleanup, rule fixes R1–R4, and Trainers that need something to do before they can be played;
+  - the rules core: milestones 1–2, the cleanup, rule fixes R1–R4, Trainers that need something to do before they can be played, and the 4 bug fixes from the 2026-10-16 review;
   - the effect system;
   - card data from Limitless, every set up to B4b: 1,871 of 2,319 cards (80%) are playable.
 - **Next** (PROGRESS.md, "Next"):

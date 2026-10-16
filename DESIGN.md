@@ -277,12 +277,14 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 | Retreat once per turn, paying the Retreat Cost | App | ✓ Which energy is paid is picked automatically (shortcut) |
 | No evolving on your own first turn, or on a Pokémon's first turn in play | Tips | ✓ |
 | "Once during your turn" abilities: once per card, so an evolved Pokémon can use its own ability the same turn | App | ✓ evolving resets the mark (R3) |
+| "If this Pokémon moved from your Bench to the Active Spot this turn" (Golisopod, Scizor, Basculin, Crobat): not for a Pokémon that came into play or evolved this turn, even if it then moved up | Assumed | ✓ open question in PROGRESS.md |
 | Stadium actions ("once during each player's turn"): once per player per turn, per Stadium card; a new Stadium can be used again | App | ○ no Stadium actions yet |
 | Attacking ends the turn; attacks with no cost can be used on the first player's turn 1 | FAQ | ✓ |
 | Turn limit 30 (both players' turns together), then a tie | App | ✓ |
 | **Damage** | | |
 | Order: base → attacker's effects → Weakness → defender's effects → floor at 0 at the end | Battle FAQ | ✓ (R2) |
 | Weakness +20, only on the Active Pokémon | Tips | ✓ |
+| Random multi-hit attacks (Wugtrio ex: "chosen at random 3 times… do 50 damage to it"): each hit is damaged on its own, so Weakness and "+N damage" effects count on every hit to the Active | Assumed | ✓ open question in PROGRESS.md |
 | The defender's "takes −N" effects also apply on the Bench | Assumed | ✓ |
 | **Special Conditions** | | |
 | Only the Active Pokémon has them. Asleep, Paralyzed and Confused replace each other; Poisoned and Burned stack | Tips | ✓ |

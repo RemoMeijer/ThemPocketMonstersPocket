@@ -11,7 +11,7 @@ The **game engine** is most of the way there. It plays Pocket games by the rules
 | Rules core: setup, turns, Energy Zone, attacking, retreating, evolving, Trainers, Tools, Stadiums (always-on effects), abilities, Special Conditions, Checkup, damage, winning | Built and checked. Missing: Stadium actions (R5), and the player choosing which energy to pay or discard |
 | Card data | Every set up to B4b: 2,319 unique cards from Limitless, cross-checked against deckgym-core |
 | Card effects | 1,871 of 2,319 cards (80%) playable. Trainers lag behind (table below) |
-| Checks | 21 rule tests, 24 effect tests, `check_states` (8.0M moves, 0 violations), and the memory and undefined-behaviour checker build is clean after the Trainer change (the tests plus `check_states` on 4 decks) |
+| Checks | 21 rule tests, 28 effect tests, `check_states` (8.0M moves, 0 violations), and the memory and undefined-behaviour checker build is clean after the review fixes (the tests plus `check_states` on 4 decks) |
 | Replayable games (seeds) | Not yet: every game seeds itself from `random_device` |
 | Simulation runner (many games, threads, stats) | Not started |
 | Finding decks (generate, play, rank) | Not started |
@@ -91,7 +91,26 @@ Also answered on 2026-10-16:
 - When one attack knocks out both Active Pokémon, the defending player picks a new Active first, then the attacking player, then Pokémon Checkup. The engine already did this; a test now holds it.
 - An effect that starts something can always be played, even if it can never pay off. That covers Blaine without Ninetales, and X Speed after you've already retreated: the Retreat Cost is still 1 less. The engine already did this.
 
-**Open questions:** none right now.
+**Open questions** (found in the review below; the engine's current behaviour is marked "assumed" in DESIGN.md §10):
+- **Moved to the Active Spot this turn:** evolve Wimpod on the Bench into Golisopod, then retreat it into the Active Spot. Does First Impression get its +60? The engine says no: it skips a Pokémon that came into play or evolved this turn. The same goes for a Basculin benched this turn, then retreated in.
+- **Random multi-hit attacks:** when Wugtrio ex's 3 random hits land on a Weak Active Pokémon, is each hit 50 + 20? Does Giovanni add +10 to each hit? The engine does both on every hit.
+
+## Review (2026-10-16)
+
+A read-through of the engine and every compiled Trainer found 4 bugs. Each was confirmed with a test against the engine, then fixed in its own commit with a test that holds it:
+- **"For each Energy attached to all of your (opponent's) Pokémon"** counted the Active Pokémon only. Affected cards: Espeon, Zoroark, Eelektross and Mega Diancie ex. The fix is in the `(energy …)` number.
+- **Lt. Surge** moved energy from 1 Benched Pokémon instead of all of them. The compiler now reads a plural with no number in front as "all". That was the only script that changed.
+- **Whitney** also cured Poison and Burn, because `cure` ignored its list of conditions. The fix is in the block.
+- **Replacing an HP Stadium** (Starting Plains) left Pokémon with too much damage in play. Playing a Stadium now runs the knock-out check.
+
+The scripts of all 63 playable Trainers now match their text, apart from the shortcuts listed below.
+
+Weak spots the review found, not fixed:
+- **No argument-count checks:** blocks don't check how many arguments they get, so an extra one is silently ignored (that was the Whitney bug). A check in the builder would make such a script fail to load, and the card would show up in `--coverage`.
+- **Numbers and tests look at one Pokémon only:** `has-damage`, `is-ex` and the like read only the first Pokémon of a target. They would even ask for a choice if a script gave them `(choose …)`. No script does that today.
+- **Abilities without a check:** abilities don't check `possible()` the way Trainers do, so the random player wastes some uses.
+- **`move-energy` picks the energy type itself:** Elemental Switch and Dawn work like the discard shortcut below, but the code isn't marked `shortcut:`.
+- **Why these slipped through:** the compiler's self-test uses example sentences, not the real cards' scripts. Real-card golden tests (Next, step 1) are what would catch this kind of bug.
 
 ## Shortcuts (marked `shortcut:` in the code)
 
