@@ -170,10 +170,12 @@ void Game::knockOutCheck() {
             }
         }
     }
+    // No Pokémon in play loses whatever the points; nobody left is a tie (Tips, DESIGN.md §10).
     auto out = [&](int p) { return !s_.players[p].active.card && s_.players[p].bench.empty(); };
+    if (out(0) || out(1)) return finish(out(0) && out(1) ? -1 : out(0) ? 1 : 0);
     bool won[2];
-    for (int p = 0; p < 2; ++p) won[p] = s_.players[p].points >= rules::PointsToWin || out(1 - p);
-    if (won[0] && won[1]) return finish(-1);  // assumed: both at once is a draw
+    for (int p = 0; p < 2; ++p) won[p] = s_.players[p].points >= rules::PointsToWin;
+    if (won[0] && won[1]) return finish(-1);  // both reach the points at once: a tie (Tips)
     if (won[0] || won[1]) return finish(won[0] ? 0 : 1);
     for (int p : {1 - s_.current, s_.current})
         if (!s_.players[p].active.card) promote(p);

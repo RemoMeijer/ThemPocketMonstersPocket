@@ -105,14 +105,17 @@ void checkState(const Game& game, const Deck* decks[2]) {
             EXPECT(s.players[0].active.card && s.players[1].active.card);
             break;
         case Phase::Over: {
-            auto won = [&](int p) {
-                const PlayerState& l = s.players[1 - p];
-                return s.players[p].points >= rules::PointsToWin || (!l.active.card && l.bench.empty());
-            };
-            if (s.winner < 0)
-                EXPECT(s.turn == rules::TurnCap || (won(0) && won(1)));  // turn cap, or both won at once
-            else
-                EXPECT(won(s.winner));
+            // No Pokémon in play loses whatever the points, nobody left is a tie; else 3 points wins and
+            // both at once is a tie; else it's the turn cap.
+            auto out = [&](int p) { return !s.players[p].active.card && s.players[p].bench.empty(); };
+            auto reached = [&](int p) { return s.players[p].points >= rules::PointsToWin; };
+            int expected = -1;
+            if (out(0) != out(1))
+                expected = out(0) ? 1 : 0;
+            else if (!out(0) && reached(0) != reached(1))
+                expected = reached(0) ? 0 : 1;
+            EXPECT(s.winner == expected);
+            if (!out(0) && !out(1) && !reached(0) && !reached(1)) EXPECT(s.turn == rules::TurnCap);
             break;
         }
     }

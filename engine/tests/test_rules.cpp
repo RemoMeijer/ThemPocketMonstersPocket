@@ -69,6 +69,33 @@ static void nothingLeftToPromoteLoses() {
     CHECK(s.phase == Phase::Over && s.winner == 0);
 }
 
+// Both players at 2 points, both Active Pokémon Poisoned with 10 HP left: the Checkup knocks out both
+// and takes both to 3 points. Returns the winner, given who still has a Benched Pokémon.
+static int bothReachThreeAtOnce(bool bench0, bool bench1) {
+    Table t;
+    GameState& s = t.position();
+    s.players[1].bench.clear();
+    if (bench0) t.bench(0, t.cards[3]);
+    if (bench1) t.bench(1, t.cards[2]);
+    for (PlayerState& p : s.players) {
+        p.points = 2;
+        p.active.damage = 50;
+        p.active.status = Poisoned;
+    }
+    t.play(ActionKind::EndTurn);
+    CHECK(s.phase == Phase::Over && s.players[0].points == 3 && s.players[1].points == 3);
+    return s.winner;
+}
+
+// Tips: "If a player doesn't have any Pokémon remaining in play, that player loses the battle regardless
+// of the number of points each player has."
+static void noPokemonLeftLosesWhateverThePoints() {
+    CHECK(bothReachThreeAtOnce(true, false) == 0);
+    CHECK(bothReachThreeAtOnce(false, true) == 1);
+    CHECK(bothReachThreeAtOnce(false, false) == -1);  // nobody left: a tie
+    CHECK(bothReachThreeAtOnce(true, true) == -1);    // both reach 3 points at once: a tie
+}
+
 static void firstPlayerGetsNoEnergyOnTurnOne() {
     Table t;
     t.game.setup();
@@ -284,6 +311,7 @@ int main() {
     unpaidCostBlocksAttack();
     thirdPointWins();
     nothingLeftToPromoteLoses();
+    noPokemonLeftLosesWhateverThePoints();
     firstPlayerGetsNoEnergyOnTurnOne();
     unusedEnergyStays();
     benchHoldsThree();
