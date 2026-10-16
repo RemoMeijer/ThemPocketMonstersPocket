@@ -288,7 +288,7 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 | Order: base → attacker's effects → Weakness → defender's effects → floor at 0 at the end | Battle FAQ | ✓ (R2) |
 | Weakness +20, only on the Active Pokémon | Tips | ✓ |
 | Damage from an attack's text ("do 20 damage to each of your opponent's Pokémon", Lurantis) gets Weakness when it hits the Active Pokémon | Tips (only the Bench is excluded); deckgym-core's Lurantis test | ✓ |
-| Random multi-hit attacks (Wugtrio ex: "chosen at random 3 times… do 50 damage to it"): each hit is damaged on its own, so Weakness and "+N damage" effects count on every hit to the Active | Assumed | ✓ open question in PROGRESS.md |
+| Random multi-hit attacks (Wugtrio ex: "chosen at random 3 times… do 50 damage to it"): the picks on one Pokémon add up first and are dealt as one, so Weakness and "+N damage" count once. All 3 on a Weak Active: 150 + 20 | Remco | ✓ `(hits …)` |
 | The defender's "takes −N" effects also apply on the Bench | Assumed | ✓ |
 | **Special Conditions** | | |
 | Only the Active Pokémon has them. Asleep, Paralyzed and Confused replace each other; Poisoned and Burned stack | Tips | ✓ |

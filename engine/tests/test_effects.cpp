@@ -497,6 +497,24 @@ static void abilitiesNeedSomethingToDo() {
     CHECK(!t.can(ActionKind::UseAbility));
 }
 
+// Wugtrio ex, "chosen at random 3 times … do 50 damage to it" (Remco): the hits on one Pokémon add up
+// first and are dealt as one, so all three on a Weak Active is 150 + 20, and Giovanni's +10 counts once.
+static void randomHitsAddUpBeforeWeakness() {
+    Table t;
+    t.cards[1].hp = 300;
+    t.cards[1].weakness = Type::Water;
+    attackScript(t, "(seq (hit) (hits 3 (random opp active) 50))");
+    t.cards[0].attacks[0].damage = 0;
+    GameState& s = t.position();
+    TimedEffect giovanni;
+    giovanni.mod = mod("(damage-dealt 10 :scope my-all)");
+    giovanni.player = 0;
+    giovanni.lastTurn = s.turn;
+    s.timed.push_back(giovanni);
+    t.play(ActionKind::Attack);
+    CHECK(damageOn(t, 1) == 150 + 10 + 20);
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -528,5 +546,6 @@ int main() {
     replacedStadiumKnocksOut();
     movedToActiveBelongsToTheCard();
     abilitiesNeedSomethingToDo();
+    randomHitsAddUpBeforeWeakness();
     return report("effects");
 }

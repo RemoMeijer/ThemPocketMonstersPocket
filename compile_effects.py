@@ -411,7 +411,7 @@ def statements(text, ctx):
             if not d:
                 raise Unsupported(f"random hits: {s}")
             pool = "(random opp all)" if side == "opp" else "(random both all not-self)"
-            out.append(("post", f"(repeat {times} (damage {pool} {d.group(1) or d.group(2)}))"))
+            out.append(("post", f"(hits {times} {pool} {d.group(1) or d.group(2)})"))
             continue
         phase, stmt = sentence(s, ctx)
         m = re.fullmatch(r"\(set-random-hits (\d+) (opp|both)\)", stmt or "")
@@ -635,7 +635,7 @@ EXAMPLES = [
     ("attack", "30×", "This attack does 30 damage for each of your Benched {L} Pokémon.",
      "(seq (set-damage (* (count my bench (type lightning)) 30)) (hit))"),
     ("attack", "", "1 of your opponent's Pokémon is chosen at random 4 times. For each time a Pokémon was chosen, do 40 damage to it.",
-     "(seq (hit) (repeat 4 (damage (random opp all) 40)))"),
+     "(seq (hit) (hits 4 (random opp all) 40))"),
     ("ability", "", "Once during your turn, you may heal 20 damage from each of your Pokémon.", "(activated (heal (each my all damaged) 20))"),
     ("ability", "", "This Pokémon takes −20 damage from attacks.", "(passive (damage-taken -20))"),
     ("Supporter", "", "Draw 2 cards.", "(play (draw 2))"),

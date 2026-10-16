@@ -11,7 +11,7 @@ The **game engine** is most of the way there. It plays Pocket games by the rules
 | Rules core: setup, turns, Energy Zone, attacking, retreating, evolving, Trainers, Tools, Stadiums (always-on effects), abilities, Special Conditions, Checkup, damage, winning | Built and checked. Missing: Stadium actions (R5), and the player choosing which energy to pay or discard |
 | Card data | Every set up to B4b: 2,319 unique cards from Limitless, cross-checked against deckgym-core |
 | Card effects | 1,871 of 2,319 cards (80%) playable. Trainers lag behind (table below) |
-| Checks | 21 rule tests, 30 effect tests, `check_states` (8.0M moves, 0 violations), and the memory and undefined-behaviour checker build is clean after the review fixes (the tests plus `check_states` on 4 decks) |
+| Checks | 21 rule tests, 31 effect tests, `check_states` (8.0M moves, 0 violations), and the memory and undefined-behaviour checker build is clean after the review fixes (the tests plus `check_states` on 4 decks) |
 | Replayable games (seeds) | Not yet: every game seeds itself from `random_device` |
 | Simulation runner (many games, threads, stats) | Not started |
 | Finding decks (generate, play, rank) | Not started |
@@ -94,8 +94,9 @@ Also answered on 2026-10-16:
 - Abilities follow the Trainer rule: an ability with nothing to do can't be used (Remco).
 - When a Pokémon has two types of energy and one is moved or discarded, the player picks the type (Remco). That's step 4 under Next.
 
-**Open questions:**
-- **Random multi-hit attacks:** when Wugtrio ex's 3 random hits land on a Weak Active Pokémon, is each hit 50 + 20? Does Giovanni add +10 to each hit? The engine does both on every hit. Remco doesn't know either. Damage from an attack's text does get Weakness on the Active: the in-app Tip only excludes the Bench, and deckgym-core tests Lurantis that way. Whether that's once per hit is unknown; check it in the app with Wugtrio ex against a Pokémon weak to Water.
+- Random multi-hit attacks (Wugtrio ex): the hits on one Pokémon add up first and are dealt as one attack, so Weakness (+20) and bonuses count once per Pokémon (Remco). The engine used to apply them on every hit.
+
+**Open questions:** none right now.
 
 ## Review (2026-10-16)
 

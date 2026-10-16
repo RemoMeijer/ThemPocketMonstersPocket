@@ -1,5 +1,6 @@
 // Damage and healing: the attack's own damage, damage to chosen Pokémon, healing, Special Conditions.
 #include <algorithm>
+#include <array>
 
 #include "effects/effect.h"
 #include "game/game.h"
@@ -32,26 +33,55 @@ public:
     }
 };
 
-// (damage TARGET N): during an attack, damage to the opponent's Pokémon goes through the damage pipeline
-// (Weakness only for the Active one); anything else is put on directly.
-class Damage : public Stmt {
+// During an attack, damage to the opponent's Pokémon goes through the damage pipeline (Weakness only for
+// the Active one); anything else is put on directly.
+void damageOne(EffectCtx& ctx, uint16_t uid, int n) {
+    int owner = 0;
+    if (!ctx.game.find(uid, &owner) || n <= 0) return;
+    if (ctx.attack && owner != ctx.player)
+        ctx.game.dealAttackDamage(ctx.player, ctx.self, uid, n);
+    else
+        ctx.game.putDamage(uid, n);
+}
+
+class Damage : public Stmt {  // (damage TARGET N)
 public:
     Damage(const Target* t, const Num* n) : t_(t), n_(n) {}
     void run(EffectCtx& ctx) const override {
         Uids targets;
         t_->select(ctx, targets);
         int n = n_->eval(ctx);
-        for (uint16_t uid : targets) {
-            int owner = 0;
-            if (!ctx.game.find(uid, &owner) || n <= 0) continue;
-            if (ctx.attack && owner != ctx.player)
-                ctx.game.dealAttackDamage(ctx.player, ctx.self, uid, n);
-            else
-                ctx.game.putDamage(uid, n);
-        }
+        for (uint16_t uid : targets) damageOne(ctx, uid, n);
     }
 
 private:
+    const Target* t_;
+    const Num* n_;
+};
+
+// (hits TIMES TARGET N): pick TARGET TIMES times, add up N per pick, then damage each picked Pokémon once,
+// so Weakness and "+N damage" count once per Pokémon, not per pick (Remco: "chosen at random 3 times").
+class Hits : public Stmt {
+public:
+    Hits(const Num* times, const Target* t, const Num* n) : times_(times), t_(t), n_(n) {}
+    void run(EffectCtx& ctx) const override {
+        Uids hit;
+        std::array<int, 2 * (1 + rules::BenchSize)> total{};  // damage per entry of `hit`
+        int n = n_->eval(ctx);
+        for (int i = times_->eval(ctx); i > 0; --i) {
+            Uids picked;
+            t_->select(ctx, picked);
+            for (uint16_t uid : picked) {
+                std::size_t k = std::find(hit.begin(), hit.end(), uid) - hit.begin();
+                if (k == hit.size()) hit.push_back(uid);
+                total[k] += n;
+            }
+        }
+        for (std::size_t k = 0; k < hit.size(); ++k) damageOne(ctx, hit[k], total[k]);
+    }
+
+private:
+    const Num* times_;
     const Target* t_;
     const Num* n_;
 };
@@ -128,6 +158,9 @@ void addDamageWords(Words& w) {
     w.stmt["set-damage"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<AttackDamage>(true, b.num(arg(e, 0))); };
     w.stmt["cancel"] = [](const SExpr&, ScriptBuilder& b) { return b.make<Cancel>(); };
     w.stmt["damage"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<Damage>(b.target(arg(e, 0)), b.num(arg(e, 1))); };
+    w.stmt["hits"] = [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<Hits>(b.num(arg(e, 0)), b.target(arg(e, 1)), b.num(arg(e, 2)));
+    };
     w.stmt["heal"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<Heal>(b.target(arg(e, 0)), b.num(arg(e, 1))); };
     w.stmt["status"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<SetStatus>(b.target(arg(e, 0)), parseStatuses(e, 1)); };
     w.stmt["cure"] = [](const SExpr& e, ScriptBuilder& b) {
