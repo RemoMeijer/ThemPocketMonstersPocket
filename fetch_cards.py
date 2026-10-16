@@ -1,22 +1,23 @@
-"""Download every Pokémon TCG Pocket card from the TCGdex API into data/cards.json.
+"""Download every Pokémon TCG Pocket set from Limitless (pocket.limitlesstcg.com) into data/raw/limitless/.
 
-Re-run when a new set comes out.
+Two pages per set: the text view (every card's full text) and the list view (rarities).
+About 50 requests in all. Re-run when a new set comes out; export_cards.py reads the result.
 """
-import json
+import re
 import time
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-API = "https://api.tcgdex.net/v2/en"
-OUT = Path(__file__).parent / "data" / "cards.json"
+SITE = "https://pocket.limitlesstcg.com"
+OUT = Path(__file__).parent / "data" / "raw" / "limitless"
 
 
 def get(path, tries=3):
+    req = urllib.request.Request(SITE + path, headers={"User-Agent": "Mozilla/5.0 (personal deck simulator)"})
     for attempt in range(tries):
         try:
-            with urllib.request.urlopen(f"{API}/{path}", timeout=30) as r:
-                return json.load(r)
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return r.read().decode("utf-8")
         except Exception:
             if attempt == tries - 1:
                 raise
@@ -24,15 +25,15 @@ def get(path, tries=3):
 
 
 def main():
-    sets = get("series/tcgp")["sets"]
-    ids = [c["id"] for s in sets for c in get(f"sets/{s['id']}")["cards"]]
-    print(f"{len(sets)} sets, {len(ids)} cards")
-    with ThreadPoolExecutor(8) as pool:
-        cards = list(pool.map(lambda i: get(f"cards/{i}"), ids))
-    assert len(cards) == len(ids) and all(c["id"] == i for c, i in zip(cards, ids))
-    OUT.parent.mkdir(exist_ok=True)
-    OUT.write_text(json.dumps(cards, ensure_ascii=False, indent=1))
-    print(f"wrote {OUT}")
+    sets = list(dict.fromkeys(re.findall(r'href="/cards/([A-Za-z0-9-]+)"', get("/cards"))))
+    assert "A1" in sets and "P-A" in sets, sets
+    OUT.mkdir(parents=True, exist_ok=True)
+    for s in sets:
+        for view in ("text", "list"):
+            (OUT / f"{s}.{view}.html").write_text(get(f"/cards/{s}?display={view}"))
+            time.sleep(1)  # be polite to a community site
+        print(s)
+    print(f"{len(sets)} sets -> {OUT}")
 
 
 if __name__ == "__main__":

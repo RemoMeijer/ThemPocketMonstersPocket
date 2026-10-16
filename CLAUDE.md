@@ -1,10 +1,12 @@
 # Pokémon TCG Pocket simulator
 
-Remco's personal side project, not Odd.Bot work. Not a git repo.
+Remco's personal side project, not Odd.Bot work. A local git repo with no remote: commit each finished step. The generated `data/*.tsv` files are committed so data changes show up as diffs.
 
 ## Goal
 
-Find decks that work surprisingly well. A fast C++ engine plays Pokémon TCG Pocket games between decks, many at a time in memory. Later we add stats, deck search, and a small LLM that suggests what to try next.
+Run many simulated games and see which decks come out on top, as ideas for Remco to try in the game. A fast C++ engine plays Pokémon TCG Pocket games between decks, many at a time in memory.
+
+The current focus is a correct engine: the right cards and the right rules. Stats, deck search, a real player (bot) and maybe a small LLM come later.
 
 ## Where we are
 
@@ -12,14 +14,16 @@ Find decks that work surprisingly well. A fast C++ engine plays Pokémon TCG Poc
 - **Done:**
   - base rules (milestones 1–2);
   - core cleanup;
-  - the effect system, with 85% of cards playable.
+  - the effect system;
+  - card data from Limitless, every set up to B4b: 1,871 of 2,319 cards (80%) are playable.
 - **Next:** milestone 3 (simulation runner: threads, seeds, stats), or more card coverage.
 
 ## Layout
 
 ```
-fetch_cards.py      TCGdex API → data/cards.json   (re-run when a new set comes out)
-export_cards.py     cards.json → data/cards.tsv    (drops Star/Crown/Shiny alt arts, dedupes, Fossils as Pokémon)
+fetch_cards.py      Limitless → data/raw/limitless/  (two pages per set; re-run when a new set comes out)
+export_cards.py     those pages → data/cards.tsv     (drops Star/Crown/Shiny alt arts, dedupes, Fossils as Pokémon, FIXES)
+check_cards.py      cards.tsv vs deckgym-core's database, a second source: prints every difference
 compile_effects.py  card text → data/effects.tsv   (sentence patterns → effect scripts, has a self-test)
 decks/*.txt         "energy: Water" + "2 A1-053" lines
 engine/src/
@@ -41,6 +45,12 @@ Rebuild the card data:
 
 ```bash
 python3 fetch_cards.py && python3 export_cards.py && python3 compile_effects.py
+```
+
+Cross-check the card data against a second source (it should print 0 differences):
+
+```bash
+python3 check_cards.py
 ```
 
 Build:
@@ -86,12 +96,17 @@ For memory and undefined-behaviour checks, `engine/build-debug` is configured wi
   - rule numbers live in `core/rules.h`;
   - guesses are marked "unconfirmed" or "assumed" there and listed in DESIGN.md §10;
   - don't present them as facts.
-- **Players:** keep the random player for now. Remco said not to add player types or bots yet.
+- **Players:** the random player, or at most a minimal one, is enough for now. No real bots yet: games only have to follow the rules and use the right actions.
 - **Ignore Star, Crown and Shiny cards.** They're alt-art reprints.
-- **Card data:** only from TCGdex. The APK's assets are encrypted and we don't decrypt them.
+- **Card data:**
+  - it comes from Limitless (pocket.limitlesstcg.com), cross-checked with `check_cards.py` against deckgym-core;
+  - settle a difference with a third source (serebii.net/tcgpocket), and put real Limitless errors in `FIXES` in `export_cards.py`;
+  - TCGdex stopped adding Pocket sets after B2a, and its data has errors, so we no longer use it;
+  - the APK's assets are encrypted and we don't decrypt them.
 - **Before calling something done:**
   - the tests pass;
   - `check_states` reports 0 violations;
   - `compile_effects.py`'s self-test passes;
+  - after a data change, `check_cards.py` reports 0 differences;
   - when adding patterns, compare a sample of compiled scripts with their card text.
 - **Known shortcuts:** marked `shortcut:` in the code and listed in PROGRESS.md.

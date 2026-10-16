@@ -582,7 +582,7 @@ def compile_card(kind, text, ctx):
     if m:
         pool = f"(choose my all{' (type ' + t(m.group(1)) + ')' if m.group(1) else ''})"
         return f"(play (pick {pool} (seq (flip-until-tails) (repeat heads (attach-energy picked {t(m.group(2))} 1)))))"
-    m = re.fullmatch(r"Take (a|\d+) " + E + r" Energy from your Energy Zone and attach it to your ([\w' ]+?)(?:, ([\w' ]+?))?,? or ([\w' ]+?)\.", text)
+    m = re.fullmatch(r"Take (a|\d+) " + E + r" Energy from your Energy Zone and attach it to (?:your )?([\w' ]+?)(?:, ([\w' ]+?))?,? or ([\w' ]+?)\.", text)
     if m:
         names = " ".join(f'"{n}"' for n in (m.group(3), m.group(4), m.group(5)) if n)
         return f"(play (attach-energy (choose my all (name {names})) {t(m.group(2))} {num(m.group(1))}))"

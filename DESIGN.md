@@ -1,7 +1,7 @@
 # TCG Pocket engine: how card effects fit in
 
-This is a proposal. Milestones 1 and 2 are built; nothing in this document is implemented yet.
-Written 2026-10-15 from `data/cards.json` (TCGdex, fetched 2026-10-15).
+Built: see PROGRESS.md for the current state.
+Written 2026-10-15. The counts in §1 come from the TCGdex data of that day (1,708 cards); the card data now comes from Limitless (2,319 cards, 2026-10-16).
 
 ## 1. What has to fit in
 
