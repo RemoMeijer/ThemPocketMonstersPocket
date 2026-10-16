@@ -160,7 +160,7 @@ public:
             case IsEx: return p->card->ex;
             case IsBasic: return p->card->stage == Stage::Basic;
             case IsEvolution: return p->card->isEvolution();
-            case MovedToActive: return p->becameActiveTurn == turn && p->enteredTurn != turn;
+            case MovedToActive: return p->becameActiveTurn == turn;
             case EvolvedThisTurn: return !p->below.empty() && p->enteredTurn == turn;
             case EnergyAtLeast: {
                 int n = 0;

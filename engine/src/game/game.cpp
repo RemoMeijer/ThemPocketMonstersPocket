@@ -235,6 +235,7 @@ void Game::evolve(PokemonSlot& slot, const CardDef* card) {
     slot.card = card;
     slot.enteredTurn = s_.turn;
     slot.abilityTurn = -1;  // "once during your turn" belongs to the card: the new one may use its own (App)
+    slot.becameActiveTurn = -1;  // so does "moved from your Bench to the Active Spot this turn" (Remco)
     clearConditions(slot);  // evolving ends Special Conditions and effects on it
 }
 

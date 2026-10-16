@@ -442,6 +442,46 @@ static void replacedStadiumKnocksOut() {
     CHECK(s.players[1].discard.size() == 2);         // Mon1 and the old Stadium
 }
 
+// Golisopod's "if this Pokémon moved from your Bench to the Active Spot this turn" (Remco): yes when it
+// evolved on the Bench and then moved up, or was benched this turn and then moved up; no when it moved up
+// as Wimpod and evolved after.
+static void movedToActiveBelongsToTheCard() {
+    const Cond* moved = [] {
+        ScriptBuilder b(arena);
+        return b.cond(parseScript("(moved-to-active self)"));
+    }();
+    auto test = [&](Table& t) {
+        EffectCtx ctx{t.game, 0};
+        ctx.self = t.game.state().players[0].active.uid;
+        return moved->test(ctx);
+    };
+    for (bool evolveFirst : {true, false}) {
+        Table t;
+        GameState& s = t.position();
+        PlayerState& p = s.players[0];
+        t.bench(0, t.cards[0]);  // a second Mon0, on the Bench since setup
+        p.hand.clear();
+        p.hand.push_back(&t.cards[10]);  // Evo1
+        if (evolveFirst) {
+            t.play(ActionKind::Evolve, 0, 0);
+            t.play(ActionKind::Retreat, 0);
+        } else {
+            t.play(ActionKind::Retreat, 0);
+            t.play(ActionKind::Evolve, 0, -1);
+        }
+        CHECK(p.active.card == &t.cards[10]);
+        CHECK(test(t) == evolveFirst);
+    }
+    Table t;
+    GameState& s = t.position();
+    s.players[0].hand.clear();
+    s.players[0].hand.push_back(&t.cards[3]);
+    t.play(ActionKind::PlaceBench, 0);  // benched this turn
+    CHECK(!test(t));
+    t.play(ActionKind::Retreat, 0);
+    CHECK(test(t));
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -471,5 +511,6 @@ int main() {
     moveEnergyFromTheWholeBench();
     cureOnlyTheNamedConditions();
     replacedStadiumKnocksOut();
+    movedToActiveBelongsToTheCard();
     return report("effects");
 }

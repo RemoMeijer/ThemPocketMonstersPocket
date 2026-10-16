@@ -23,7 +23,7 @@ struct PokemonSlot {
     uint8_t status = 0;
     uint16_t uid = 0;           // identity while in play; timed effects point at it
     int enteredTurn = 0;        // turn it came into play or last evolved; 0 = during setup
-    int becameActiveTurn = -1;  // turn it last moved into the Active Spot
+    int becameActiveTurn = -1;  // turn the top card last moved into the Active Spot (evolving resets it)
     int abilityTurn = -1;       // turn it last used its "once during your turn" ability
 
     int energyCount() const {
