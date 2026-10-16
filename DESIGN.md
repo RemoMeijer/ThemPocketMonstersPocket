@@ -257,12 +257,12 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 | 1 Stadium per turn; it replaces the one in play; a Stadium with the same name can't be played | Card (Mesagoza), App | ✓ |
 | Retreat once per turn, paying the Retreat Cost | App | ✓ Which energy is paid is picked automatically (shortcut) |
 | No evolving on your own first turn, or on a Pokémon's first turn in play | Tips | ✓ |
-| "Once during your turn" abilities: once per card, so an evolved Pokémon can use its own ability the same turn | App | ✗ the use is marked per spot, so evolving blocks the new card's ability |
+| "Once during your turn" abilities: once per card, so an evolved Pokémon can use its own ability the same turn | App | ✓ evolving resets the mark (R3) |
 | Stadium actions ("once during each player's turn"): once per player per turn, per Stadium card; a new Stadium can be used again | App | ○ no Stadium actions yet |
 | Attacking ends the turn; attacks with no cost can be used on the first player's turn 1 | FAQ | ✓ |
 | Turn limit 30 (both players' turns together), then a tie | App | ✓ |
 | **Damage** | | |
-| Order: base → attacker's effects → Weakness → defender's effects → floor at 0 at the end | Battle FAQ | ✗ the engine skips Weakness when step 2 brings the damage to 0 or below |
+| Order: base → attacker's effects → Weakness → defender's effects → floor at 0 at the end | Battle FAQ | ✓ (R2) |
 | Weakness +20, only on the Active Pokémon | Tips | ✓ |
 | The defender's "takes −N" effects also apply on the Bench | Assumed | ✓ |
 | **Special Conditions** | | |
@@ -277,7 +277,7 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 | Evolving also ends other effects on the Pokémon | Assumed | ✓ |
 | **Winning** | | |
 | 3 points wins. A knock-out scores 1, an ex 2, a Mega ex 3 | pokemon.com, Card | ✓ |
-| A player with no Pokémon in play loses, whatever the points. If both have none, it's a tie | Tips, pokemon.com | ✗ when both reach 3 points in the same knock-out, the engine calls it a draw even if one side has no Pokémon left |
+| A player with no Pokémon in play loses, whatever the points. If both have none, it's a tie | Tips, pokemon.com | ✓ (R1) |
 | Both reach 3 points at once, both with Pokémon in play: a tie | Tips | ✓ |
 | An empty deck doesn't lose; there's just no draw | Tips | ✓ |
 | Only knock-outs score; a Pokémon discarded by an effect gives no points | FAQ | ✓ |
