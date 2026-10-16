@@ -424,6 +424,24 @@ static void cureOnlyTheNamedConditions() {
     CHECK(p.active.status == Poisoned);
 }
 
+// Replacing a Stadium that gave +HP knocks out at once whatever now has too much damage.
+static void replacedStadiumKnocksOut() {
+    Table t;
+    CardDef plains = trainer(TrainerKind::Stadium, "Plains");
+    plains.passive.push_back(mod("(hp 20 :stage basic)", ModScope::All));
+    CardDef area = trainer(TrainerKind::Stadium, "Area");
+    GameState& s = t.position();
+    s.stadium = &plains;
+    s.stadiumOwner = 1;
+    s.players[1].active.damage = 70;  // 60 HP + 20: still in play
+    s.players[0].hand.clear();
+    s.players[0].hand.push_back(&area);
+    t.play(ActionKind::PlayTrainer, 0);
+    CHECK(s.players[0].points == 1);
+    CHECK(s.players[1].active.card == &t.cards[2]);  // P2's Benched Mon2 moved up before P1 goes on
+    CHECK(s.players[1].discard.size() == 2);         // Mon1 and the old Stadium
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -452,5 +470,6 @@ int main() {
     energyOnAllPokemon();
     moveEnergyFromTheWholeBench();
     cureOnlyTheNamedConditions();
+    replacedStadiumKnocksOut();
     return report("effects");
 }

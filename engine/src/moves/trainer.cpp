@@ -40,6 +40,7 @@ public:
             s.stadium = card;
             s.stadiumOwner = me;
             p.stadiumTurn = s.turn;
+            game.knockOutCheck();  // the old Stadium's +HP is gone
             return;
         }
         if (card->isTrainer(TrainerKind::Supporter)) p.supporterTurn = s.turn;
