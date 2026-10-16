@@ -144,12 +144,14 @@ This avoids writing C++ per card. There are about 60 building blocks, and adding
 ## 5. Damage pipeline (one place, fixed order)
 
 1. **Base damage** from the attack, including its own +N, ×N, coins and "for each".
-2. **The attacker's modifiers:** abilities (Lucario +20), Tools, the Stadium, effects that last this turn (Blaine).
-3. **Weakness** +20, unless the attack ignores Weakness.
+2. **The attacker's modifiers:** abilities (Lucario +20), Tools, the Stadium, effects that last this turn (Blaine), and effects on the attacker such as "the Defending Pokémon's attacks do −20 damage".
+3. **Weakness** +20 (×2 under Bounded Field), unless the attack ignores Weakness. It applies whenever the attack does damage, even if step 2 brought the number to 0 or below.
 4. **The defender's modifiers:** "takes −20", "prevent all damage", unless the attack ignores effects on the defender.
-5. Never below 0. Then apply the damage.
+5. Floor at 0, once, here at the end. Then apply the damage.
 
-Damage to the Bench skips steps 3–4 (assumed, see §10). Damage an attacker does to itself and damage from Checkup are put on directly.
+This is the official order from the "Detailed battle FAQ" (§10). Example: 10 damage, −20 on the attacker, a weak defender: 10 − 20 + 20 = 10.
+
+Damage to the Bench skips Weakness (Tips). The attacker's bonuses name the Active ("to your opponent's Active Pokémon"), so they don't apply on the Bench either. The defender's own modifiers do apply on the Bench (assumed, as in the paper game). Damage an attacker does to itself and damage from Checkup are put on directly.
 
 **After any damage** (attack, Bench, self, Checkup, ability), one knock-out check runs:
 - it scans every Pokémon in play, not only the Defending one;
@@ -169,11 +171,18 @@ The trade-off is that the game doesn't pause mid-effect. That keeps it simple an
 
 | Where | Added |
 |---|---|
-| Pokémon in play | Special Conditions (Asleep, Paralyzed and Confused replace each other; Poisoned and Burned stack on top), attached Tool, ability used this turn, damaged-by-attack turn, timed effects on it, counters ("this effect stacks") |
-| Player | Energy Zone *current and next*, Supporter played this turn, Stadium played this turn, a record of this turn and last turn (attacks used, knock-outs suffered, evolutions), player-wide timed effects (Supporter lock) |
-| Game | The Stadium in play and who played it |
+| Pokémon in play | Special Conditions (Asleep, Paralyzed and Confused replace each other; Poisoned and Burned stack on top), attached Tool, whether its top card used its ability this turn (see "Once per turn belongs to the card" below), damaged-by-attack turn, timed effects on it, counters ("this effect stacks") |
+| Player | Energy Zone *current and next*; energy in the discard pile, as a count per type; Supporter played this turn; Stadium played this turn; a record of this turn and last turn (attacks used, knock-outs suffered, evolutions); player-wide timed effects (Supporter lock) |
+| Game | The Stadium in play, who played it, and whether each player used its action this turn |
 
-Timed effects are small records: what it is, who it's on, and when it ends. The game removes them at the right turn boundary. Effects on a Pokémon also end when it leaves the Active Spot or evolves (assumed, see §10).
+Timed effects are small records: what it is, who it's on, and when it ends. The game removes them at the right turn boundary. Effects on a Pokémon also end when it goes to the Bench (official FAQ) or evolves (assumed, see §10).
+
+**Energy in the discard pile.** Energy that leaves play lands in its owner's discard pile, as a count per type. Remco checked this in the app for unused Energy Zone energy at the end of the turn. For energy spent on retreating, energy discarded by an effect and energy on a knocked-out Pokémon it's assumed. Cards such as Flame Patch, Professor Sada and some abilities attach energy from the discard pile, which only makes sense if it collects there. Energy isn't a card, so it doesn't go in the discard card list.
+
+**Once per turn belongs to the card.** "Once during your turn" is tracked per card, not per spot on the board (Remco checked this in the app):
+- A Pokémon uses its ability, evolves, and the evolved card can use its own ability in the same turn. Evolving resets the "used this turn" mark.
+- A Stadium with "Once during each player's turn, that player may…" gives each player one use per turn. If a new Stadium replaces it, the new card can be used too, even if the old one was used this turn. Only one Stadium can be played per turn (printed on the cards), so this can't repeat.
+- The same goes for any future "once during your turn" source: the mark sits on the card that has the text.
 
 **Fossils** get Pokémon stats at load: 40 HP, Colorless, a "can't retreat" modifier and a "discard from play" action. After that the engine treats them as Basic Pokémon, with no special case in the core.
 
@@ -181,20 +190,22 @@ Timed effects are small records: what it is, who it's on, and when it ends. The 
 
 This is the cleanup from the last review, now shaped to carry effects.
 
-- **One class per kind of move:** place Basic, evolve, attach energy, retreat, attack, play Item, play Supporter, attach Tool, play Stadium, use ability, end turn.
+- **One class per kind of move:** place Basic, evolve, attach energy, retreat, attack, play Item, play Supporter, attach Tool, play Stadium, use ability, use the Stadium's action, end turn.
   - Each class lists its legal moves and carries them out, so the rules for one move live in one place.
   - Each asks the modifiers. For example, retreat asks "retreat cost?" and "can retreat?", and attack asks "attack cost?" and "can attack?" (Asleep, Paralyzed, "can't attack next turn").
 - **`Game` keeps only the turn flow:**
   ```
-  start of turn  draw → Energy Zone (current, next) → start-of-turn triggers
+  start of turn  draw (also the first player on turn 1) → Energy Zone: current = next, roll a new
+                 next (no energy for the first player's turn 1) → start-of-turn triggers
   main           moves until Attack or End turn
   attack         can attack? → pay cost → effect script and damage pipeline → knock-out check
-  end of turn    end-of-turn triggers → "this turn" effects end → Pokémon Checkup
-                 (Poison, Burn, Sleep, Paralysis) → knock-out check → effects that ran
-                 "until the end of the opponent's next turn" end
+  end of turn    unused Energy Zone energy → discard pile → end-of-turn triggers (abilities, Tools,
+                 the Stadium's "at the end of each player's turn") → "this turn" effects end →
+                 Pokémon Checkup (Poison, Burn, Sleep, Paralysis; the player whose turn ended first)
+                 → knock-out check → effects that ran "until the end of the opponent's next turn" end
   ```
 - **Named rule checks** instead of bare conditions, for example `ownFirstTurn(state, player)` instead of `turn <= 2`.
-- **Fixed values (enums)** for category, stage and trainer kind, set when the cards load. ex comes from TCGdex's `suffix`, not the name.
+- **Fixed values (enums)** for category, stage and trainer kind, set when the cards load. ex is set by `export_cards.py` from the name ending in " ex"; Mega ex from "Mega … ex". Their points (2 and 3) are printed on the cards.
 - **Player view:** policies get a `PlayerView`, not the whole state. It shows their own hand, both boards, discard piles, the opponent's hand *size* and any cards revealed by effects. A smarter player then can't cheat by design.
 
 ## 9. Folder layout
@@ -210,25 +221,67 @@ engine/src/
 export_cards.py, compile_effects.py → data/cards.tsv, data/effects.tsv  (+ data/effects_manual.tsv)
 ```
 
-## 10. Rules to confirm in the app
+## 10. Rules and where they come from
 
-These are standard Pokémon TCG rules I'm assuming for Pocket. I couldn't find them in a public source. They'll go in `rules.h` or the Checkup code, in one place.
+Updated 2026-10-16. One row per rule: what the engine does and how we know.
 
-| Rule | Assumed |
-|---|---|
-| Poisoned | 10 damage at every Checkup |
-| Burned | 20 damage at Checkup, then flip: heads recovers |
-| Asleep | Can't attack or retreat; flip at Checkup, heads wakes up |
-| Paralyzed | Can't attack or retreat; wears off at the end of the owner's next turn |
-| Confused | Flip when attacking: tails means the attack fails. (The regular card game does 30 to itself instead. Which is it in Pocket?) |
-| Moving to the Bench or evolving | Removes all Special Conditions and effects on that Pokémon |
-| Supporters | 1 per turn. Can the player going first play one on turn 1? |
-| Tools | 1 per Pokémon |
-| Mega ex | Worth 3 points |
-| Both players reach 3 points at once | ? (draw or sudden death) |
-| Damage to the Bench | No Weakness |
+**Sources**, strongest first:
+- **App:** Remco checked it in the game, 2026-10-16.
+- **FAQ:** the official Pokémon Support [Battle Rules FAQ](https://support.pokemon.com/hc/en-us/articles/38906248102292-Pok%C3%A9mon-TCG-Pocket-Battle-Rules-FAQ).
+- **pokemon.com:** the official [deck-building guide](https://www.pokemon.com/us/strategy/learn-how-to-build-a-deck-in-pokemon-tcg-pocket).
+- **Card:** printed on the cards (rule boxes, Stadium text).
+- **Tips:** the in-app Tips panel, as quoted word for word in deckgym-core's [rule tests](https://github.com/bcollazo/deckgym-core/tree/main/tests/rules), transcribed 2026-09-08.
+- **Battle FAQ:** the official in-app "Detailed battle FAQ", as quoted in the same deckgym tests. We couldn't open it ourselves.
+- **Fan:** Serebii or fan guides only.
+- **Assumed:** the paper-game rule; no Pocket source found.
 
-The open guesses from milestones 1–2 still apply too: the turn cap of 30, the first player drawing on turn 1, an empty deck, the hand limit of 10, and nobody evolving on their own first turn.
+**Engine column:** ✓ the engine does this. ✗ it doesn't yet; the fix is planned in PROGRESS.md. ○ not built yet.
+
+| Rule | Source | Engine |
+|---|---|---|
+| **Deck and setup** | | |
+| 20 cards, at most 2 with the same name, at least 1 Basic | pokemon.com | ✓ |
+| At most 3 energy types per deck | App | ✓ |
+| The Bench holds 3 Pokémon | App | ✓ |
+| Opening hand of 5 always holds a Basic; no mulligans | Fan | ✓ The real dealing method is unknown: the engine reshuffles until the top 5 hold a Basic (assumed) |
+| **Turns** | | |
+| The first player draws on turn 1 | App | ✓ |
+| The first player gets no energy on turn 1 | FAQ (free attacks are "usable on the first turn of the player that goes first") | ✓ |
+| The Energy Zone makes 1 energy per turn, from the types picked for the deck | pokemon.com | ✓ Which type comes up is random and even across those types (assumed) |
+| The next energy is known in advance | Card (Porygon-Z, Rainbow Cave) | ✗ only the current one is stored |
+| Unused energy goes to the discard pile at the end of the turn; a new one is made at the start of the next | App | ✗ the engine keeps unused energy and makes no new one |
+| Hand limit 10: no draws while the hand is full | App | ✓ |
+| 1 Supporter per turn, also on the first player's turn 1 | App (turn 1); assumed (1 per turn) | ✓ |
+| Items: any number per turn | Assumed | ✓ |
+| 1 Tool per Pokémon | App | ✓ |
+| 1 Stadium per turn; it replaces the one in play; a Stadium with the same name can't be played | Card (Mesagoza), App | ✓ |
+| Retreat once per turn, paying the Retreat Cost | App | ✓ Which energy is paid is picked automatically (shortcut) |
+| No evolving on your own first turn, or on a Pokémon's first turn in play | Tips | ✓ |
+| "Once during your turn" abilities: once per card, so an evolved Pokémon can use its own ability the same turn | App | ✗ the use is marked per spot, so evolving blocks the new card's ability |
+| Stadium actions ("once during each player's turn"): once per player per turn, per Stadium card; a new Stadium can be used again | App | ○ no Stadium actions yet |
+| Attacking ends the turn; attacks with no cost can be used on the first player's turn 1 | FAQ | ✓ |
+| Turn limit 30 (both players' turns together), then a tie | App | ✓ |
+| **Damage** | | |
+| Order: base → attacker's effects → Weakness → defender's effects → floor at 0 at the end | Battle FAQ | ✗ the engine skips Weakness when step 2 brings the damage to 0 or below |
+| Weakness +20, only on the Active Pokémon | Tips | ✓ |
+| The defender's "takes −N" effects also apply on the Bench | Assumed | ✓ |
+| **Special Conditions** | | |
+| Only the Active Pokémon has them. Asleep, Paralyzed and Confused replace each other; Poisoned and Burned stack | Tips | ✓ |
+| Checkup after every turn, for both players, the player whose turn ended first. Order: Poison, Burn, Asleep, Paralyzed. Knock-outs happen together at the end | Tips | ✓ |
+| Poison 10; Burn 20, then a flip (heads recovers) | Tips | ✓ |
+| Asleep: can't attack or retreat; a flip at every Checkup, heads wakes it | Tips | ✓ |
+| Paralyzed: can't attack or retreat; recovers at the Checkup after its owner's next turn | Tips | ✓ A Pokémon paralyzing itself would recover a turn early, but no card does that |
+| Confused: flip when attacking; tails means no attack and the turn ends. It can still retreat | Tips | ✓ |
+| Going to the Bench clears Special Conditions and all effects on the Pokémon | Tips, FAQ | ✓ |
+| Evolving clears Special Conditions | App | ✓ |
+| Evolving also ends other effects on the Pokémon | Assumed | ✓ |
+| **Winning** | | |
+| 3 points wins. A knock-out scores 1, an ex 2, a Mega ex 3 | pokemon.com, Card | ✓ |
+| A player with no Pokémon in play loses, whatever the points. If both have none, it's a tie | Tips, pokemon.com | ✗ when both reach 3 points in the same knock-out, the engine calls it a draw even if one side has no Pokémon left |
+| Both reach 3 points at once, both with Pokémon in play: a tie | Tips | ✓ |
+| An empty deck doesn't lose; there's just no draw | Tips | ✓ |
+| Only knock-outs score; a Pokémon discarded by an effect gives no points | FAQ | ✓ |
+| Both Active Pokémon knocked out together: the player whose turn it isn't picks a new Active first | Assumed | ✓ |
 
 ## 11. Build order
 

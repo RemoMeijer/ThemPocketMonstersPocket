@@ -61,22 +61,37 @@ Updated 2026-10-16. DESIGN.md's foundation is built: card effects work through s
 - Effects that look at the deck and put the cards back in any order do nothing.
 - Clemont's Backpack's "+20 to your opponent's Pokémon" isn't supported (our damage bonuses only count against the Active).
 
-## Assumed rules (DESIGN.md §10, still to confirm in the app)
+## Rules (DESIGN.md §10)
 
-deckgym-core transcribed the in-app Tips panel into tests, and that secondhand source agrees with Confused, Poison, Burn, Sleep, Paralysis and the Checkup order, the hand limit, the empty deck, the turn cap, and both players winning at once being a draw. Still open: whether evolving clears conditions, how the opening hand is dealt, and 1 Tool per Pokémon.
+Every rule now has a source in DESIGN.md §10. On 2026-10-16 Remco checked the open ones in the app:
+- The first player draws and may play a Supporter on turn 1.
+- The turn limit is 30, then a tie. The hand limit is 10.
+- 1 Tool per Pokémon, 3 Bench spots, 3 energy types, 1 retreat per turn.
+- Evolving clears Special Conditions.
+- Unused energy goes to the discard pile.
+- "Once during your turn" counts per card (abilities and Stadium actions).
 
-- Confused: tails, the attack fails.
-- Poison 10; Burn 20 then a flip; Sleep flip; Paralysis ends after its owner's next turn.
-- Mega ex is worth 3 points; both players winning at once is a draw.
-- The first player may play a Supporter on turn 1.
-- Bench damage has no Weakness. Effects on a Pokémon end when it leaves the Active Spot or evolves.
-- Plus the milestone 1–2 guesses: turn cap 30, first player draws on turn 1, empty deck = no draw, hand limit 10, no evolving on your own first turn.
+Five rows in §10 are marked ✗ or ○: the engine doesn't follow them yet. The plan below fixes them.
 
-## Next options
+## Next: the rules milestone
 
-1. **Rules:** check DESIGN.md §10 against the in-app Tips panel and the sources above, and mark each rule in `rules.h` with where it comes from.
-2. **Seeds:** make games replayable from a seed, so a violation found by `check_states` can be replayed. This is also part of milestone 3.
-3. **Card coverage for the new sets:** the `tcgp --coverage` output lists the most common missing texts.
-4. **Milestone 3, the simulation runner:** threads and stats over many games. Win rates from the random player mean little (about 70% of its games are draws at the turn cap), but it's enough to test the runner.
+Planned 2026-10-16. Nothing is built yet. One step at a time, each with tests, `check_states` at 0 violations (its own reading of the rules updated where needed) and a commit.
+
+| Step | What | Where |
+|---|---|---|
+| R1 | **Win condition:** a player with no Pokémon in play loses, whatever the points; both without Pokémon is a tie. Today, reaching 3 points together is always a draw. | `game.cpp` (knock-out check), `test_rules`, `check_states` |
+| R2 | **Damage order:** Weakness applies whenever the attack does damage, even if the attacker's effects took it to 0 or below; floor at 0 once, at the end. | `damage.cpp`, `test_effects` |
+| R3 | **Abilities per card:** evolving resets "used its ability this turn", so the evolved card can use its own. | `evolve.cpp`, `test_effects` |
+| R4 | **Energy Zone and discard-pile energy:** store the current and the next energy. At the end of the turn, unused energy goes to the discard pile, and a new one comes at the start of the next turn. Energy in the discard pile is counted per type; energy from retreating, discard effects and knocked-out Pokémon goes there too. `PlayerView` shows your own next energy and both discard piles. | `state.h`, `game.cpp`, `retreat.cpp`, `blocks_energy.cpp`, `view.h`, `check_states` |
+| R5 | **Stadium actions:** a "use the Stadium" move, once per player per turn, per Stadium card. A new Stadium starts fresh, so playing one after using the old one allows a second use. Also the Stadium's "at the end of each player's turn" trigger. Needs compiler patterns for both sentence shapes. | `moves/` (new move), `state.h`, `game.cpp`, `load_scripts.cpp`, `compile_effects.py` |
+| R6 | **Source tags:** each constant in `rules.h` gets a short tag pointing at §10 (App, FAQ, Card, Tips, Fan, Assumed). | `rules.h` |
+
+R1–R3 are a few lines each. R4 changes the game state and the turn flow. R5 is a new mechanic: it unlocks Stadiums such as Mesagoza, Fragrant Forest, Area Zero, Arcade, Hiking Trail and Soothing Shore, as far as their effects have blocks. Rainbow Cave also needs R4.
+
+## Later
+
+1. **Seeds:** make games replayable from a seed, so a violation found by `check_states` can be replayed. This is also part of milestone 3.
+2. **Card coverage for the new sets:** the `tcgp --coverage` output lists the most common missing texts.
+3. **Milestone 3, the simulation runner:** threads and stats over many games. Win rates from the random player mean little (about 70% of its games are draws at the turn cap), but it's enough to test the runner.
 
 Players: the random player, or at most a minimal one, is enough for now. No real bots yet.
