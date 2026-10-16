@@ -65,10 +65,19 @@ inline Deck evolutionDeck(const std::vector<CardDef>& cards) {
 }
 
 // A game with everything around it, ready for a hand-built position.
+// A random player that also notes, in `chosen`, which player was asked each choice inside an effect.
+struct TestPolicy : RandomPolicy {
+    std::vector<int>* chosen = nullptr;
+    std::size_t choose(const PlayerView& view, const std::vector<Action>& actions) override {
+        if (chosen && actions[0].kind == ActionKind::Choose) chosen->push_back(view.me());
+        return RandomPolicy::choose(view, actions);
+    }
+};
+
 struct Table {
     std::vector<CardDef> cards = testCards();
     Deck deck = testDeck(cards);
-    RandomPolicy policy0, policy1;
+    TestPolicy policy0, policy1;
     Game game{deck, deck, policy0, policy1};
 
     // P1 (player 0) to move on turn 5: Mon0 Active with one Water vs Mon1 Active, and P2 has Mon2 benched.

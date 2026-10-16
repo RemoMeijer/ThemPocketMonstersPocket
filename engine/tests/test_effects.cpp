@@ -63,6 +63,24 @@ static void recoilKnockOutScoresForTheOpponent() {
     CHECK(s.players[0].active.card == &t.cards[3]);
 }
 
+// Both Active Pokémon knocked out by one attack: the defending player picks a new Active first, then the
+// attacking player, and only then comes Pokémon Checkup (App).
+static void defenderPicksNewActiveFirst() {
+    Table t;
+    attackScript(t, "(seq (hit) (damage self 60))");
+    GameState& s = t.position();
+    t.bench(0, t.cards[3]);
+    t.bench(0, t.cards[4]);
+    t.bench(1, t.cards[5]);  // two on each Bench, so both players have a real choice
+    s.players[1].active.damage = 30;
+    std::vector<int> chosen;
+    t.policy0.chosen = t.policy1.chosen = &chosen;
+    t.play(ActionKind::Attack);
+    CHECK(s.players[0].points == 1 && s.players[1].points == 1);
+    CHECK((chosen == std::vector<int>{1, 0}));  // P2 (defending), then P1 (attacking)
+    CHECK(s.players[0].active.card && s.players[1].active.card && s.current == 1);
+}
+
 static void benchDamageHasNoWeakness() {
     Table t;
     t.cards[2].weakness = Type::Water;
@@ -366,6 +384,7 @@ static void moveEnergyAndSearch() {
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
+    defenderPicksNewActiveFirst();
     benchDamageHasNoWeakness();
     weaknessBeforeTheFloor();
     discardedEnergyGoesToItsOwnersPile();

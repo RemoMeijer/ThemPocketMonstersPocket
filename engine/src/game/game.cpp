@@ -187,6 +187,7 @@ void Game::knockOutCheck() {
     for (int p = 0; p < 2; ++p) won[p] = s_.players[p].points >= rules::PointsToWin;
     if (won[0] && won[1]) return finish(-1);  // both reach the points at once: a tie (Tips)
     if (won[0] || won[1]) return finish(won[0] ? 0 : 1);
+    // The defending player picks a new Active first, then the attacking player; Checkup comes after (App).
     for (int p : {1 - s_.current, s_.current})
         if (!s_.players[p].active.card) promote(p);
 }
