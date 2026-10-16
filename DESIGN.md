@@ -282,17 +282,21 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 | "Once during your turn" abilities: once per card, so an evolved Pokémon can use its own ability the same turn | App | ✓ evolving resets the mark (R3) |
 | "If this Pokémon moved from your Bench to the Active Spot this turn" (Golisopod, Scizor, Basculin, Crobat): it counts for the card now on top. Evolved on the Bench then moved up, or benched this turn then moved up: yes. Moved up as Wimpod, then evolved: no | Remco | ✓ evolving resets the mark, like R3 |
 | Stadium actions ("once during each player's turn"): once per player per turn, per Stadium card; a new Stadium can be used again | App | ○ no Stadium actions yet |
+| Stadium effects "at the end of each player's turn" (Hiking Trail, Soothing Shore) come last: after the end-of-turn abilities and after Pokémon Checkup | Remco | ○ batch 4 |
+| Rainbow Cave: discarding the Energy Zone's energy works like an extra turn for the zone: the shown next energy becomes the current one, and a new next one is rolled | Remco | ○ batch 4 |
 | Attacking ends the turn; attacks with no cost can be used on the first player's turn 1 | FAQ | ✓ |
 | Turn limit 30 (both players' turns together), then a tie | App | ✓ |
 | **Damage** | | |
 | Order: base → attacker's effects → Weakness → defender's effects → floor at 0 at the end | Battle FAQ | ✓ (R2) |
 | Weakness +20, only on the Active Pokémon | Tips | ✓ |
+| Bounded Field: Weakness ×2 takes the place of +20 in the damage order (base → attacker's effects → ×2 → defender's effects) | Remco | ○ batch 4 |
 | Damage from an attack's text ("do 20 damage to each of your opponent's Pokémon", Lurantis) gets Weakness when it hits the Active Pokémon | Tips (only the Bench is excluded); deckgym-core's Lurantis test | ✓ |
 | Random multi-hit attacks (Wugtrio ex: "chosen at random 3 times… do 50 damage to it"): the picks on one Pokémon add up first and are dealt as one, so Weakness and "+N damage" count once. All 3 on a Weak Active: 150 + 20 | Remco | ✓ `(hits …)` |
 | The defender's "takes −N" effects also apply on the Bench | Assumed | ✓ |
 | **Special Conditions** | | |
 | Only the Active Pokémon has them. Asleep, Paralyzed and Confused replace each other; Poisoned and Burned stack | Tips | ✓ |
 | Checkup after every turn, for both players, the player whose turn ended first. Order: Poison, Burn, Asleep, Paralyzed. Knock-outs happen together at the end | Tips | ✓ |
+| Lum Berry, Sitrus Berry ("at the end of each turn") act before Pokémon Checkup, so a Lum Berry cures Poison before it does damage | Assumed (Remco's best guess, to double-check) | ○ batch 5 |
 | Poison 10; Burn 20, then a flip (heads recovers) | Tips | ✓ |
 | Asleep: can't attack or retreat; a flip at every Checkup, heads wakes it | Tips | ✓ |
 | Paralyzed: can't attack or retreat; recovers at the Checkup after its owner's next turn | Tips | ✓ A Pokémon paralyzing itself would recover a turn early, but no card does that |
@@ -306,6 +310,8 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 | Both reach 3 points at once, both with Pokémon in play: a tie | Tips | ✓ |
 | An empty deck doesn't lose; there's just no draw | Tips | ✓ |
 | Only knock-outs score; a Pokémon discarded by an effect gives no points | FAQ | ✓ |
+| A Pokémon put back into the hand (Koga, Ilima) takes its evolution cards and Tool with it; its energy goes to the discard pile | Remco | ○ batch 6 |
+| Putting your Active Pokémon back into the hand is allowed with an empty Bench: with no Pokémon left in play, that player loses (a way to concede) | Remco | ○ batch 6 |
 | Both Active Pokémon knocked out by one attack: the defending player picks a new Active first, then the attacking player, then Pokémon Checkup | App | ✓ |
 
 ## 11. Build order
