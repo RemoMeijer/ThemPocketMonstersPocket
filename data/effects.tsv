@@ -99,7 +99,7 @@ A1-221	card	(play (effect this-turn me (damage-dealt 30 :scope my-all :name "Nin
 A1-223	card	(play (effect this-turn me (damage-dealt 10 :scope my-all)))
 A1-224	card	(play (attach-energy (choose my all (name "Golem" "Onix")) fighting 1))
 A1-225	card	(play (switch-in (owner-chooses opp bench)))
-A1-226	card	(play (move-energy (choose my bench) (choose my active (name "Raichu" "Electrode" "Electabuzz")) lightning all))
+A1-226	card	(play (move-energy (each my bench) (choose my active (name "Raichu" "Electrode" "Electabuzz")) lightning all))
 A1a-001	attack:0	(seq (hit) (attach-energy self grass 1))
 A1a-002	attack:0	(seq (bonus (* (energy opp-active) 20)) (hit))
 A1a-003	attack:0	(seq (flip (energy self)) (set-damage (* heads 50)) (hit))

@@ -393,6 +393,22 @@ static void energyOnAllPokemon() {
     CHECK(damageOn(t, 1) == 30);
 }
 
+// Lt. Surge: "Move all {L} Energy from your Benched Pokémon to …": from every Benched Pokémon.
+static void moveEnergyFromTheWholeBench() {
+    Table t;
+    CardDef surge = trainer(TrainerKind::Supporter, "Surge", "(move-energy (each my bench) (choose my active (name \"Mon0\")) lightning all)");
+    GameState& s = t.position();
+    PlayerState& p = s.players[0];
+    t.bench(0, t.cards[3]).energy[int(Type::Lightning)] = 1;
+    t.bench(0, t.cards[4]).energy[int(Type::Lightning)] = 2;
+    p.bench[1].energy[int(Type::Water)] = 1;
+    p.hand.clear();
+    p.hand.push_back(&surge);
+    t.play(ActionKind::PlayTrainer, 0);
+    CHECK(p.active.energy[int(Type::Lightning)] == 3);
+    CHECK(p.bench[0].energyCount() == 0 && p.bench[1].energyCount() == 1);  // only Lightning moves
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -419,5 +435,6 @@ int main() {
     trainersNeedSomethingToDo();
     moveEnergyAndSearch();
     energyOnAllPokemon();
+    moveEnergyFromTheWholeBench();
     return report("effects");
 }

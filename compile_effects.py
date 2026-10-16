@@ -94,7 +94,8 @@ def target(m, prefer_damaged=False):
     if m.group("ex"): filters.append("ex")
     if prefer_damaged: filters.append("damaged")
     qty = m.group("qty")
-    mode = "each" if qty in ("each", "all") else "choose"
+    # "1 of your Pokemon" is one choice; a plural with no number ("your Benched Pokemon", Lt. Surge) is all of them
+    mode = "choose" if qty in ("1", "a", "an") or m.group("act") else "each"
     return f"({mode} {side} {zone}{''.join(' ' + x for x in filters)})"
 
 
@@ -654,6 +655,8 @@ EXAMPLES = [
      "(play (pick (choose my all) (seq (heal picked 30) (cure picked))))"),
     ("Supporter", "", "Move an Energy from 1 of your Benched Pokémon to your Active Pokémon.",
      "(play (move-energy (choose my bench) my-active any 1))"),
+    ("Supporter", "", "Move all {L} Energy from your Benched Pokémon to your Raichu, Electrode, or Electabuzz in the Active Spot.",
+     '(play (move-energy (each my bench) (choose my active (name "Raichu" "Electrode" "Electabuzz")) lightning all))'),
     ("Item", "", "Flip a coin. If heads, take a Lightning Energy from your Energy Zone and attach it to 1 of your Benched Lightning Pokémon.",
      "(play (seq (flip 1) (if heads (attach-energy (choose my bench (type lightning)) lightning 1))))"),
     ("Tool", "", "At the end of your turn, if the Pokémon this card is attached to is in the Active Spot, heal 10 damage from that Pokémon.",
