@@ -482,6 +482,21 @@ static void movedToActiveBelongsToTheCard() {
     CHECK(test(t));
 }
 
+// An ability with nothing to do can't be used (Remco), the same rule as for Trainers.
+static void abilitiesNeedSomethingToDo() {
+    Table t;
+    t.cards[0].activated = stmt("(heal (each my all damaged) 20)");                         // Butterfree
+    t.cards[3].activated = stmt("(attach-energy (choose my active (type psychic)) psychic 1)");  // Gardevoir
+    GameState& s = t.position();
+    t.bench(0, t.cards[3]);
+    CHECK(!t.can(ActionKind::UseAbility));  // nothing damaged, and a Water Active
+    s.players[0].bench[0].damage = 10;
+    CHECK(t.can(ActionKind::UseAbility));
+    t.play(ActionKind::UseAbility, 0, -1);
+    CHECK(s.players[0].bench[0].damage == 0);
+    CHECK(!t.can(ActionKind::UseAbility));
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -512,5 +527,6 @@ int main() {
     cureOnlyTheNamedConditions();
     replacedStadiumKnocksOut();
     movedToActiveBelongsToTheCard();
+    abilitiesNeedSomethingToDo();
     return report("effects");
 }

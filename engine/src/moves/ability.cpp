@@ -11,8 +11,11 @@ public:
         int me = s.current;
         for (int t = -1; t < int(s.players[me].bench.size()); ++t) {
             const PokemonSlot& p = game.slot(me, t);
-            if (p.card->activated && p.abilityTurn != s.turn && (!p.card->activatedWhileActive || t < 0))
-                out.push_back({ActionKind::UseAbility, 0, int8_t(t)});
+            if (!p.card->activated || p.abilityTurn == s.turn || (p.card->activatedWhileActive && t >= 0)) continue;
+            // Like a Trainer, an ability needs something to do: no Psy Shadow without a Psychic Active (Remco).
+            EffectCtx ctx{game, me};
+            ctx.self = p.uid;
+            if (p.card->activated->possible(ctx)) out.push_back({ActionKind::UseAbility, 0, int8_t(t)});
         }
     }
 
