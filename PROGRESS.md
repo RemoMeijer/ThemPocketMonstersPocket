@@ -89,9 +89,9 @@ Also answered on 2026-10-16:
 - Energy paid for a retreat or discarded by an effect goes to the discard pile.
 - When one attack knocks out both Active Pokémon, the defending player picks a new Active first, then the attacking player, then Pokémon Checkup. The engine already did this; a test now holds it.
 
-**Open questions for Remco.** These are guesses in the engine today:
-1. Can you play a "this turn" Supporter whose named Pokémon you don't have, such as Blaine without Ninetales, Rapidash or Magmar, or Cynthia without Garchomp or Togekiss? The engine allows it.
-2. Can you play X Speed or Leaf when your Active's Retreat Cost is already 0? The engine allows it.
+- An effect that starts something can always be played, even if it can never pay off. That covers Blaine without Ninetales, and X Speed after you've already retreated: the Retreat Cost is still 1 less. The engine already did this.
+
+**Open questions:** none right now.
 
 ## Shortcuts (marked `shortcut:` in the code)
 
