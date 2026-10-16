@@ -103,21 +103,22 @@ private:
     uint8_t mask_;
 };
 
-class Cure : public Stmt {  // (cure TARGET): remove all Special Conditions
+class Cure : public Stmt {  // (cure TARGET [S…]): remove those Special Conditions, or all of them
 public:
-    explicit Cure(const Target* t) : t_(t) {}
+    Cure(const Target* t, uint8_t mask) : t_(t), mask_(mask) {}
     void run(EffectCtx& ctx) const override {
         Uids targets;
         t_->select(ctx, targets);
         for (uint16_t uid : targets)
-            if (PokemonSlot* p = ctx.game.find(uid)) p->status = 0;
+            if (PokemonSlot* p = ctx.game.find(uid)) p->status &= ~mask_;
     }
     bool possible(EffectCtx& ctx) const override {
-        return anyCandidate(ctx, t_, [](const PokemonSlot& p) { return p.status != 0; });
+        return anyCandidate(ctx, t_, [this](const PokemonSlot& p) { return (p.status & mask_) != 0; });
     }
 
 private:
     const Target* t_;
+    uint8_t mask_;
 };
 }  // namespace
 
@@ -129,5 +130,7 @@ void addDamageWords(Words& w) {
     w.stmt["damage"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<Damage>(b.target(arg(e, 0)), b.num(arg(e, 1))); };
     w.stmt["heal"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<Heal>(b.target(arg(e, 0)), b.num(arg(e, 1))); };
     w.stmt["status"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<SetStatus>(b.target(arg(e, 0)), parseStatuses(e, 1)); };
-    w.stmt["cure"] = [](const SExpr& e, ScriptBuilder& b) { return b.make<Cure>(b.target(arg(e, 0))); };
+    w.stmt["cure"] = [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<Cure>(b.target(arg(e, 0)), argCount(e) > 1 ? parseStatuses(e, 1) : uint8_t(0xFF));
+    };
 }

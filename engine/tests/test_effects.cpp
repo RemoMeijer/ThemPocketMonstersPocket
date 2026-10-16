@@ -409,6 +409,21 @@ static void moveEnergyFromTheWholeBench() {
     CHECK(p.bench[0].energyCount() == 0 && p.bench[1].energyCount() == 1);  // only Lightning moves
 }
 
+// Whitney: "it recovers from being Asleep, Paralyzed, and Confused": Poisoned stays.
+static void cureOnlyTheNamedConditions() {
+    Table t;
+    CardDef whitney = trainer(TrainerKind::Supporter, "Whitney", "(cure my-active asleep paralyzed confused)");
+    GameState& s = t.position();
+    PlayerState& p = s.players[0];
+    p.hand.clear();
+    p.hand.push_back(&whitney);
+    p.active.status = Poisoned;
+    CHECK(!t.can(ActionKind::PlayTrainer));  // nothing it can cure
+    p.active.status = Poisoned | Asleep;
+    t.play(ActionKind::PlayTrainer, 0);
+    CHECK(p.active.status == Poisoned);
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -436,5 +451,6 @@ int main() {
     moveEnergyAndSearch();
     energyOnAllPokemon();
     moveEnergyFromTheWholeBench();
+    cureOnlyTheNamedConditions();
     return report("effects");
 }
