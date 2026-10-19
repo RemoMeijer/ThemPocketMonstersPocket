@@ -942,6 +942,90 @@ static void backToTheHand() {
     }
 }
 
+// Batch 7: memory of the last turn. "Last turn" for the opponent is turn − 1, "your last turn" is turn − 2.
+static void lastTurnMemory() {
+    {   // a Knock Out by attack damage is remembered for its owner, with its type
+        Table t;
+        GameState& s = t.position();
+        s.players[1].active.damage = 30;
+        t.play(ActionKind::Attack);
+        CHECK(s.players[1].koTurn == 5 && s.players[1].koTypes == typeBit(Type::Water));
+        CHECK(s.players[0].scoredTurn == 5 && s.players[0].scored == 1);
+        CHECK(s.players[1].active.damagedTurn == -1);  // the new Active wasn't hit
+    }
+    {   // not a Knock Out by Poison at Checkup, but its point still counts as scored that turn (Remco)
+        Table t;
+        GameState& s = t.position();
+        s.players[1].active.damage = 55;
+        s.players[1].active.status = Poisoned;
+        t.play(ActionKind::EndTurn);
+        CHECK(s.players[1].koTurn == -1 && s.players[0].scoredTurn == 5 && s.players[0].scored == 1);
+    }
+    {   // nor your own Pokémon Knocked Out by its own attack, on your own turn
+        Table t;
+        attackScript(t, "(seq (hit) (damage self 60))");
+        GameState& s = t.position();
+        t.bench(0, t.cards[3]);
+        t.play(ActionKind::Attack);
+        CHECK(s.players[0].koTurn == -1 && s.players[1].active.damagedTurn == 5);
+        CHECK(s.players[0].attackTurn == 5 && s.players[0].lastAttack == &t.cards[0].attacks[0]);
+    }
+    {   // an attack that doesn't happen isn't "used" (assumed)
+        bool missed = false;
+        for (int i = 0; i < 64 && !missed; ++i) {
+            Table t;
+            GameState& s = t.position();
+            s.players[0].active.status = Confused;
+            t.play(ActionKind::Attack);
+            missed = damageOn(t, 1) == 0;
+            if (missed) CHECK(s.players[0].attackTurn == -1);
+        }
+        CHECK(missed);
+    }
+    auto damageWith = [](const char* script, auto setup) {
+        Table t;
+        attackScript(t, script);
+        GameState& s = t.position();
+        setup(t, s);
+        t.play(ActionKind::Attack);
+        return damageOn(t, 1);
+    };
+    const char* ko = "(seq (if (ko-last-turn) (bonus 20)) (hit))";
+    const char* koDark = "(seq (if (ko-last-turn darkness) (bonus 20)) (hit))";
+    auto koAt = [](int turn, Type type) {
+        return [=](Table&, GameState& s) { s.players[0].koTurn = turn, s.players[0].koTypes = typeBit(type); };
+    };
+    CHECK(damageWith(ko, koAt(4, Type::Water)) == 50);
+    CHECK(damageWith(ko, koAt(3, Type::Water)) == 30);
+    CHECK(damageWith(koDark, koAt(4, Type::Water)) == 30);
+    CHECK(damageWith(koDark, koAt(4, Type::Darkness)) == 50);
+    const char* relay = "(seq (if (used-last-turn \"Splash\") (bonus 20)) (hit))";
+    auto usedAt = [](int turn) {
+        return [=](Table& t, GameState& s) { s.players[0].attackTurn = turn, s.players[0].lastAttack = &t.cards[5].attacks[0]; };
+    };
+    CHECK(damageWith(relay, usedAt(3)) == 50);
+    CHECK(damageWith(relay, usedAt(1)) == 30);
+    CHECK(damageWith("(seq (if (used-last-turn \"Sweets Relay\") (bonus 20)) (hit))", usedAt(3)) == 30);
+    const char* reply = "(seq (if (damaged-last-turn self) (bonus 20)) (hit))";
+    CHECK(damageWith(reply, [](Table&, GameState& s) { s.players[0].active.damagedTurn = 4; }) == 50);
+    CHECK(damageWith(reply, [](Table&, GameState& s) { s.players[0].active.damagedTurn = 3; }) == 30);
+    const char* counter = "(seq (bonus (* (points-last-turn opp) 10)) (hit))";
+    CHECK(damageWith(counter, [](Table&, GameState& s) { s.players[1].scoredTurn = 4, s.players[1].scored = 2; }) == 50);
+    CHECK(damageWith(counter, [](Table&, GameState& s) { s.players[1].scoredTurn = 2, s.players[1].scored = 2; }) == 30);
+    {   // "During your next turn, this Pokémon's attack does +20": not now, next turn yes
+        Table t;
+        attackScript(t, "(seq (hit) (effect my-next-turn self (damage-dealt 20)))");
+        GameState& s = t.position();
+        t.play(ActionKind::Attack);
+        CHECK(damageOn(t, 1) == 30);
+        s.players[1].active.damage = 0;
+        t.play(ActionKind::EndTurn);  // P2's turn 6
+        CHECK(s.turn == 7 && s.timed.size() == 1);
+        t.play(ActionKind::Attack);
+        CHECK(damageOn(t, 1) == 50);
+    }
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -983,5 +1067,6 @@ int main() {
     coverageBatchFourBlocks();
     coverageBatchFiveBlocks();
     backToTheHand();
+    lastTurnMemory();
     return report("effects");
 }

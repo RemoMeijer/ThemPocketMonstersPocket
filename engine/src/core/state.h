@@ -25,6 +25,7 @@ struct PokemonSlot {
     int enteredTurn = 0;        // turn it came into play or last evolved; 0 = during setup
     int becameActiveTurn = -1;  // turn the top card last moved into the Active Spot (evolving resets it)
     int abilityTurn = -1;       // turn it last used its "once during your turn" ability
+    int damagedTurn = -1;       // turn it last took damage from an attack while in the Active Spot
 
     int energyCount() const {
         int n = 0;
@@ -60,6 +61,13 @@ struct PlayerState {
     int stadiumUseTurn = -1;     // turn this player last used a Stadium's action…
     const CardDef* stadiumUsed = nullptr;  // …and which Stadium that was
     int points = 0;
+    // Memory of earlier turns, for "during your (opponent's) last turn".
+    int koTurn = -1;            // turn one of their Pokémon was last Knocked Out by damage from an attack…
+    uint16_t koTypes = 0;       // …and the types of the Pokémon Knocked Out that turn (bit per Type)
+    int attackTurn = -1;        // turn they last used an attack…
+    const AttackDef* lastAttack = nullptr;  // …and which one
+    int scoredTurn = -1;        // turn they last got points…
+    int scored = 0;             // …and how many that turn
 };
 
 enum class Phase : uint8_t {

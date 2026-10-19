@@ -163,7 +163,7 @@ private:
 class PokemonTest : public Cond {
 public:
     enum What { HasDamage, HasStatus, HasTool, IsType, IsEx, IsBasic, IsEvolution, EnergyAtLeast, ExtraEnergy,
-                MovedToActive, EvolvedThisTurn, Exists, HalfHp };
+                MovedToActive, EvolvedThisTurn, DamagedLastTurn, Exists, HalfHp };
     PokemonTest(What what, const Target* t, int amount, uint16_t types) : what_(what), t_(t), amount_(amount), types_(types) {}
 
     bool test(EffectCtx& ctx) const override {
@@ -185,6 +185,7 @@ public:
             case IsEvolution: return p->card->isEvolution();
             case MovedToActive: return p->becameActiveTurn == turn;
             case EvolvedThisTurn: return !p->below.empty() && p->enteredTurn == turn;
+            case DamagedLastTurn: return p->damagedTurn == turn - 1;  // as the Active, during the opponent's last turn
             case HalfHp: {  // "has half of its maximum HP or less remaining"
                 int owner = 0;
                 ctx.game.find(p->uid, &owner);
@@ -324,6 +325,7 @@ void addTargetWords(Words& w) {
     test("is-evolution", PokemonTest::IsEvolution);
     test("moved-to-active", PokemonTest::MovedToActive);
     test("evolved-this-turn", PokemonTest::EvolvedThisTurn);
+    test("damaged-last-turn", PokemonTest::DamagedLastTurn);
     test("half-hp", PokemonTest::HalfHp);
     w.cond["has-status"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<PokemonTest>(PokemonTest::HasStatus, b.target(arg(e, 0)), statusMask(e, 1), 0);

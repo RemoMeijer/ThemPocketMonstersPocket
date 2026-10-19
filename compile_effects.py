@@ -145,6 +145,11 @@ CONDITIONS = [
     (r"you have (\w[\w' ]*?) or (\w[\w' ]*?) in play",
      lambda m, c: f'(exists my all (name "{m.group(1)}" "{m.group(2)}"))'),
     (r"your opponent has (\d+) or more cards in their hand", lambda m, c: f"(>= (hand-size opp) {m.group(1)})"),
+    (r"any of your (?:" + E + r" )?Pokemon were Knocked Out by damage from an attack during your opponent's last turn",
+     lambda m, c: f"(ko-last-turn{' ' + t(m.group(1)) if m.group(1) else ''})"),
+    (r"1 of your Pokemon used (.+) during your last turn", lambda m, c: f'(used-last-turn "{m.group(1)}")'),
+    (r"this Pokemon was damaged by an attack during your opponent's last turn while it was in the Active Spot",
+     lambda m, c: "(damaged-last-turn self)"),
 ]
 
 
@@ -186,6 +191,13 @@ def attack_index(ctx, name):
     if name not in names:
         raise Unsupported(f"unknown attack {name}")
     return names.index(name)
+
+
+def only_attack(ctx, name):
+    """"This Pokemon's X attack does +N": damage-dealt has no per-attack filter, so only a card whose one attack is X."""
+    if [a[0] for a in ctx["attacks"]] != [name]:
+        raise Unsupported(f"bonus for one of several attacks: {name}")
+    return ""
 
 
 def timed(duration):
@@ -265,8 +277,10 @@ CLAUSES = [
      lambda m, c: ("post", f"(repeat heads (attach-energy (choose my bench{' (type ' + t(m.group(2)) + ')' if m.group(2) else ''}) {t(m.group(1))} 1))")),
     (r"take a " + E + r" Energy from your Energy Zone and attach it to it", lambda m, c: ("post", f"(attach-energy picked {t(m.group(1))} 1)")),
     # Timed effects
-    (OPP_NEXT + r", this Pokemon takes -(\d+) damage from attacks",
-     lambda m, c: ("post", f"(effect {timed(m.group('d'))} self (damage-taken -{m.group(2)}))")),
+    (OPP_NEXT + r", this Pokemon takes ([-+]\d+) damage from attacks",
+     lambda m, c: ("post", f"(effect {timed(m.group('d'))} self (damage-taken {m.group(2).lstrip('+')}))")),
+    (OPP_NEXT + r", this Pokemon's (.+) attack does \+(\d+) damage",
+     lambda m, c: ("post", f"(effect {timed(m.group('d'))} self (damage-dealt {m.group(3)}{only_attack(c, m.group(2))}))")),
     (OPP_NEXT + r", (?P<who>this|the Defending) Pokemon can't (?P<what>attack|retreat)",
      lambda m, c: ("post", f"(effect {timed(m.group('d'))} {'self' if m.group('who') == 'this' else 'defending'} (cant-{m.group('what')}))")),
     (r"the Defending Pokemon can't attack during your opponent's next turn", lambda m, c: ("post", "(effect opp-next-turn defending (cant-attack))")),
@@ -295,9 +309,9 @@ CLAUSES = [
      lambda m, c: ("post", f"(effect opp-next-turn opp-active (retreat-cost {m.group(1)}))")),
     (r"During this turn, the Retreat Cost of your Active Pokemon is (\d+) less",
      lambda m, c: ("post", f"(effect this-turn me (retreat-cost -{m.group(1)} :scope my-active))")),
-    (r"During this turn, attacks used by your (?:" + E + r" )?(Pokemon|" + NAMES + r") do \+(\d+) damage to your opponent's Active Pokemon( ex)?",
-     lambda m, c: ("post", f"(effect this-turn me (damage-dealt {m.group(3)} :scope my-all{type_opt(m.group(1))}"
-                           f"{names_opt(m.group(2))}{' :vs-ex' if m.group(4) else ''}))")),
+    (r"(?P<d>During this turn|During your next turn), attacks used by your (?:" + E + r" )?(Pokemon|" + NAMES + r") do \+(\d+) damage to your opponent's Active Pokemon( ex)?",
+     lambda m, c: ("post", f"(effect {timed(m.group('d'))} me (damage-dealt {m.group(4)} :scope my-all{type_opt(m.group(2))}"
+                           f"{names_opt(m.group(3))}{' :vs-ex' if m.group(5) else ''}))")),
     (r"During this turn, attacks used by your (" + NAMES + r") cost (\d+) less \{C\} Energy",
      lambda m, c: ("post", f"(effect this-turn me (attack-cost -{m.group(2)} :scope my-all{names_opt(m.group(1))}))")),
     (OPP_NEXT + r", all of your (?:(?P<ty>" + E.replace("(", "(?:") + r") )?(?P<who>Pokemon|" + NAMES + r") take -(?P<n>\d+) damage from attacks(?: from your opponent's Pokemon(?P<fex> ex)?)?",
@@ -385,6 +399,8 @@ CLAUSES = [
      lambda m, c: ("post", "(from-discard choose 1 opp bench basic)")),
     (r"attach (an?|\d+) " + E + r" Energy from your discard pile to " + REF,
      lambda m, c: ("post", f"(attach-from-discard {target(m)} {t(m.group(2))} {num(m.group(1))})")),
+    (r"this attack does (\d+) more damage for each point your opponent got during their last turn",
+     lambda m, c: ("pre", f"(bonus (* (points-last-turn opp) {m.group(1)}))")),
     (r"this attack does (\d+) more damage for each (Supporter|Item|Pokemon Tool) card in your discard pile",
      lambda m, c: ("pre", f"(bonus (* (discard-count my {TRAINER_KINDS[m.group(2)]}) {m.group(1)}))")),
     (r"this attack does (\d+) more damage for each (?:" + E + r" )?Pokemon in your discard pile",
@@ -867,6 +883,20 @@ EXAMPLES = [
     ("attack", "", "You may shuffle this Pokémon and all attached cards into your deck.", "(seq (hit) (one-of (to-deck self) (nothing)))"),
     ("ability", "", "If you have Arceus or Arceus ex in play, this Pokémon takes −30 damage from attacks.",
      '(passive (damage-taken -30 :needs "Arceus" "Arceus ex"))'),
+    ("attack", "130", "During your opponent's next turn, this Pokémon takes +30 damage from attacks.",
+     "(seq (hit) (effect opp-next-turn self (damage-taken 30)))"),
+    ("attack", "60", "During your next turn, this Pokémon's Sacred Sword attack does +60 damage.",
+     "(seq (hit) (effect my-next-turn self (damage-dealt 60)))"),
+    ("attack", "30", "During your next turn, attacks used by your {F} Pokémon do +30 damage to your opponent's Active Pokémon.",
+     "(seq (hit) (effect my-next-turn me (damage-dealt 30 :scope my-all :type fighting)))"),
+    ("attack", "40+", "If any of your {D} Pokémon were Knocked Out by damage from an attack during your opponent's last turn, "
+     "this attack does 80 more damage.", "(seq (if (ko-last-turn darkness) (bonus 80)) (hit))"),
+    ("attack", "10+", "If 1 of your Pokémon used Sweets Relay during your last turn, this attack does 20 more damage.",
+     '(seq (if (used-last-turn "Sweets Relay") (bonus 20)) (hit))'),
+    ("attack", "30+", "If this Pokémon was damaged by an attack during your opponent's last turn while it was in the Active Spot, "
+     "this attack does 50 more damage.", "(seq (if (damaged-last-turn self) (bonus 50)) (hit))"),
+    ("attack", "50+", "This attack does 50 more damage for each point your opponent got during their last turn.",
+     "(seq (bonus (* (points-last-turn opp) 50)) (hit))"),
 ]
 
 

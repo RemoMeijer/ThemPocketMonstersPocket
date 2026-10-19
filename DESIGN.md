@@ -239,7 +239,7 @@ export_cards.py, compile_effects.py → data/cards.tsv, data/effects.tsv  (+ dat
 
 ## 10. Rules and where they come from
 
-Updated 2026-10-16. One row per rule: what the engine does and how we know.
+Updated 2026-10-19. One row per rule: what the engine does and how we know.
 
 **Sources**, strongest first:
 - **App:** Remco checked it in the game, 2026-10-16.
@@ -315,6 +315,11 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 | Putting your Active Pokémon back into the hand is allowed with an empty Bench: with no Pokémon left in play, that player loses (a way to concede) | Remco | ✓ |
 | A card put back into a full hand (10 cards) goes to the discard pile instead | Assumed | ✓ open question in PROGRESS.md |
 | Both Active Pokémon knocked out by one attack: the defending player picks a new Active first, then the attacking player, then Pokémon Checkup | App | ✓ |
+| **Memory of the last turn** | | |
+| "Your opponent's last turn" is the turn just before this one; "your last turn" is your turn before that | Card | ✓ |
+| "Knocked Out by damage from an attack": Active or Benched Pokémon knocked out by the opponent's attack. Not Poison or Burn at Checkup, not Ability damage | Remco | ✓ |
+| A point scored at Checkup at the end of a player's turn counts as "during their last turn" (Hisuian Basculegion) | Remco | ✓ |
+| An attack that doesn't happen (Confused, or a coin-flip effect, tails) wasn't "used" (Sweets Relay) | Assumed | ✓ open question in PROGRESS.md |
 
 ## 11. Build order
 

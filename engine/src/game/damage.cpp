@@ -46,6 +46,7 @@ int Game::dealAttackDamage(int attacker, uint16_t attackerUid, uint16_t targetUi
         say("  ", damage, weak ? " damage (weakness)" : " damage", prevented ? " (prevented)" : "", " -> ",
             show(*target, owner));
     if (damage > 0 && active) {
+        target->damagedTurn = s_.turn;
         int reflect = sumMods(ModKind::Reflect, *target, owner);
         if (reflect) {
             source->damage += reflect;

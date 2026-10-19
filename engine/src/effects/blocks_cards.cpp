@@ -557,6 +557,47 @@ private:
     bool opp_;
 };
 
+// Memory of earlier turns: the opponent's last turn is the one before this; your last turn is two back.
+class KoLastTurn : public Cond {  // (ko-last-turn TYPE…): any of your (TYPE) Pokémon were Knocked Out by damage
+public:                           // from an attack during your opponent's last turn
+    explicit KoLastTurn(uint16_t types) : types_(types) {}
+    bool test(EffectCtx& ctx) const override {
+        const GameState& s = ctx.game.state();
+        const PlayerState& p = s.players[ctx.player];
+        return p.koTurn == s.turn - 1 && (!types_ || (p.koTypes & types_));
+    }
+
+private:
+    uint16_t types_;
+};
+
+class UsedLastTurn : public Cond {  // (used-last-turn "A"): one of your Pokémon used the attack A during your last turn
+public:
+    explicit UsedLastTurn(std::string name) : name_(std::move(name)) {}
+    bool test(EffectCtx& ctx) const override {
+        const GameState& s = ctx.game.state();
+        const PlayerState& p = s.players[ctx.player];
+        return p.attackTurn == s.turn - 2 && p.lastAttack->name == name_;
+    }
+
+private:
+    std::string name_;
+};
+
+class PointsLastTurn : public Num {  // (points-last-turn my|opp): points that player got during their last turn
+public:
+    explicit PointsLastTurn(bool opp) : opp_(opp) {}
+    int eval(EffectCtx& ctx) const override {
+        const GameState& s = ctx.game.state();
+        int who = sidePlayer(ctx, opp_);
+        int last = who == s.current ? s.turn - 2 : s.turn - 1;
+        return s.players[who].scoredTurn == last ? s.players[who].scored : 0;
+    }
+
+private:
+    bool opp_;
+};
+
 int sideOf(const SExpr& e) {
     if (e.atom == "both") return 2;
     return oppArg(e) ? 1 : 0;
@@ -630,5 +671,10 @@ void addCardWords(Words& w) {
     w.cond["my-turn"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<MyTurn>(); }};
     w.cond["played-supporter"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<PlayedSupporter>(); }};
     w.num["hand-size"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<HandSize>(oppArg(arg(e, 0))); }};
+    w.cond["ko-last-turn"] = {0, AnyCount, [](const SExpr& e, ScriptBuilder& b) { return b.make<KoLastTurn>(typeMask(e, 0)); }};
+    w.cond["used-last-turn"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<UsedLastTurn>(arg(e, 0).atom); }};
+    w.num["points-last-turn"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<PointsLastTurn>(oppArg(arg(e, 0)));
+    }};
     w.num["points-needed"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<PointsNeeded>(oppArg(arg(e, 0))); }};
 }

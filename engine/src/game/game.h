@@ -41,7 +41,8 @@ public:
     // --- Turn flow ---
     void beginPlay();      // after setup: coin flip, turn 1
     void endTurn();        // end-of-turn effects, Pokémon Checkup, then the next player's turn
-    void knockOutCheck();  // after any damage: knock-outs, points, winner, new Active Pokémon
+    // After any damage: knock-outs, points, winner, new Active Pokémon. byAttack: right after an attack.
+    void knockOutCheck(bool byAttack = false);
     void finish(int winner);
 
     // --- Board ---
@@ -97,7 +98,7 @@ private:
     void deal(int player);
     void startTurn();
     void showBoard();
-    void knockOut(int player, PokemonSlot& slot);
+    void knockOut(int player, PokemonSlot& slot, bool byAttack);
     void promote(int player);
     template <class Fn>
     void forEachMod(ModKind kind, const PokemonSlot* subject, int owner, Fn fn) const;

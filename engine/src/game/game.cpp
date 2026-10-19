@@ -191,17 +191,17 @@ void Game::endTurn() {
     startTurn();
 }
 
-void Game::knockOutCheck() {
+void Game::knockOutCheck(bool byAttack) {
     if (s_.phase == Phase::Over) return;
     for (int p = 0; p < 2; ++p) {
         PlayerState& ps = s_.players[p];
         if (ps.active.card && ps.active.damage >= maxHp(ps.active, p)) {
-            knockOut(p, ps.active);
+            knockOut(p, ps.active, byAttack);
             ps.active = PokemonSlot{};
         }
         for (std::size_t i = ps.bench.size(); i-- > 0;) {
             if (ps.bench[i].damage >= maxHp(ps.bench[i], p)) {
-                knockOut(p, ps.bench[i]);
+                knockOut(p, ps.bench[i], byAttack);
                 ps.bench.take(i);
             }
         }
@@ -218,10 +218,18 @@ void Game::knockOutCheck() {
         if (!s_.players[p].active.card) promote(p);
 }
 
-void Game::knockOut(int player, PokemonSlot& slot) {
+void Game::knockOut(int player, PokemonSlot& slot, bool byAttack) {
     PlayerState& owner = s_.players[player];
     PlayerState& scorer = s_.players[1 - player];
     scorer.points += slot.card->points;
+    if (scorer.scoredTurn != s_.turn) scorer.scored = 0;
+    scorer.scoredTurn = s_.turn;
+    scorer.scored += slot.card->points;
+    if (byAttack && player != s_.current) {  // "Knocked Out by damage from an attack during your opponent's last turn"
+        if (owner.koTurn != s_.turn) owner.koTypes = 0;
+        owner.koTurn = s_.turn;
+        if (slot.card->type) owner.koTypes |= typeBit(*slot.card->type);
+    }
     say(slot.card->name, " is knocked out. P", 2 - player, " scores ", slot.card->points, " (total ", scorer.points,
         ")");
     for (const CardDef* c : slot.below) owner.discard.push_back(c);

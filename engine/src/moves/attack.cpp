@@ -36,8 +36,10 @@ public:
                 attack.script->run(ctx);
             else
                 hit(ctx);
+            s.players[me].attackTurn = s.turn;  // after the attack, which may ask "used … during your last turn"
+            s.players[me].lastAttack = &attack;
         }
-        game.knockOutCheck();
+        game.knockOutCheck(true);
         if (s.phase == Phase::Main) game.endTurn();
     }
 };

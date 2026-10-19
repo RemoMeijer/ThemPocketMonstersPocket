@@ -1,6 +1,6 @@
 # Progress
 
-Updated 2026-10-19, after coverage batch 6 (commit `782284e`).
+Updated 2026-10-19, after coverage batch 7.
 
 This is the handoff file: what the project is, where it stands, what's open and what comes next. Read it first, then:
 - [CLAUDE.md](CLAUDE.md) for the working rules and commands;
@@ -17,16 +17,16 @@ A C++ simulator for Pokémon TCG Pocket. The goal is to play many games between 
 |---|---|
 | Rules core: setup, turns, Energy Zone, attacking, retreating, evolving, Trainers, Tools, Stadiums with their actions (R5), abilities, Special Conditions, Checkup, damage, winning | Built and checked. Missing: the player picking which energy type to pay, discard or move (the engine picks; step 4 under Next) |
 | Card data | Every set up to B4b: 2,319 unique cards from Limitless, cross-checked against deckgym-core |
-| Card effects | 1,963 of 2,319 cards playable (85%). Trainers: 122 of 152 |
-| Checks | 21 rule tests, 40 effect tests, 50 compiler self-test examples. `check_states`: 32.8M moves over 14 decks, 0 violations. Sanitizer build (memory and undefined behaviour) clean |
+| Card effects | 1,996 of 2,319 cards playable (86%). Trainers: 122 of 152 |
+| Checks | 21 rule tests, 41 effect tests, 57 compiler self-test examples. `check_states`: 0 violations over 15 decks. Sanitizer build (memory and undefined behaviour) clean |
 | Replayable games (seeds) | Not yet: every game seeds itself from `random_device` |
 | Simulation runner (many games, threads, stats) | Not started |
 | Finding decks (generate, play, rank) | Not started |
 | Players | Random only. About 70% of random-vs-random games end in a draw at the turn cap; that's accepted for now |
 
 - **Code size:** about 4,150 lines of C++ in the engine, 1,850 in tests, and 1,130 of Python (card data, plus the 900-line effect compiler).
-- **Script language:** about 100 words.
-- **Effect scripts:** 1,190 scripts in `data/effects.tsv`.
+- **Script language:** about 105 words.
+- **Effect scripts:** 1,225 scripts in `data/effects.tsv`.
 
 ## Card coverage
 
@@ -34,32 +34,28 @@ A C++ simulator for Pokémon TCG Pocket. The goal is to play many games between 
 
 | Kind | Playable | At the 2026-10-16 review |
 |---|---|---|
-| Pokémon | 1,841 / 2,167 | 1,808 |
+| Pokémon | 1,874 / 2,167 | 1,808 |
 | Supporters | 68 / 82 | 40 |
 | Items | 23 / 31 | 14 |
 | Tools | 18 / 26 | 6 |
 | Stadiums | 13 / 13 | 3 |
-| **All** | **1,963 / 2,319 (85%)** | 1,871 (80%) |
+| **All** | **1,996 / 2,319 (86%)** | 1,871 (80%) |
 
 **Trainers still missing (30):**
 - **Knock-out triggers (6):** Rescue Scarf, Lucky Egg, Lucky Mittens, Electrical Cord, Hala, Iris.
 - **Need a Pokémon trait the data doesn't mark (7):** Ultra Beasts (Beastite, Beast Wall, Lusamine), Ancient (Ancient Booster Energy Capsule, Professor Sada), Future (Future Booster Energy Capsule, Professor Turo). Neither Limitless nor deckgym-core says which Pokémon have these traits, so it would take a hand-made list.
 - **One-offs (17):** Penny, Will, Drayden, May, Silver, Prank Spinner, Team Rocket's Boss, Quick-Grow Extract, Wallace, Acerola, Eevee Bag, Maintenance, Mythical Slab, Memory Light, Lucky Ice Pop, Puppy-Loving Girl, Clemont's Backpack.
 
-**Pokémon still missing (326):** a long tail. The most common missing text is on 8 cards, and most are on 1 or 2. The biggest groups (`python3 compile_effects.py` lists them):
-- **Memory of the last turn:**
-  - "If any of your Pokémon were Knocked Out … during your opponent's last turn" (7);
-  - Sweets Relay (8).
-- **"During your next turn, this Pokémon's X attack does +N"** (6).
-- **"During your opponent's next turn, this Pokémon takes +N damage"** (3).
+**Pokémon still missing (293):** a long tail. The most common missing text is on 5 cards, and most are on 1 or 2. The biggest groups (`python3 compile_effects.py` lists them):
 - **"Discard a card from your hand"** (5).
 - **Puppy Pile** (5).
 - **"This attack's damage isn't affected by Weakness / by effects on the Active"** (6).
 - **Knock-out triggers on abilities:** Pyukumuku, Team Rocket's Electrode, Galarian Cursola.
 - **Copying attacks:** "… and use it as this attack", as in Mew ex's Genome Hacking.
 - **Choices like "choose either Poisoned or Confused"**.
+- **Left out of batch 7:** Toxtricity (its bonus and its Paralysis sit in one clause, which can't run both before and after the damage), Archeops (a "+20 next turn" on the Bench), Cherubi and Revavroom (their Abilities: a cost cut with a Tool, and 2 Tools).
 
-**Test decks:** `decks/coverage-a.txt` … `coverage-g.txt` hold the Trainers of each batch, so `check_states` plays them in random games. The other 7 decks (`pikachu`, `charizard`, `abilities`, …) are the older test decks.
+**Test decks:** `decks/coverage-a.txt` … `coverage-h.txt` hold the cards of each batch, so `check_states` plays them in random games. The other 7 decks (`pikachu`, `charizard`, `abilities`, …) are the older test decks.
 
 ## Checks: how to run them, and the last results
 
@@ -75,11 +71,11 @@ engine/build/tcgp --coverage
 
 The sanitizer build is `engine/build-debug`, configured with `-fsanitize=address,undefined`. It's about 8× slower, so run `check_states` on 2–4 decks there.
 
-Last results, 2026-10-19 after batch 6 (not re-run for this update):
+Last results, 2026-10-19 after batch 7:
 - all tests pass;
-- the self-test passes (50 examples);
-- `check_states`: 32.8M moves over all 14 decks, 0 violations;
-- sanitizer build: tests plus `check_states` on `coverage-g` and `coverage-f`, clean.
+- the self-test passes (57 examples);
+- `check_states`: all 15 decks, 0 violations;
+- sanitizer build: tests plus `check_states` on `coverage-h` and `coverage-g`, clean.
 
 **Speed:** about 2,000 games/s on one thread with full state checking after every move (measured 2026-10-16). The engine alone is faster but hasn't been measured. deckgym-core quotes about 3,300 random games/s.
 
@@ -132,6 +128,7 @@ No existing script changed in any batch unless the batch said so.
 | 4 (R5) | `962abbb` | 9 Stadiums: Mesagoza, Fragrant Forest, Area Zero, Kid's Room, Rainbow Cave, Arcade, Hiking Trail, Soothing Shore, Bounded Field. All 13 Stadiums now work | The Use Stadium move; the end-of-each-turn Stadium trigger; Weakness ×2; `draw-until`, `hand-to-deck`, `swap-for`, `cycle-energy` | none |
 | 5 | `ec9ebe8` | 9 Tools: Lum Berry, Sitrus Berry, Poison Barb, Dark Pendant, Steel Apron, Clear Veil, Metal Core Barrier, Protective Poncho, Heavy Helmet | The `on-damaged` and `at-end-of-each-turn` triggers; `no-conditions`, `prevent-effects`, `prevent-ability-damage`; `:bench`, `:min-retreat`; `half-hp`, `my-turn`, `status-count` | 7: Regice, Arceus ex, Wartortle, Jellicent, Dragalge ex, Blissey, TR Magmar |
 | 6 | `be4c2e5` | 5: Koga, Budding Expeditioner, Ilima, Parasol Lady, Elesa | `to-hand`, `to-deck`, `tools-to-hand`, `not-ex` | 3: Eldegoss, Dunsparce, Accelgor |
+| 7 | see `git log` | none | Memory of the last turn in the state: `ko-last-turn`, `used-last-turn`, `damaged-last-turn`, `points-last-turn`. Compiler only: "takes +N" next turn, "this Pokémon's attack does +N" next turn (one-attack cards only), "your Pokémon do +N" next turn | 33: 9 "Knocked Out last turn" (Marshadow, Lapras, Zarude, …), 7 Sweets Relay, 9 "+N next turn" (Togekiss, Donphan, Crabominable ex, …), 3 "your Pokémon +N next turn" (Oricorio, Meloetta, Happiny), 3 "takes +N" (Kommo-o, Lucario, Hariyama), Wobbuffet, Hisuian Basculegion |
 
 ## Rules
 
@@ -144,6 +141,8 @@ DESIGN.md §10 lists every rule the engine follows, with its source:
 **The rule for changes:** a game rule only changes after Remco has clarified it. Never change one on a guess; ask, then write his answer into §10.
 
 **Answered by Remco and built** (newest first):
+- "Knocked Out by damage from an attack during your opponent's last turn" counts Active and Benched Pokémon knocked out by that attack, not Poison or Burn at Checkup, nor Ability damage.
+- A point scored at Checkup at the end of a player's turn counts as "during their last turn" (Hisuian Basculegion).
 - Stadium effects "at the end of each player's turn" come last, after end-of-turn abilities and after Checkup.
 - Rainbow Cave works like an extra turn for the Energy Zone.
 - Bounded Field's ×2 takes the place of +20.
@@ -155,6 +154,7 @@ DESIGN.md §10 lists every rule the engine follows, with its source:
 - Earlier (sources in §10): R1–R4; Trainers need something to do; effects that start something can always be played (Blaine, X Speed); after a double knock-out, the defending player picks a new Active first.
 
 **Assumed, and still to confirm:**
+- An attack that doesn't happen (Confused, or a coin-flip effect, tails) wasn't "used", so it doesn't count for Sweets Relay.
 - Lum Berry and Sitrus Berry act at the end of each turn, before Checkup. That's Remco's best guess; he said he'd double-check.
 - Which Energy Zone type comes up is random and even across the deck's types.
 - Dealing an opening hand reshuffles until the top 5 cards hold a Basic.
@@ -165,6 +165,7 @@ DESIGN.md §10 lists every rule the engine follows, with its source:
 - **Team Rocket's Thieving Machine:** once you play the Item it took, does it go to your discard pile (assumed) or back to your opponent's?
 - **Back into a full hand:** when Koga or Elesa puts cards into a hand that already holds 10, the engine sends the extra cards to the discard pile (assumed).
 - **Berries:** confirm "before Checkup".
+- **Sweets Relay:** does an attack that didn't happen (Confused, tails) count as "used Sweets Relay"? Assumed: no.
 
 ## Shortcuts
 
@@ -192,7 +193,6 @@ These are marked `shortcut:` in the code:
 In order. Each step gets a short plan, then tests, `check_states` at 0 violations, a sanitizer run and a commit. For coverage batches, Remco said (2026-10-19): commit freely, run batches back to back, and report every two batches or so. Rules still go to him first.
 
 1. **More card coverage, in batches.** Candidates, in the order I'd suggest:
-   - **Batch 7, memory of the last turn:** "knocked out during your opponent's last turn" (7 cards), Sweets Relay (8), "during your next turn this attack does +N" (6), "takes +N damage during your opponent's next turn" (3). This needs a little per-turn history in the state.
    - **Batch 8, knock-out triggers:** Rescue Scarf, Lucky Egg, Lucky Mittens, Electrical Cord, Hala, Iris, plus abilities such as Pyukumuku, Team Rocket's Electrode and Galarian Cursola. This needs a knock-out hook in `Game::knockOut`, and probably rule questions for Remco: the order of triggers, and the points for Iris.
    - **Batch 9, the long tail of simple conditions and numbers:** "has no damage on it", "has an Ability", "more remaining HP than this Pokémon", "Evolution Pokémon on your Bench", "exactly N cards in your hand", "isn't affected by Weakness / by effects", "discard a card from your hand".
    - **Traits:** a hand-made list of Ultra Beasts and Ancient/Future Pokémon, from Serebii, would unlock 7 Trainers plus some Pokémon. Ask Remco first, since it's card data.

@@ -1,0 +1,22 @@
+# Coverage batch 7, Psychic/Water: memory of the last turn. Sweets Relay on Vanillite, Vanillish, Swirlix, Slurpuff
+# and Milcery; Knock Out revenge on Oricorio and Bouffalant; Wobbuffet's Reply Strongly; Basculegion's points;
+# "+N next turn" on Togekiss, Cyclizar (its own attack) and Happiny (all your Pokémon).
+energy: Psychic, Water
+
+2 A3b-018  # Vanillite: Sweets Relay
+1 A3b-019  # Vanillish (from Vanillite): Sweets Relay
+2 A3b-031  # Swirlix: Sweets Relay
+1 A3b-032  # Slurpuff (from Swirlix): Sweets Relay
+2 A3b-036  # Milcery: Sweets Relay
+1 A3-077   # Oricorio: Spiteful Dance
+1 B1a-064  # Bouffalant: Revenge
+1 A4-086   # Wobbuffet: Reply Strongly
+1 B4a-017  # Hisuian Basculin
+1 B4a-018  # Hisuian Basculegion (from Hisuian Basculin): Soul Counter
+1 A2-063   # Togepi
+1 A2-064   # Togetic (from Togepi)
+1 A2-065   # Togekiss (from Togetic): Overdrive Smash
+1 A2b-068  # Cyclizar: Overacceleration
+1 B4a-063  # Happiny: Chubby Cheer
+1 P-A-005  # Poké Ball
+1 P-A-007  # Professor's Research
