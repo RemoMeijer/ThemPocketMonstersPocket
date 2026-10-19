@@ -9,10 +9,14 @@
 //              (on-evolve STMT)                        "When you play this Pokémon from your hand to evolve…"
 //              (on-damaged STMT)                       "If this Pokémon is in the Active Spot and is damaged by an attack…"
 //              (at-end-of-each-turn STMT)              "At the end of each turn…" (self = this Pokémon, player = its owner)
+//              (on-knocked-out [:active] [:by-attack] STMT)  "If this Pokémon is Knocked Out…" ([:by-attack]: by damage
+//                                                      from an attack from the opponent's Pokémon; attacker = that Pokémon)
+//              (on-knocks-out STMT)                    "If your opponent's Pokémon is Knocked Out by damage from this Pokémon's attacks…"
 //   card       (play STMT)     an Item or Supporter
 //              (tool MOD…)     a Tool: modifiers for the Pokémon it is attached to
 //              (at-end-of-turn [:active] STMT)  a Tool that does something at the end of your turn (self = its Pokémon)
-//              (on-damaged STMT), (at-end-of-each-turn STMT)  as for abilities, on a Tool's Pokémon (several forms allowed)
+//              (on-damaged STMT), (at-end-of-each-turn STMT), (on-knocked-out …), (on-knocks-out STMT)
+//                              as for abilities, on a Tool's Pokémon (several forms allowed)
 //              (stadium MOD…)  a Stadium: modifiers for every Pokémon in play unless a :scope says otherwise
 //              (stadium-action STMT)       a Stadium: "Once during each player's turn, that player may…" (player = them)
 //              (stadium-end-of-turn STMT)  a Stadium: "At the end of each player's turn, that player…" (player = them)
@@ -36,14 +40,16 @@ std::vector<std::string> splitTabs(const std::string& line) {
     return out;
 }
 
-// Options before the statement: :active and :type T…. Returns the position of the statement.
-std::size_t options(const SExpr& e, bool& whileActive, uint16_t& types) {
+// Options before the statement: :active, :by-attack and :type T…. Returns the position of the statement.
+std::size_t options(const SExpr& e, bool& whileActive, bool& byAttack, uint16_t& types) {
     std::size_t i = 0;
     for (; i < argCount(e); ++i) {
         const SExpr& a = arg(e, i);
         if (a.list) break;
         if (a.atom == ":active") {
             whileActive = true;
+        } else if (a.atom == ":by-attack") {
+            byAttack = true;
         } else if (a.atom == ":type") {
             while (i + 1 < argCount(e) && !arg(e, i + 1).list && arg(e, i + 1).atom[0] != ':') types |= typeBit(typeArg(arg(e, ++i)));
         } else {
@@ -61,9 +67,9 @@ void modifiers(CardDef& c, const SExpr& e, ScriptBuilder& b, ModScope scope) {
 void readAbility(CardDef& c, const SExpr& e, ScriptBuilder& b) {
     const std::string& form = e.head();
     if (form == "passive") return modifiers(c, e, b, ModScope::Self);
-    bool whileActive = false;
+    bool whileActive = false, byAttack = false;
     uint16_t types = 0;
-    std::size_t at = options(e, whileActive, types);
+    std::size_t at = options(e, whileActive, byAttack, types);
     const Stmt* stmt = b.stmt(arg(e, at));
     if (form == "activated") {
         c.activated = stmt;
@@ -81,6 +87,12 @@ void readAbility(CardDef& c, const SExpr& e, ScriptBuilder& b) {
         c.onDamaged = stmt;
     } else if (form == "at-end-of-each-turn") {
         c.endOfEachTurn = stmt;
+    } else if (form == "on-knocked-out") {
+        c.onKnockedOut = stmt;
+        c.onKnockedOutWhileActive = whileActive;
+        c.onKnockedOutByAttack = byAttack;
+    } else if (form == "on-knocks-out") {
+        c.onKnocksOut = stmt;
     } else {
         scriptFail("unknown ability form '" + form + "'", e);
     }
@@ -94,7 +106,8 @@ void readCardText(CardDef& c, const SExpr& e, ScriptBuilder& b) {
     }
     else if (form == "tool" && c.isTrainer(TrainerKind::Tool))
         modifiers(c, e, b, ModScope::Self);
-    else if ((form == "at-end-of-turn" || form == "on-damaged" || form == "at-end-of-each-turn") && c.isTrainer(TrainerKind::Tool))
+    else if ((form == "at-end-of-turn" || form == "on-damaged" || form == "at-end-of-each-turn" || form == "on-knocked-out" ||
+              form == "on-knocks-out") && c.isTrainer(TrainerKind::Tool))
         readAbility(c, e, b);
     else if (form == "stadium" && c.isTrainer(TrainerKind::Stadium))
         modifiers(c, e, b, ModScope::All);

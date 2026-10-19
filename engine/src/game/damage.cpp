@@ -52,17 +52,16 @@ int Game::dealAttackDamage(int attacker, uint16_t attackerUid, uint16_t targetUi
             source->damage += reflect;
             if (log_) say("  ", reflect, " damage back -> ", show(*source, attacker));
         }
-        // "If this Pokémon is in the Active Spot and is damaged by an attack…": its ability, then its Tool.
-        for (bool tool : {false, true}) {
-            const PokemonSlot* p = find(targetUid);
-            const CardDef* c = p ? (tool ? p->tool : p->card) : nullptr;
-            if (!c || !c->onDamaged) continue;
+        // "If this Pokémon is in the Active Spot and is damaged by an attack…": its ability, then its Tools.
+        forEachSource(targetUid, [&](const CardDef* c) {
+            if (!c->onDamaged) return;
             say("  ", c->name, " reacts");
             EffectCtx ctx{*this, owner};
             ctx.self = targetUid;
             ctx.attacker = attackerUid;
+            ctx.card = c;
             c->onDamaged->run(ctx);
-        }
+        });
     }
     return damage;
 }

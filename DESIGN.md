@@ -315,11 +315,21 @@ Updated 2026-10-19. One row per rule: what the engine does and how we know.
 | Putting your Active Pokémon back into the hand is allowed with an empty Bench: with no Pokémon left in play, that player loses (a way to concede) | Remco | ✓ |
 | A card put back into a full hand (10 cards) goes to the discard pile instead | Assumed | ✓ open question in PROGRESS.md |
 | Both Active Pokémon knocked out by one attack: the defending player picks a new Active first, then the attacking player, then Pokémon Checkup | App | ✓ |
+| **Knock-outs** | | |
+| Knock-out triggers ("If this Pokémon is Knocked Out…", Rescue Scarf, Pyukumuku) run first; then every knock-out of that moment counts, and only then the win rules apply | Remco | ✓ |
+| Both at 3 or more points at once: a player with Pokémon left wins; Pokémon on both sides or on neither is a tie. More points (4 against 3) don't matter | Remco | ✓ |
+| Knock-out triggers of one moment: the defender's Pokémon first, each with its Ability and then its Tools; the attacker's "knocks out" triggers after each knock-out | Assumed | ✓ |
+| Rescue Scarf: the Pokémon and its evolution cards go to the hand; the Scarf and the energy go to the discard pile; the opponent still gets the points | Remco | ✓ |
+| Lucky Mittens: one card per Pokémon knocked out | Remco | ✓ |
+| "Is Knocked Out" by an effect (Bewear, Galarian Cursola) isn't "Knocked Out by damage from an attack" (no Rescue Scarf, Hala, revenge bonus) | Assumed | ✓ |
+| Electrical Cord with one Benched Pokémon moves only 1 Energy ("1 Energy each to 2") | Assumed | ✓ |
+| **Card names** | | |
+| A named Pokémon means exactly that name: "Crabominable" doesn't cover Crabominable ex. A card that includes an ex names it | Remco | ✓ |
 | **Memory of the last turn** | | |
 | "Your opponent's last turn" is the turn just before this one; "your last turn" is your turn before that | Card | ✓ |
 | "Knocked Out by damage from an attack": Active or Benched Pokémon knocked out by the opponent's attack. Not Poison or Burn at Checkup, not Ability damage | Remco | ✓ |
 | A point scored at Checkup at the end of a player's turn counts as "during their last turn" (Hisuian Basculegion) | Remco | ✓ |
-| An attack that doesn't happen (Confused, or a coin-flip effect, tails) wasn't "used" (Sweets Relay) | Assumed | ✓ open question in PROGRESS.md |
+| An attack that doesn't happen (Confused, or a coin-flip effect, tails) wasn't "used" (Sweets Relay) | Remco | ✓ |
 
 ## 11. Build order
 

@@ -118,9 +118,10 @@ void markSupported(CardDef& c) {
         if (!a.script && !a.damageText.empty() && !isNumber(a.damageText))
             return no("attack damage '" + a.damageText + "' without a script");
     }
-    bool abilityDone = c.activated || c.endOfTurn || c.onAttach || c.onEvolve || c.onDamaged || c.endOfEachTurn || !c.passive.empty();
+    bool triggers = c.onDamaged || c.endOfEachTurn || c.onKnockedOut || c.onKnocksOut;
+    bool abilityDone = c.activated || c.endOfTurn || c.onAttach || c.onEvolve || triggers || !c.passive.empty();
     if (!c.abilities.empty() && !abilityDone) return no("ability text: " + c.abilities[0].effect);
-    if (c.category == Category::Trainer && !c.play && !c.endOfTurn && !c.endOfEachTurn && !c.onDamaged && !c.stadiumAction && c.passive.empty())
+    if (c.category == Category::Trainer && !c.play && !c.endOfTurn && !triggers && !c.stadiumAction && c.passive.empty())
         return no("trainer text: " + c.effect);
     if (c.isPokemon() && !c.effect.empty() && c.passive.empty()) return no("card text: " + c.effect);  // Fossils
     if (c.isPokemon() && c.attacks.empty() && c.passive.empty()) return no("no attacks");

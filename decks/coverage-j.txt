@@ -1,0 +1,17 @@
+# Coverage batch 8, Metal/Psychic/Grass: Revavroom's two Tools, Cherubi's cheaper attack with a Tool, Galarian
+# Cursola and Dusknoir's knock-out flips, and Tools that react to a knock-out.
+energy: Metal, Psychic, Grass
+
+2 A2b-055  # Varoom
+2 B4-115   # Revavroom (from Varoom): up to 2 Tools
+2 A4-023   # Cherubi: 1 less {G} with a Tool
+1 A4a-034  # Galarian Corsola
+1 A4a-035  # Galarian Cursola (from Galarian Corsola)
+1 B1-103   # Duskull
+1 B1-104   # Dusclops (from Duskull)
+1 B1-105   # Dusknoir (from Dusclops)
+2 A4-155   # Rescue Scarf
+2 B3-148   # Lucky Egg
+2 A2-147   # Giant Cape
+2 P-A-005  # Poké Ball
+1 P-A-007  # Professor's Research

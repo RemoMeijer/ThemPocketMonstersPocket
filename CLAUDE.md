@@ -14,8 +14,8 @@ The current focus is a correct engine: the right cards and the right rules. Stat
 - **Done:**
   - the rules core: milestones 1–2, the cleanup, rule fixes R1–R4, Trainers and abilities that need something to do before they can be used, and the 4 bug fixes from the 2026-10-16 review;
   - the effect system;
-  - card data from Limitless, every set up to B4b: 1,996 of 2,319 cards (86%) are playable;
-  - coverage batches 0–7 (argument-count check, 59 Trainers: 122 of 152 now; R5 Stadium actions: all 13 Stadiums; memory of the last turn).
+  - card data from Limitless, every set up to B4b: 2,016 of 2,319 cards (86%) are playable;
+  - coverage batches 0–8 (argument-count check, 65 Trainers: 128 of 152 now; R5 Stadium actions: all 13 Stadiums; memory of the last turn; knock-out triggers).
 - **Next** (PROGRESS.md, "Next"):
   - card coverage: the most common missing attack texts, then the Trainers left out of batches 0–6;
   - effect-script checks (golden tests);
@@ -30,6 +30,7 @@ The current focus is a correct engine: the right cards and the right rules. Stat
 fetch_cards.py      Limitless → data/raw/limitless/  (two pages per set; re-run when a new set comes out)
 export_cards.py     those pages → data/cards.tsv     (drops Star/Crown/Shiny alt arts, dedupes, Fossils as Pokémon, FIXES)
 check_cards.py      cards.tsv vs deckgym-core's database, a second source: prints every difference
+check_all.sh        check_states over all decks in parallel (--row K: deck K against every deck)
 compile_effects.py  card text → data/effects.tsv   (sentence patterns → effect scripts, has a self-test)
 decks/*.txt         "energy: Water" + "2 A1-053" lines
 engine/src/
@@ -71,7 +72,19 @@ Run the tests:
 engine/build/test_rules && engine/build/test_effects
 ```
 
-Run the state checker:
+Run the state checker over every deck, one process per deck on all cores (about 1 minute; it prints the violations and their total):
+
+```bash
+./check_all.sh
+```
+
+The same with the sanitizer build (about 8× slower):
+
+```bash
+./check_all.sh engine/build-debug/check_states
+```
+
+A few decks only, in one process:
 
 ```bash
 engine/build/check_states decks/pikachu.txt decks/charizard.txt decks/abilities.txt

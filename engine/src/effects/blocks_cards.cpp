@@ -209,15 +209,16 @@ public:
         for (uint16_t uid : targets) {
             int owner = 0;
             PokemonSlot* p = ctx.game.find(uid, &owner);
-            if (!p || !p->tool || !affects(ctx, uid)) continue;
-            ctx.game.say("  ", p->tool->name, " goes back to the hand");
-            const CardDef* tool = p->tool;
-            p->tool = nullptr;
-            ctx.game.toHand(owner, tool);
+            if (!p || p->tools.empty() || !affects(ctx, uid)) continue;
+            while (!p->tools.empty()) {
+                const CardDef* tool = p->tools.pop_back();
+                ctx.game.say("  ", tool->name, " goes back to the hand");
+                ctx.game.toHand(owner, tool);
+            }
         }
     }
     bool possible(EffectCtx& ctx) const override {
-        return anyCandidate(ctx, t_, [](const PokemonSlot& p) { return p.tool != nullptr; });
+        return anyCandidate(ctx, t_, [](const PokemonSlot& p) { return !p.tools.empty(); });
     }
 
 private:
@@ -233,14 +234,16 @@ public:
         for (uint16_t uid : targets) {
             int owner = 0;
             PokemonSlot* p = ctx.game.find(uid, &owner);
-            if (!p || !p->tool || !affects(ctx, uid)) continue;
-            ctx.game.say("  ", p->tool->name, " is discarded");
-            ctx.game.state().players[owner].discard.push_back(p->tool);
-            p->tool = nullptr;
+            if (!p || p->tools.empty() || !affects(ctx, uid)) continue;
+            while (!p->tools.empty()) {
+                const CardDef* tool = p->tools.pop_back();
+                ctx.game.say("  ", tool->name, " is discarded");
+                ctx.game.state().players[owner].discard.push_back(tool);
+            }
         }
     }
     bool possible(EffectCtx& ctx) const override {
-        return anyCandidate(ctx, t_, [](const PokemonSlot& p) { return p.tool != nullptr; });
+        return anyCandidate(ctx, t_, [](const PokemonSlot& p) { return !p.tools.empty(); });
     }
 
 private:
@@ -557,6 +560,51 @@ private:
     bool opp_;
 };
 
+// Knock-out triggers (Game::knockOut reads the flags once the triggers have run).
+class NoPoints : public Stmt {  // (no-points): "your opponent can't get any points for it"
+public:
+    void run(EffectCtx& ctx) const override { ctx.noPoints = true; }
+};
+
+class ToHandInstead : public Stmt {  // (to-hand-instead): the Pokémon and its evolutions go to the hand (Rescue Scarf)
+public:
+    void run(EffectCtx& ctx) const override { ctx.toHandInstead = true; }
+};
+
+class KnockOut : public Stmt {  // (knock-out TARGET): "the Attacking Pokémon is Knocked Out" (Galarian Cursola)
+public:
+    explicit KnockOut(const Target* t) : t_(t) {}
+    void run(EffectCtx& ctx) const override {
+        Uids targets;
+        t_->select(ctx, targets);
+        for (uint16_t uid : targets) {
+            int owner = 0;
+            if (PokemonSlot* p = ctx.game.find(uid, &owner)) {
+                p->damage = std::max(p->damage, ctx.game.maxHp(*p, owner));
+                p->koByEffect = true;
+            }
+        }
+    }
+
+private:
+    const Target* t_;
+};
+
+class DiscardThis : public Stmt {  // (discard-this): a Tool's "discard this card", from the Pokémon it's on
+public:
+    void run(EffectCtx& ctx) const override {
+        int owner = 0;
+        PokemonSlot* p = ctx.game.find(ctx.self, &owner);
+        if (!p) return;
+        for (std::size_t i = 0; i < p->tools.size(); ++i)
+            if (p->tools[i] == ctx.card) {
+                ctx.game.say("  ", ctx.card->name, " is discarded");
+                ctx.game.state().players[owner].discard.push_back(p->tools.take(i));
+                return;
+            }
+    }
+};
+
 // Memory of earlier turns: the opponent's last turn is the one before this; your last turn is two back.
 class KoLastTurn : public Cond {  // (ko-last-turn TYPE…): any of your (TYPE) Pokémon were Knocked Out by damage
 public:                           // from an attack during your opponent's last turn
@@ -577,7 +625,7 @@ public:
     bool test(EffectCtx& ctx) const override {
         const GameState& s = ctx.game.state();
         const PlayerState& p = s.players[ctx.player];
-        return p.attackTurn == s.turn - 2 && p.lastAttack->name == name_;
+        return p.lastAttack && p.attackTurn == s.turn - 2 && p.lastAttack->name == name_;  // none yet: -1 is "turn 1 − 2"
     }
 
 private:
@@ -671,6 +719,10 @@ void addCardWords(Words& w) {
     w.cond["my-turn"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<MyTurn>(); }};
     w.cond["played-supporter"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<PlayedSupporter>(); }};
     w.num["hand-size"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<HandSize>(oppArg(arg(e, 0))); }};
+    w.stmt["no-points"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<NoPoints>(); }};
+    w.stmt["to-hand-instead"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<ToHandInstead>(); }};
+    w.stmt["knock-out"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<KnockOut>(b.target(arg(e, 0))); }};
+    w.stmt["discard-this"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<DiscardThis>(); }};
     w.cond["ko-last-turn"] = {0, AnyCount, [](const SExpr& e, ScriptBuilder& b) { return b.make<KoLastTurn>(typeMask(e, 0)); }};
     w.cond["used-last-turn"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<UsedLastTurn>(arg(e, 0).atom); }};
     w.num["points-last-turn"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) {

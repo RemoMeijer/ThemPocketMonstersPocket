@@ -19,13 +19,14 @@ struct PokemonSlot {
     int damage = 0;
     EnergyCounts energy{};
     FixedVec<const CardDef*, 2> below{};  // the cards it evolved from, Basic first
-    const CardDef* tool = nullptr;
+    FixedVec<const CardDef*, 2> tools{};  // Pokémon Tools: one, or two with an Ability that allows it (Revavroom)
     uint8_t status = 0;
     uint16_t uid = 0;           // identity while in play; timed effects point at it
     int enteredTurn = 0;        // turn it came into play or last evolved; 0 = during setup
     int becameActiveTurn = -1;  // turn the top card last moved into the Active Spot (evolving resets it)
     int abilityTurn = -1;       // turn it last used its "once during your turn" ability
     int damagedTurn = -1;       // turn it last took damage from an attack while in the Active Spot
+    bool koByEffect = false;    // "is Knocked Out" by an effect, not by damage (Bewear, Galarian Cursola)
 
     int energyCount() const {
         int n = 0;

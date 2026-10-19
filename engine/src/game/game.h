@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <random>
 #include <sstream>
 #include <string>
@@ -41,8 +42,8 @@ public:
     // --- Turn flow ---
     void beginPlay();      // after setup: coin flip, turn 1
     void endTurn();        // end-of-turn effects, Pokémon Checkup, then the next player's turn
-    // After any damage: knock-outs, points, winner, new Active Pokémon. byAttack: right after an attack.
-    void knockOutCheck(bool byAttack = false);
+    // After any damage: knock-outs, points, winner, new Active Pokémon. attacker: right after its attack.
+    void knockOutCheck(uint16_t attacker = 0);
     void finish(int winner);
 
     // --- Board ---
@@ -71,11 +72,26 @@ public:
     int maxHp(const PokemonSlot& p, int owner) const;
     int retreatCost(const PokemonSlot& p, int owner) const;
     bool canRetreat(const PokemonSlot& p, int owner) const;
+    bool toolRoom(const PokemonSlot& p, int owner) const {  // one Tool, more with ExtraTools (Revavroom)
+        return !p.tools.full() && int(p.tools.size()) < 1 + sumMods(ModKind::ExtraTools, p, owner);
+    }
     bool canUseAttack(const PokemonSlot& p, int owner, int attack) const;
     EnergyCounts attackCost(const PokemonSlot& p, int owner, int attack) const;
     int sumMods(ModKind kind, const PokemonSlot& subject, int owner) const;
     bool hasMod(ModKind kind, const PokemonSlot& subject, int owner) const;
     bool playerHas(ModKind kind, int player) const;  // player-wide modifiers, e.g. "can't play Supporters"
+
+    // fn(card) for the Pokémon's own card, then each of its Tools; skips any that left it on the way.
+    template <class Fn>
+    void forEachSource(uint16_t uid, Fn fn) {
+        const PokemonSlot* p = find(uid);
+        if (!p) return;
+        FixedVec<const CardDef*, 3> cards;
+        cards.push_back(p->card);
+        for (const CardDef* t : p->tools) cards.push_back(t);
+        for (const CardDef* c : cards)
+            if ((p = find(uid)) && (c == p->card || std::find(p->tools.begin(), p->tools.end(), c) != p->tools.end())) fn(c);
+    }
 
     // --- Decisions and chance ---
     int choose(int player, int options);  // the player's policy picks one of `options` (0 when only one)
@@ -98,7 +114,8 @@ private:
     void deal(int player);
     void startTurn();
     void showBoard();
-    void knockOut(int player, PokemonSlot& slot, bool byAttack);
+    void knockOut(uint16_t uid, uint16_t attacker);
+    void survive(PokemonSlot& slot, int owner);
     void promote(int player);
     template <class Fn>
     void forEachMod(ModKind kind, const PokemonSlot* subject, int owner, Fn fn) const;
@@ -128,6 +145,11 @@ void Game::forEachMod(ModKind kind, const PokemonSlot* subject, int owner, Fn fn
         if (m.whileActive && source != &s_.players[sourceOwner].active) return false;
         if (m.whileBenched && (!source || source == &s_.players[sourceOwner].active)) return false;
         if (m.needs && !inPlay(sourceOwner, *m.needs)) return false;
+        if (m.when) {  // asked about its source; the compiler never puts a choice in it
+            EffectCtx ctx{const_cast<Game&>(*this), sourceOwner};
+            ctx.self = source ? source->uid : 0;
+            if (!m.when->test(ctx)) return false;
+        }
         bool mine = owner == sourceOwner;
         if (!subject) {
             bool forOpponent = m.scope == ModScope::OppActive || m.scope == ModScope::OppAll;
@@ -161,8 +183,8 @@ void Game::forEachMod(ModKind kind, const PokemonSlot* subject, int owner, Fn fn
         auto visit = [&](const PokemonSlot& source) {
             for (const Modifier& m : source.card->passive)
                 if (applies(m, p, &source)) fn(m);
-            if (source.tool)
-                for (const Modifier& m : source.tool->passive)
+            for (const CardDef* tool : source.tools)
+                for (const Modifier& m : tool->passive)
                     if (applies(m, p, &source)) fn(m);
         };
         if (s_.players[p].active.card) visit(s_.players[p].active);

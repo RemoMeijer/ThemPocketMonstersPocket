@@ -66,6 +66,8 @@ Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
         {"cant-attach-to-active", ModKind::CantAttachToActive}, {"weakness-x2", ModKind::WeaknessTimesTwo},
         {"no-conditions", ModKind::NoConditions},   {"prevent-effects", ModKind::PreventEffects},
         {"prevent-ability-damage", ModKind::PreventAbilityDamage},
+        {"extra-tools", ModKind::ExtraTools},       {"survive-at", ModKind::SurviveAt},
+        {"extra-point", ModKind::ExtraPoint},
     };
     static const std::unordered_map<std::string, ModScope> scopes = {
         {"self", ModScope::Self},           {"my-active", ModScope::MyActive}, {"my-all", ModScope::MyAll},
@@ -98,6 +100,12 @@ Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
             m.fromEx = true;
         } else if (a.atom == ":not-mega") {
             m.notMega = true;
+        } else if (a.atom == ":flip") {
+            m.flip = true;
+        } else if (a.atom == ":energy" && i + 1 < argCount(e)) {
+            m.energy = int8_t(typeArg(arg(e, ++i)));
+        } else if (a.atom == ":if" && i + 1 < argCount(e)) {
+            m.when = cond(arg(e, ++i));
         } else if (a.atom == ":name" || a.atom == ":needs") {
             auto list = std::make_shared<NameList>();
             values([&](const SExpr& n) { list->names.push_back(n.atom); });

@@ -59,12 +59,19 @@ std::vector<const PokemonSlot*> inPlay(const PlayerState& p) {
     return out;
 }
 
+// One Pokémon Tool each, two with an Ability that says so (Revavroom).
+bool allowsTwoTools(const CardDef& c) {
+    return std::any_of(c.passive.begin(), c.passive.end(), [](const Modifier& m) { return m.kind == ModKind::ExtraTools; });
+}
+
 // No abilities, Tools, Stadium or timed effects in play: only the base rules apply.
 bool plainBoard(const GameState& s) {
     if (s.stadium || !s.timed.empty()) return false;
     for (const PlayerState& p : s.players)
-        for (const PokemonSlot* slot : inPlay(p))
-            if (slot->tool || !slot->card->passive.empty()) return false;
+        for (const PokemonSlot* slot : inPlay(p)) {
+            const CardDef& c = *slot->card;
+            if (!slot->tools.empty() || !c.passive.empty() || c.onKnockedOut || c.onKnocksOut) return false;
+        }
     return true;
 }
 
@@ -81,7 +88,7 @@ void checkState(const Game& game, const Deck* decks[2]) {
         for (const PokemonSlot* slot : inPlay(p)) {
             seen.insert(slot->card);
             seen.insert(slot->below.begin(), slot->below.end());
-            if (slot->tool) seen.insert(slot->tool);
+            seen.insert(slot->tools.begin(), slot->tools.end());
         }
         dealt.insert(decks[i]->cards.begin(), decks[i]->cards.end());
     }
@@ -95,7 +102,8 @@ void checkState(const Game& game, const Deck* decks[2]) {
             EXPECT(slot->damage >= 0 && slot->damage < game.maxHp(*slot, i));  // knocked-out Pokémon leave play at once
             EXPECT(slot->enteredTurn <= s.turn);
             EXPECT(slot->uid != 0);
-            EXPECT(!slot->tool || slot->tool->isTrainer(TrainerKind::Tool));
+            for (const CardDef* t : slot->tools) EXPECT(t->isTrainer(TrainerKind::Tool));
+            EXPECT(slot->tools.size() <= (allowsTwoTools(*slot->card) ? 2u : 1u));
             if (slot != &p.active) EXPECT(slot->status == 0);  // Special Conditions are only on the Active Pokémon
             // An evolved Pokémon sits on its line, Basic first, each card naming the one below it. Rare Candy
             // puts a Stage 2 straight onto its Basic.
@@ -194,7 +202,8 @@ void checkActions(const GameState& s, const std::vector<Action>& actions) {
                 break;
             }
             case ActionKind::AttachTool:
-                EXPECT(p.hand[a.index]->isTrainer(TrainerKind::Tool) && !slotOf(p, a.target).tool);
+                EXPECT(p.hand[a.index]->isTrainer(TrainerKind::Tool) &&
+                       slotOf(p, a.target).tools.size() < (allowsTwoTools(*slotOf(p, a.target).card) ? 2u : 1u));
                 break;
             case ActionKind::UseStadium:  // once per player per turn and per Stadium card
                 EXPECT(s.stadium && s.stadium->stadiumAction && !(p.stadiumUseTurn == s.turn && p.stadiumUsed == s.stadium));
@@ -218,8 +227,13 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
     switch (a.kind) {
         case ActionKind::Evolve: {
             const PokemonSlot& from = slotOf(pb, a.target);
-            const PokemonSlot& to = slotOf(pa, a.target);
             EXPECT(before.turn >= 3 && from.enteredTurn < before.turn);
+            auto still = inPlay(pa);
+            if (std::none_of(still.begin(), still.end(), [&](const PokemonSlot* x) { return x->uid == from.uid; })) {
+                EXPECT(from.damage >= pb.hand[a.index]->hp);  // knocked out at once: its damage is more than its new HP
+                break;
+            }
+            const PokemonSlot& to = slotOf(pa, a.target);
             EXPECT(to.card == pb.hand[a.index] && to.card->evolvesFrom == from.card->name);
             EXPECT(to.below.size() == from.below.size() + 1 && to.below.back() == from.card);
             if (!to.card->onEvolve) EXPECT(to.damage == from.damage && to.energy == from.energy);  // damage and energy stay
@@ -260,7 +274,7 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
             break;
         }
         case ActionKind::AttachTool:
-            EXPECT(slotOf(pa, a.target).tool == pb.hand[a.index]);
+            EXPECT(slotOf(pa, a.target).tools.back() == pb.hand[a.index]);
             st.tools++;
             break;
         case ActionKind::UseAbility:
@@ -326,8 +340,14 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
 }  // namespace
 
 int main(int argc, char** argv) {
+    int row = -1;  // --row K: only deck K against every deck, so check_all.sh can run the rows in parallel
+    if (argc > 2 && std::string(argv[1]) == "--row") {
+        row = std::stoi(argv[2]);
+        argv += 2;
+        argc -= 2;
+    }
     if (argc < 2) {
-        std::cerr << "usage: check_states <deck.txt>...\n";
+        std::cerr << "usage: check_states [--row K] <deck.txt>...\n";
         return 2;
     }
     try {
@@ -338,7 +358,9 @@ int main(int argc, char** argv) {
         RandomPolicy random0, random1;
         AnyPolicy any0, any1;
         Stats st;
-        for (const Deck& d0 : decks) {
+        for (std::size_t i = 0; i < decks.size(); ++i) {
+            if (row >= 0 && int(i) != row) continue;
+            const Deck& d0 = decks[i];
             for (const Deck& d1 : decks) {
                 const Deck* pair[2] = {&d0, &d1};
                 long wins[2] = {}, draws[2] = {}, turns = 0;  // draws: random player, any-move player
@@ -362,6 +384,7 @@ int main(int argc, char** argv) {
                         std::vector<Action> actions = game.legalActions();
                         checkActions(before, actions);
                         Action a = actions.at(policies[player]->choose(PlayerView(before, player), actions));
+                        where += ", move kind " + std::to_string(int(a.kind));
                         game.apply(a);
                         checkMove(before, a, s, st);
                         checkState(game, pair);

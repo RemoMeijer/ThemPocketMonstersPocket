@@ -332,7 +332,17 @@ CLAUSES = [
     (r"switch in (?:1|one) of your opponent's Benched (Basic )?Pokemon( that has damage on it)? to the Active Spot",
      lambda m, c: ("post", f"(switch-in (choose opp bench{' basic' if m.group(1) else ''}{' damaged' if m.group(2) else ''}))")),
     (r"your turn ends", lambda m, c: ("post", "(end-turn)")),
-    (r"discard this card", lambda m, c: ("post", "(discard-tools self)")),  # a Tool, from the Pokémon it's on
+    (r"discard this card", lambda m, c: ("post", "(discard-this)")),  # a Tool, from the Pokémon it's on
+    (REF + r" is Knocked Out", lambda m, c: ("post", f"(knock-out {target(m)})")),
+    (r"your opponent can't get any points for it", lambda m, c: ("post", "(no-points)")),
+    (r"put it into your hand instead of the discard pile", lambda m, c: ("post", "(to-hand-instead)")),
+    (r"move 2 " + E + r" Energy from that Pokemon and attach 1 Energy each to 2 of your Benched Pokemon",
+     lambda m, c: ("post", f"(pick (choose my bench) (seq (move-energy self picked {t(m.group(1))} 1) "
+                           f"(move-energy self (choose my bench not-picked) {t(m.group(1))} 1)))")),
+    (OPP_NEXT + r", if your (" + NAMES + r") would be Knocked Out by damage from an attack, it is not Knocked Out and its remaining HP becomes (\d+)",
+     lambda m, c: ("post", f"(effect {timed(m.group('d'))} me (survive-at {m.group(3)}{names_opt(m.group(2))}))")),
+    (r"During this turn, if your opponent's Active Pokemon is Knocked Out by damage from an attack used by your (" + NAMES + r"), "
+     r"you get (\d+) more points?", lambda m, c: ("post", f"(effect this-turn me (extra-point {m.group(2)}{names_opt(m.group(1))}))")),
     # Back to the hand or the deck
     (r"put " + REF + r" into your hand", lambda m, c: ("post", f"(to-hand {target(m)})")),
     (r"put 1 of your (?:" + E + r" )?Pokemon that has damage on it into your hand",
@@ -560,6 +570,11 @@ ABILITY_FORMS = [
     (r"At the end of your turn, (.+)", lambda m, c: ("at-end-of-turn", "", m.group(1))),
     (r"Whenever you attach an? " + E + r" Energy from your Energy Zone to this Pokemon, (.+)",
      lambda m, c: ("on-attach", f":type {t(m.group(1))}", m.group(2))),
+    (r"If this Pokemon is in the Active Spot and is Knocked Out by damage from an attack from your opponent's Pokemon, (.+)",
+     lambda m, c: ("on-knocked-out", ":active :by-attack", m.group(1))),
+    (r"When this Pokemon is Knocked Out, (.+)", lambda m, c: ("on-knocked-out", "", m.group(1))),
+    (r"If your opponent's Pokemon is Knocked Out by damage from this Pokemon's attacks, (.+)",
+     lambda m, c: ("on-knocks-out", "", m.group(1))),
     (r"As long as this Pokemon is in the Active Spot, whenever you attach an Energy from your Energy Zone to it, (.+)",
      lambda m, c: ("on-attach", ":active", m.group(1).replace("it is now", "this Pokemon is now"))),
 ]
@@ -587,6 +602,9 @@ PASSIVES = [
     (r"This Pokemon can't be affected by any Special Conditions", lambda m: "(no-conditions)"),
     (r"Prevent all effects of attacks used by your opponent's Pokemon done to this Pokemon", lambda m: "(prevent-effects)"),
     (r"As long as this Pokemon is on your Bench, prevent all damage done to this Pokemon by attacks", lambda m: "(prevent-damage :bench)"),
+    (r"If this Pokemon would be Knocked Out by damage from an attack, flip a coin\. If heads, this Pokemon is not Knocked Out, "
+     r"and its remaining HP becomes (\d+)", lambda m: f"(survive-at {m.group(1)} :flip)"),
+    (r"This Pokemon may have up to 2 Pokemon Tool cards attached to it", lambda m: "(extra-tools 1)"),
 ]
 
 
@@ -606,6 +624,17 @@ def compile_ability(text, ctx):
             if not fn:
                 raise Unsupported(f"ability: {text}")
             return f"(passive {fn(m)})"
+    m = re.fullmatch(r"If (this Pokemon [^,]+), (.+)", text)
+    if m:  # "If this Pokémon has a Pokémon Tool attached, …": a passive that only counts while that holds
+        try:
+            cond = condition(m.group(1), ctx)
+        except Unsupported:
+            cond = None
+        rest = m.group(2)[:1].upper() + m.group(2)[1:]
+        for rx, fn in PASSIVES + CONDITIONAL_PASSIVES if cond else []:
+            pm = re.fullmatch(rx, rest.rstrip("."))
+            if pm and fn:
+                return f"(passive {fn(pm)[:-1]} :if {cond}))"
     for rx, fn in ABILITY_FORMS:
         m = re.fullmatch(rx, text)
         if m:
@@ -621,6 +650,7 @@ def compile_ability(text, ctx):
 CONDITIONAL_PASSIVES = [
     (r"Attacks used by this Pokemon do \+(\d+) damage to your opponent's Active Pokemon", lambda m: f"(damage-dealt {m.group(1)})"),
     (r"Attacks used by this Pokemon cost (\d+) less \{C\} Energy", lambda m: f"(attack-cost -{m.group(1)})"),
+    (r"Attacks used by this Pokemon cost (\d+) less " + E + r" Energy", lambda m: f"(attack-cost -{m.group(1)} :energy {t(m.group(2))})"),
 ]
 
 TOOLS = [
@@ -700,6 +730,15 @@ def compile_card(kind, text, ctx):
         if m:  # Poison Barb, Dark Pendant
             body = seq([s for _, s in statements(m.group(2)[:1].upper() + m.group(2)[1:], ctx)])
             return f"(on-damaged {'(if (is-type self ' + t(m.group(1)) + ') ' + body + ')' if m.group(1) else body})"
+        m = re.fullmatch(r"If the (?:" + E + r" )?Pokemon this card is attached to is (in the Active Spot and is )?Knocked Out by damage "
+                         r"from an attack from your opponent's Pokemon, (.+)", text)
+        if m:  # Rescue Scarf, Lucky Egg, Electrical Cord
+            body = seq([s for _, s in statements(m.group(3)[:1].upper() + m.group(3)[1:], ctx)])
+            body = f"(if (is-type self {t(m.group(1))}) {body})" if m.group(1) else body
+            return f"(on-knocked-out{' :active' if m.group(2) else ''} :by-attack {body})"
+        m = re.fullmatch(r"Whenever your opponent's Pokemon is Knocked Out by damage from an attack used by the Pokemon this card is attached to, (.+)", text)
+        if m:  # Lucky Mittens
+            return f"(on-knocks-out {seq([s for _, s in statements(m.group(1)[:1].upper() + m.group(1)[1:], ctx)])})"
         m = re.fullmatch(r"At the end of each turn, (.+)", text)
         if m:  # the berries: "the Pokémon this card is attached to … it … discard this card"
             rest = m.group(1).replace("the Pokemon this card is attached to", "this Pokemon").replace("from it.", "from this Pokemon.")
@@ -719,7 +758,7 @@ def compile_card(kind, text, ctx):
             return "(tool (prevent-damage :bench) (prevent-ability-damage :bench))"
         m = re.fullmatch(r"If this card is attached to 1 of your Pokemon, discard it at the end of your opponent's turn\. (.+)", text)
         if m:  # Metal Core Barrier: its modifier, and a second form that discards it
-            return [compile_card(kind, m.group(1), ctx), "(at-end-of-each-turn (if (not (my-turn)) (discard-tools self)))"]
+            return [compile_card(kind, m.group(1), ctx), "(at-end-of-each-turn (if (not (my-turn)) (discard-this)))"]
         raise Unsupported(f"tool: {text}")
     if kind == "Stadium":
         m = re.fullmatch(r"(Once during each player's turn, that player may|At the end of each player's turn, that player) (.+)", text)
@@ -875,9 +914,9 @@ EXAMPLES = [
     ("Tool", "", "If the Pokémon this card is attached to is your Active Pokémon and is damaged by an attack from your opponent's Pokémon, "
      "the Attacking Pokémon is now Poisoned.", "(on-damaged (status attacker poisoned))"),
     ("Tool", "", "At the end of each turn, if the Pokémon this card is attached to has half of its maximum HP or less remaining, heal 30 damage "
-     "from it. If you do, discard this card.", "(at-end-of-each-turn (then (if (half-hp self) (heal self 30)) (discard-tools self)))"),
+     "from it. If you do, discard this card.", "(at-end-of-each-turn (then (if (half-hp self) (heal self 30)) (discard-this)))"),
     ("Tool", "", "At the end of each turn, if the Pokémon this card is attached to is affected by any Special Conditions, it recovers from all "
-     "of them, and discard this card.", "(at-end-of-each-turn (then (if (has-status self any) (cure self)) (discard-tools self)))"),
+     "of them, and discard this card.", "(at-end-of-each-turn (then (if (has-status self any) (cure self)) (discard-this)))"),
     ("Supporter", "", "Put your Muk or Weezing in the Active Spot into your hand.",
      '(play (to-hand (choose my active (name "Muk" "Weezing"))))'),
     ("attack", "", "You may shuffle this Pokémon and all attached cards into your deck.", "(seq (hit) (one-of (to-deck self) (nothing)))"),
@@ -897,6 +936,26 @@ EXAMPLES = [
      "this attack does 50 more damage.", "(seq (if (damaged-last-turn self) (bonus 50)) (hit))"),
     ("attack", "50+", "This attack does 50 more damage for each point your opponent got during their last turn.",
      "(seq (bonus (* (points-last-turn opp) 50)) (hit))"),
+    ("ability", "", "If this Pokémon is in the Active Spot and is Knocked Out by damage from an attack from your opponent's Pokémon, "
+     "do 50 damage to the Attacking Pokémon.", "(on-knocked-out :active :by-attack (damage attacker 50))"),
+    ("ability", "", "When this Pokémon is Knocked Out, flip a coin. If heads, your opponent can't get any points for it.",
+     "(on-knocked-out (seq (flip 1) (if heads (no-points))))"),
+    ("ability", "", "If this Pokémon would be Knocked Out by damage from an attack, flip a coin. If heads, this Pokémon is not "
+     "Knocked Out, and its remaining HP becomes 10.", "(passive (survive-at 10 :flip))"),
+    ("ability", "", "If your opponent's Pokémon is Knocked Out by damage from this Pokémon's attacks, during your opponent's next turn, "
+     "prevent all damage from—and effects of—attacks done to this Pokémon.", "(on-knocks-out (effect opp-next-turn self (prevent-all)))"),
+    ("ability", "", "If this Pokémon has a Pokémon Tool attached, attacks used by this Pokémon cost 1 less {G} Energy.",
+     "(passive (attack-cost -1 :energy grass :if (has-tool self)))"),
+    ("ability", "", "This Pokémon may have up to 2 Pokémon Tool cards attached to it.", "(passive (extra-tools 1))"),
+    ("Tool", "", "If the Pokémon this card is attached to is Knocked Out by damage from an attack from your opponent's Pokémon, "
+     "put it into your hand instead of the discard pile.", "(on-knocked-out :by-attack (to-hand-instead))"),
+    ("Tool", "", "Whenever your opponent's Pokémon is Knocked Out by damage from an attack used by the Pokémon this card is attached "
+     "to, draw a card.", "(on-knocks-out (draw 1))"),
+    ("Supporter", "", "During your opponent's next turn, if your Hariyama or Crabominable would be Knocked Out by damage from an "
+     "attack, it is not Knocked Out and its remaining HP becomes 10.",
+     '(play (effect opp-next-turn me (survive-at 10 :name "Hariyama" "Crabominable")))'),
+    ("Supporter", "", "During this turn, if your opponent's Active Pokémon is Knocked Out by damage from an attack used by your "
+     "Haxorus, you get 1 more point.", '(play (effect this-turn me (extra-point 1 :name "Haxorus")))'),
 ]
 
 

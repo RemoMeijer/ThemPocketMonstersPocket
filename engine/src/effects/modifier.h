@@ -2,6 +2,7 @@
 #include <cstdint>
 
 struct NameList;  // effects/effect.h
+class Cond;
 
 // An always-on change to the rules, from an ability, a Tool, the Stadium or a timed effect.
 // Plain data, so timed effects can live in the game state.
@@ -27,6 +28,9 @@ enum class ModKind : uint8_t {
     NoConditions,        // can't be affected by Special Conditions (Steel Apron, Arceus ex)
     PreventEffects,      // prevent the effects (not the damage) of the opponent's attacks (Clear Veil, Regice)
     PreventAbilityDamage,  // prevent damage from the opponent's Abilities (Protective Poncho)
+    ExtraTools,          // amount more Pokémon Tools may be attached to it (Revavroom)
+    SurviveAt,           // would be Knocked Out by damage from an attack: isn't, and amount HP remains (Hala, Conkeldurr)
+    ExtraPoint,          // its attack Knocks Out the opponent's Active Pokémon: amount more points (Iris)
 };
 
 // Who a modifier applies to, seen from the player who owns its source.
@@ -47,6 +51,9 @@ struct Modifier {
     const NameList* names = nullptr;  // affected Pokémon must have one of these names (nullptr = any)
     bool vsEx = false;         // DamageDealt: only against a Pokémon ex
     const NameList* needs = nullptr;  // only while its owner has one of these Pokémon in play ("If you have Arceus…")
+    const Cond* when = nullptr;       // only while this holds, asked about its source ("If this Pokémon has a Tool…")
+    int8_t energy = -1;               // AttackCost: the Energy type it changes (-1 = Colorless)
+    bool flip = false;                // only when a coin flip comes up heads (Conkeldurr)
 };
 
 inline bool playerWide(ModKind k) {

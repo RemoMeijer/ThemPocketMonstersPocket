@@ -629,10 +629,10 @@ static void coverageBatchTwoBlocks() {
         s.stadiumOwner = 1;
         t.play(ActionKind::PlayTrainer, 0);
         CHECK(!s.stadium && s.players[1].discard.back() == &plaza);
-        s.players[1].bench[0].tool = &cape;
+        s.players[1].bench[0].tools.push_back(&cape);
         s.players[0].hand.push_back(&blower);
         t.play(ActionKind::PlayTrainer, 0);
-        CHECK(!s.players[1].bench[0].tool);
+        CHECK(s.players[1].bench[0].tools.empty());
     }
     {   // Nasty Notice: the opponent picks what to discard until 4 are left
         Table t;
@@ -814,7 +814,7 @@ static void coverageBatchFiveBlocks() {
         barb.onDamaged = stmt("(status attacker poisoned)");
         attackScript(t, "(seq (hit) (status opp-active paralyzed))");  // lasts through this Checkup
         GameState& s = t.position();
-        s.players[1].active.tool = &barb;
+        s.players[1].active.tools.push_back(&barb);
         CardDef veil = trainer(TrainerKind::Tool, "Veil");
         veil.passive.push_back(mod("(prevent-effects)"));
         t.play(ActionKind::Attack);
@@ -822,31 +822,32 @@ static void coverageBatchFiveBlocks() {
         Table u;
         attackScript(u, "(seq (hit) (status opp-active paralyzed))");
         GameState& s2 = u.position();
-        s2.players[1].active.tool = &veil;
+        s2.players[1].active.tools.push_back(&veil);
         u.play(ActionKind::Attack);
         CHECK(s2.players[1].active.damage == 30 && s2.players[1].active.status == 0);
     }
     {   // Lum Berry acts before Checkup, on either player's turn; Sitrus Berry at half HP; Metal Core Barrier
         Table t;
         CardDef lum = trainer(TrainerKind::Tool, "Lum");
-        lum.endOfEachTurn = stmt("(then (if (has-status self any) (cure self)) (discard-tools self))");
+        lum.endOfEachTurn = stmt("(then (if (has-status self any) (cure self)) (discard-this))");
         CardDef sitrus = trainer(TrainerKind::Tool, "Sitrus");
-        sitrus.endOfEachTurn = stmt("(then (if (half-hp self) (heal self 30)) (discard-tools self))");
+        sitrus.endOfEachTurn = stmt("(then (if (half-hp self) (heal self 30)) (discard-this))");
         CardDef barrier = trainer(TrainerKind::Tool, "Barrier");
-        barrier.endOfEachTurn = stmt("(if (not (my-turn)) (discard-tools self))");
+        barrier.endOfEachTurn = stmt("(if (not (my-turn)) (discard-this))");
         GameState& s = t.position();
-        s.players[1].active.tool = &lum;  // P2's Pokémon, at the end of P1's turn
+        s.players[1].active.tools.push_back(&lum);  // P2's Pokémon, at the end of P1's turn
         s.players[1].active.status = Poisoned;
         s.players[1].active.damage = 10;
-        s.players[1].bench[0].tool = &sitrus;
+        s.players[1].bench[0].tools.push_back(&sitrus);
         s.players[1].bench[0].damage = 20;  // 60 HP: not half yet
-        s.players[0].active.tool = &barrier;  // P1's own turn ends: it stays
+        s.players[0].active.tools.push_back(&barrier);  // P1's own turn ends: it stays
         t.play(ActionKind::EndTurn);
-        CHECK(s.players[1].active.status == 0 && s.players[1].active.damage == 10 && !s.players[1].active.tool);
-        CHECK(s.players[1].bench[0].tool == &sitrus && s.players[0].active.tool == &barrier);
+        CHECK(s.players[1].active.status == 0 && s.players[1].active.damage == 10 && s.players[1].active.tools.empty());
+        CHECK(s.players[1].bench[0].tools.size() == 1 && s.players[1].bench[0].tools[0] == &sitrus);
+        CHECK(s.players[0].active.tools.size() == 1 && s.players[0].active.tools[0] == &barrier);
         s.players[1].bench[0].damage = 30;  // half
         t.play(ActionKind::EndTurn);  // P2's turn ends: the Barrier on P1's Pokémon goes, Sitrus heals
-        CHECK(s.players[1].bench[0].damage == 0 && !s.players[1].bench[0].tool && !s.players[0].active.tool);
+        CHECK(s.players[1].bench[0].damage == 0 && s.players[1].bench[0].tools.empty() && s.players[0].active.tools.empty());
     }
     {   // Steel Apron: no Special Conditions, and attaching it cures them; Protective Poncho, Heavy Helmet
         Table t;
@@ -870,13 +871,13 @@ static void coverageBatchFiveBlocks() {
         ctx.self = s.players[1].active.uid;
         stmt("(status opp-active poisoned)")->run(ctx);
         CHECK(p.active.status == 0);
-        t.bench(0, t.cards[3]).tool = &poncho;
+        t.bench(0, t.cards[3]).tools.push_back(&poncho);
         stmt("(damage (each opp bench) 30)")->run(ctx);  // attack damage on the Bench
         EffectCtx ability{t.game, 1};
         ability.self = s.players[1].active.uid;
         stmt("(damage (each opp bench) 30)")->run(ability);  // an Ability's damage
         CHECK(p.bench[0].damage == 0);
-        s.players[1].bench[0].tool = &helmet;  // Mon2, Retreat Cost 3
+        s.players[1].bench[0].tools.push_back(&helmet);  // Mon2, Retreat Cost 3
         EffectCtx mine{t.game, 0};
         mine.attack = true;
         mine.self = p.active.uid;
@@ -906,7 +907,7 @@ static void backToTheHand() {
         GameState& s = t.position();
         PlayerState& p = s.players[0];
         t.game.evolve(p.active, &t.cards[10]);  // Evo1 on Mon0, with a Tool and one Water
-        p.active.tool = &cape;
+        p.active.tools.push_back(&cape);
         t.bench(0, t.cards[3]);
         p.hand.clear();
         p.hand.push_back(&koga);
@@ -928,12 +929,12 @@ static void backToTheHand() {
         GameState& s = t.position();
         PlayerState& p = s.players[0];
         while (p.hand.size() < std::size_t(rules::HandLimit)) p.hand.push_back(&t.cards[9]);
-        p.active.tool = &cape;
-        s.players[1].active.tool = &cape;
+        p.active.tools.push_back(&cape);
+        s.players[1].active.tools.push_back(&cape);
         EffectCtx ctx{t.game, 0};
         stmt("(tools-to-hand (each both all tool))")->run(ctx);
-        CHECK(!p.active.tool && p.hand.size() == std::size_t(rules::HandLimit) && p.discard.back() == &cape);
-        CHECK(!s.players[1].active.tool && s.players[1].hand.back() == &cape);
+        CHECK(p.active.tools.empty() && p.hand.size() == std::size_t(rules::HandLimit) && p.discard.back() == &cape);
+        CHECK(s.players[1].active.tools.empty() && s.players[1].hand.back() == &cape);
         t.bench(0, t.cards[3]);
         std::size_t deck = p.deck.size();
         ctx.self = p.bench[0].uid;
@@ -1006,6 +1007,7 @@ static void lastTurnMemory() {
     CHECK(damageWith(relay, usedAt(3)) == 50);
     CHECK(damageWith(relay, usedAt(1)) == 30);
     CHECK(damageWith("(seq (if (used-last-turn \"Sweets Relay\") (bonus 20)) (hit))", usedAt(3)) == 30);
+    CHECK(damageWith(relay, [](Table&, GameState& s) { s.turn = 1; }) == 30);  // a free attack on turn 1: nothing used yet
     const char* reply = "(seq (if (damaged-last-turn self) (bonus 20)) (hit))";
     CHECK(damageWith(reply, [](Table&, GameState& s) { s.players[0].active.damagedTurn = 4; }) == 50);
     CHECK(damageWith(reply, [](Table&, GameState& s) { s.players[0].active.damagedTurn = 3; }) == 30);
@@ -1023,6 +1025,143 @@ static void lastTurnMemory() {
         CHECK(s.turn == 7 && s.timed.size() == 1);
         t.play(ActionKind::Attack);
         CHECK(damageOn(t, 1) == 50);
+    }
+}
+
+// Batch 8: knock-out triggers. Triggers run first, then every knock-out counts, then the win rules (Remco).
+static void knockOutTriggers() {
+    auto revenge = [](Table& t) {  // Mon1: "If this Pokémon is in the Active Spot and is Knocked Out by … 50 damage"
+        t.cards[1].onKnockedOut = stmt("(damage attacker 50)");
+        t.cards[1].onKnockedOutWhileActive = t.cards[1].onKnockedOutByAttack = true;
+    };
+    {
+        Table t;
+        revenge(t);
+        GameState& s = t.position();
+        s.players[1].active.damage = 30;
+        t.play(ActionKind::Attack);
+        CHECK(s.players[0].points == 1 && s.players[0].active.damage == 50);
+    }
+    {   // its damage knocks out the attacker too: both reach 3; only P2 has a Pokémon left, so P2 wins
+        Table t;
+        revenge(t);
+        GameState& s = t.position();
+        s.players[0].points = s.players[1].points = 2;
+        s.players[0].active.damage = 10;
+        s.players[1].active.damage = 30;
+        t.play(ActionKind::Attack);
+        CHECK(s.phase == Phase::Over && s.winner == 1 && s.players[0].points == 3 && s.players[1].points == 3);
+    }
+    {   // the same with a Pokémon left on both sides: a tie
+        Table t;
+        revenge(t);
+        GameState& s = t.position();
+        t.bench(0, t.cards[3]);
+        s.players[0].points = s.players[1].points = 2;
+        s.players[0].active.damage = 10;
+        s.players[1].active.damage = 30;
+        t.play(ActionKind::Attack);
+        CHECK(s.phase == Phase::Over && s.winner == -1);
+    }
+    {   // not at Checkup: Poison isn't an attack
+        Table t;
+        revenge(t);
+        GameState& s = t.position();
+        s.players[1].active.damage = 55;
+        s.players[1].active.status = Poisoned;
+        t.play(ActionKind::EndTurn);
+        CHECK(s.players[0].points == 1 && s.players[0].active.damage == 0);
+    }
+    {   // "your opponent can't get any points for it"
+        Table t;
+        t.cards[1].onKnockedOut = stmt("(no-points)");
+        GameState& s = t.position();
+        s.players[1].active.damage = 30;
+        t.play(ActionKind::Attack);
+        CHECK(s.players[0].points == 0 && s.players[1].active.card == &t.cards[2]);
+    }
+    CardDef scarf = trainer(TrainerKind::Tool, "Scarf");
+    scarf.onKnockedOut = stmt("(to-hand-instead)");
+    scarf.onKnockedOutByAttack = true;
+    {   // Rescue Scarf: the Pokémon and its evolutions to the hand, the Scarf and the energy to the discard pile (Remco)
+        Table t;
+        GameState& s = t.position();
+        PlayerState& p = s.players[1];
+        t.game.evolve(p.active, &t.cards[10]);  // Evo1 on Mon1 (the test cards don't check the line)
+        p.active.tools.push_back(&scarf);
+        p.active.energy[int(Type::Water)] = 1;
+        p.active.damage = 60;
+        p.hand.clear();
+        t.play(ActionKind::Attack);
+        auto in = [](const auto& pile, const CardDef* c) { return std::find(pile.begin(), pile.end(), c) != pile.end(); };
+        CHECK(in(p.hand, &t.cards[10]) && in(p.hand, &t.cards[1]) && !in(p.discard, &t.cards[1]));  // P2 drew one more since
+        CHECK(p.discard.size() == 1 && p.discard[0] == &scarf && p.discardEnergy[int(Type::Water)] == 1);
+        CHECK(s.players[0].points == 1);
+    }
+    {   // a knock-out by an effect ("is Knocked Out"), not by damage: no Scarf, no "Knocked Out by damage" memory
+        Table t;
+        attackScript(t, "(seq (hit) (knock-out opp-active))");
+        GameState& s = t.position();
+        s.players[1].active.tools.push_back(&scarf);
+        t.play(ActionKind::Attack);
+        const auto& discard = s.players[1].discard;
+        CHECK(discard.size() == 2 && discard[0] == &t.cards[1] && discard[1] == &scarf);
+        CHECK(s.players[1].koTurn == -1 && s.players[0].points == 1);
+    }
+    {   // Hala: "would be Knocked Out by damage from an attack": 10 HP left instead
+        Table t;
+        GameState& s = t.position();
+        s.current = 1;
+        EffectCtx ctx{t.game, 1};
+        stmt("(effect opp-next-turn me (survive-at 10 :name \"Mon1\"))")->run(ctx);
+        s.current = 0;
+        s.players[1].active.damage = 40;
+        t.play(ActionKind::Attack);
+        CHECK(s.players[1].active.card == &t.cards[1] && s.players[1].active.damage == 50 && s.players[0].points == 0);
+    }
+    {   // Lucky Mittens: one card per Pokémon knocked out; Iris: 1 more point for the Active only
+        Table t;
+        attackScript(t, "(seq (hit) (damage (each opp bench) 30))");
+        CardDef mittens = trainer(TrainerKind::Tool, "Mittens");
+        mittens.onKnocksOut = stmt("(draw 1)");
+        GameState& s = t.position();
+        t.bench(1, t.cards[3]);
+        s.players[0].active.tools.push_back(&mittens);
+        s.players[1].active.damage = 30;
+        s.players[1].bench[0].damage = 30;  // Mon2
+        EffectCtx ctx{t.game, 0};
+        stmt("(effect this-turn me (extra-point 1 :name \"Mon0\"))")->run(ctx);
+        std::size_t hand = s.players[0].hand.size();
+        t.play(ActionKind::Attack);
+        CHECK(s.players[0].points == 3);  // 1 + 1 for the Active, 1 for Mon2
+        CHECK(s.phase == Phase::Over && s.players[0].hand.size() == hand + 2);  // 3 points: no next turn, no draw
+    }
+    {   // Cherubi: 1 less {W} while it has a Tool; Revavroom: room for a second Tool
+        Table t;
+        CardDef cape = trainer(TrainerKind::Tool, "Cape");
+        t.cards[0].passive.push_back(mod("(attack-cost -1 :energy water :if (has-tool self))"));
+        t.cards[0].passive.push_back(mod("(extra-tools 1)"));
+        GameState& s = t.position();
+        PokemonSlot& a = s.players[0].active;
+        CHECK(t.game.attackCost(a, 0, 0)[int(Type::Water)] == 1 && t.game.toolRoom(a, 0));
+        a.tools.push_back(&cape);
+        CHECK(t.game.attackCost(a, 0, 0)[int(Type::Water)] == 0 && t.game.toolRoom(a, 0));
+        a.tools.push_back(&cape);
+        CHECK(!t.game.toolRoom(a, 0));
+        s.players[1].active.tools.push_back(&cape);
+        CHECK(!t.game.toolRoom(s.players[1].active, 1));
+    }
+    {   // a Tool's "discard this card" takes only that Tool off a Pokémon with two
+        Table t;
+        CardDef lum = trainer(TrainerKind::Tool, "Lum");
+        lum.endOfEachTurn = stmt("(then (if (has-status self any) (cure self)) (discard-this))");
+        CardDef cape = trainer(TrainerKind::Tool, "Cape");
+        GameState& s = t.position();
+        s.players[0].active.tools.push_back(&lum);
+        s.players[0].active.tools.push_back(&cape);
+        s.players[0].active.status = Poisoned;
+        t.play(ActionKind::EndTurn);
+        CHECK(s.players[0].active.tools.size() == 1 && s.players[0].active.tools[0] == &cape && s.players[0].discard.back() == &lum);
     }
 }
 
@@ -1068,5 +1207,6 @@ int main() {
     coverageBatchFiveBlocks();
     backToTheHand();
     lastTurnMemory();
+    knockOutTriggers();
     return report("effects");
 }

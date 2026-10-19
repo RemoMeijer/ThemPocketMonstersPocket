@@ -60,7 +60,7 @@ public:
         for (std::size_t h = 0; h < p.hand.size(); ++h) {
             if (!p.hand[h]->isTrainer(TrainerKind::Tool)) continue;
             for (int t = -1; t < int(p.bench.size()); ++t)
-                if (!game.slot(me, t).tool) out.push_back({ActionKind::AttachTool, int8_t(h), int8_t(t)});
+                if (game.toolRoom(game.slot(me, t), me)) out.push_back({ActionKind::AttachTool, int8_t(h), int8_t(t)});
         }
     }
 
@@ -68,8 +68,8 @@ public:
         int me = game.state().current;
         PlayerState& p = game.state().players[me];
         PokemonSlot& target = game.slot(me, a.target);
-        target.tool = p.hand.take(a.index);
-        game.say("P", me + 1, " attaches ", target.tool->name, " to ", target.card->name);
+        target.tools.push_back(p.hand.take(a.index));
+        game.say("P", me + 1, " attaches ", target.tools.back()->name, " to ", target.card->name);
         if (game.hasMod(ModKind::NoConditions, target, me)) target.status = 0;  // Steel Apron: "recovers from all…"
     }
 };

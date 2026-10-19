@@ -72,6 +72,10 @@ struct CardDef {
     const Stmt* onDamaged = nullptr;     // "If this Pokémon is in the Active Spot and is damaged by an attack from your opponent's…"
     const Stmt* endOfEachTurn = nullptr; // "At the end of each turn…" (both players' turns; before Checkup)
     const Stmt* stadiumAction = nullptr;  // a Stadium's "Once during each player's turn, that player may…"
+    const Stmt* onKnockedOut = nullptr;  // "If this Pokémon is Knocked Out…": before its points and its cards leave play
+    bool onKnockedOutWhileActive = false;  // only when Knocked Out in the Active Spot
+    bool onKnockedOutByAttack = false;     // only by damage from an attack from the opponent's Pokémon
+    const Stmt* onKnocksOut = nullptr;   // "If your opponent's Pokémon is Knocked Out by damage from this Pokémon's attacks…"
     uint16_t onAttachTypes = 0;        // 0 = any type
     bool onAttachWhileActive = false;
 

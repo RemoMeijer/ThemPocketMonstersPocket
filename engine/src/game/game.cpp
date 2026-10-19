@@ -121,15 +121,14 @@ void Game::endTurn() {
     if (s_.players[me].active.card) owners.push_back(s_.players[me].active.uid);
     for (const PokemonSlot& b : s_.players[me].bench) owners.push_back(b.uid);
     for (uint16_t uid : owners) {
-        for (bool tool : {false, true}) {  // the Pokémon's ability, then its Tool ("Leftovers")
-            PokemonSlot* p = find(uid);
-            const CardDef* source = p ? (tool ? p->tool : p->card) : nullptr;
-            if (!source || !source->endOfTurn || (source->endOfTurnWhileActive && p != &s_.players[me].active)) continue;
+        forEachSource(uid, [&](const CardDef* source) {  // the Pokémon's ability, then its Tools ("Leftovers")
+            if (!source->endOfTurn || (source->endOfTurnWhileActive && find(uid) != &s_.players[me].active)) return;
             say("P", me + 1, "'s ", source->name, ": ", source->abilities.empty() ? "end of turn" : source->abilities[0].name);
             EffectCtx ctx{*this, me};
             ctx.self = uid;
+            ctx.card = source;
             source->endOfTurn->run(ctx);
-        }
+        });
     }
     // "At the end of each turn…" (Lum Berry, Sitrus Berry): both players' Pokémon, before Checkup (assumed, Remco's
     // best guess: a Lum Berry cures Poison before it does damage).
@@ -138,15 +137,14 @@ void Game::endTurn() {
         if (s_.players[owner].active.card) each.push_back(s_.players[owner].active.uid);
         for (const PokemonSlot& b : s_.players[owner].bench) each.push_back(b.uid);
         for (uint16_t uid : each)
-            for (bool tool : {false, true}) {
-                PokemonSlot* p = find(uid);
-                const CardDef* source = p ? (tool ? p->tool : p->card) : nullptr;
-                if (!source || !source->endOfEachTurn) continue;
+            forEachSource(uid, [&](const CardDef* source) {
+                if (!source->endOfEachTurn) return;
                 say("P", owner + 1, "'s ", source->name, ": end of turn");
                 EffectCtx ctx{*this, owner};
                 ctx.self = uid;
+                ctx.card = source;
                 source->endOfEachTurn->run(ctx);
-            }
+            });
     }
     // Pokémon Checkup, for both Active Pokémon (Special Conditions are only ever on an Active Pokémon).
     for (int p : {me, 1 - me}) {
@@ -191,20 +189,24 @@ void Game::endTurn() {
     startTurn();
 }
 
-void Game::knockOutCheck(bool byAttack) {
+void Game::knockOutCheck(uint16_t attacker) {
     if (s_.phase == Phase::Over) return;
-    for (int p = 0; p < 2; ++p) {
-        PlayerState& ps = s_.players[p];
-        if (ps.active.card && ps.active.damage >= maxHp(ps.active, p)) {
-            knockOut(p, ps.active, byAttack);
-            ps.active = PokemonSlot{};
+    // Knock-out triggers can do damage (Pyukumuku), so look again until nobody is left at 0 HP; only the first round
+    // comes from the attack. Every knock-out counts before anyone wins (Remco). The defender's go first.
+    for (;; attacker = 0) {
+        Uids out;
+        for (int p : {1 - s_.current, s_.current}) {
+            PlayerState& ps = s_.players[p];
+            auto check = [&](PokemonSlot& slot) {
+                if (!slot.card || slot.damage < maxHp(slot, p)) return;
+                if (attacker && !slot.koByEffect) survive(slot, p);
+                if (slot.damage >= maxHp(slot, p)) out.push_back(slot.uid);
+            };
+            check(ps.active);
+            for (PokemonSlot& b : ps.bench) check(b);
         }
-        for (std::size_t i = ps.bench.size(); i-- > 0;) {
-            if (ps.bench[i].damage >= maxHp(ps.bench[i], p)) {
-                knockOut(p, ps.bench[i], byAttack);
-                ps.bench.take(i);
-            }
-        }
+        if (out.empty()) break;
+        for (uint16_t uid : out) knockOut(uid, attacker);
     }
     // No Pokémon in play loses whatever the points; nobody left is a tie (Tips, DESIGN.md §10).
     auto out = [&](int p) { return !s_.players[p].active.card && s_.players[p].bench.empty(); };
@@ -218,25 +220,74 @@ void Game::knockOutCheck(bool byAttack) {
         if (!s_.players[p].active.card) promote(p);
 }
 
-void Game::knockOut(int player, PokemonSlot& slot, bool byAttack) {
+// "If this Pokémon would be Knocked Out by damage from an attack… it is not Knocked Out, and its remaining HP becomes
+// 10" (Hala; Conkeldurr after a heads).
+void Game::survive(PokemonSlot& slot, int owner) {
+    int hp = -1;
+    forEachMod(ModKind::SurviveAt, &slot, owner, [&](const Modifier& m) {
+        if (hp < 0 && (!m.flip || flip())) hp = m.amount;
+    });
+    if (hp < 0) return;
+    slot.damage = maxHp(slot, owner) - hp;
+    say(slot.card->name, " is not Knocked Out (", hp, " HP left)");
+}
+
+void Game::knockOut(uint16_t uid, uint16_t attacker) {
+    int player = 0;
+    PokemonSlot* slot = find(uid, &player);
+    if (!slot) return;
+    bool byAttack = attacker && player != s_.current && !slot->koByEffect;  // by damage from an opponent's attack
+    bool wasActive = slot == &s_.players[player].active;
+    say(slot->card->name, " is knocked out");
+    // "If this Pokémon is Knocked Out…": its Ability, then its Tools. Its cards are still in play meanwhile.
+    EffectCtx ctx{*this, player};
+    ctx.self = uid;
+    ctx.attacker = byAttack ? attacker : 0;
+    forEachSource(uid, [&](const CardDef* c) {
+        if (!c->onKnockedOut || (c->onKnockedOutWhileActive && !wasActive) || (c->onKnockedOutByAttack && !byAttack)) return;
+        say("  ", c->name, " reacts");
+        ctx.card = c;
+        c->onKnockedOut->run(ctx);
+    });
+    slot = find(uid, &player);
+    if (!slot) return;  // no trigger takes it out of play today
     PlayerState& owner = s_.players[player];
     PlayerState& scorer = s_.players[1 - player];
-    scorer.points += slot.card->points;
+    PokemonSlot* by = byAttack ? find(attacker) : nullptr;
+    int points = slot->card->points + (by && wasActive ? sumMods(ModKind::ExtraPoint, *by, 1 - player) : 0);
+    if (ctx.noPoints) points = 0;  // "your opponent can't get any points for it"
+    scorer.points += points;
     if (scorer.scoredTurn != s_.turn) scorer.scored = 0;
     scorer.scoredTurn = s_.turn;
-    scorer.scored += slot.card->points;
-    if (byAttack && player != s_.current) {  // "Knocked Out by damage from an attack during your opponent's last turn"
+    scorer.scored += points;
+    if (byAttack) {  // "Knocked Out by damage from an attack during your opponent's last turn"
         if (owner.koTurn != s_.turn) owner.koTypes = 0;
         owner.koTurn = s_.turn;
-        if (slot.card->type) owner.koTypes |= typeBit(*slot.card->type);
+        if (slot->card->type) owner.koTypes |= typeBit(*slot->card->type);
     }
-    say(slot.card->name, " is knocked out. P", 2 - player, " scores ", slot.card->points, " (total ", scorer.points,
-        ")");
-    for (const CardDef* c : slot.below) owner.discard.push_back(c);
-    owner.discard.push_back(slot.card);
-    if (slot.tool) owner.discard.push_back(slot.tool);
-    for (int t = 0; t < TypeCount; ++t) owner.discardEnergy[t] += slot.energy[t];  // its energy too (App)
-    clearConditions(slot);
+    say("P", 2 - player, " scores ", points, " (total ", scorer.points, ")");
+    // The attacker's "If your opponent's Pokémon is Knocked Out by damage from this Pokémon's attacks…"
+    if (by)
+        forEachSource(attacker, [&](const CardDef* c) {
+            if (!c->onKnocksOut) return;
+            say("  ", c->name, " reacts");
+            EffectCtx mine{*this, 1 - player};
+            mine.self = attacker;
+            mine.card = c;
+            c->onKnocksOut->run(mine);
+        });
+    // Its cards leave play: to the discard pile, or the Pokémon and its evolutions to the hand (Rescue Scarf, Remco).
+    slot = find(uid, &player);
+    std::vector<const CardDef*> pokemon{slot->card};
+    pokemon.insert(pokemon.end(), slot->below.begin(), slot->below.end());
+    for (const CardDef* c : pokemon) ctx.toHandInstead ? toHand(player, c) : owner.discard.push_back(c);
+    for (const CardDef* t : slot->tools) owner.discard.push_back(t);
+    for (int t = 0; t < TypeCount; ++t) owner.discardEnergy[t] += slot->energy[t];  // its energy too (App)
+    clearConditions(*slot);
+    if (slot == &owner.active)
+        owner.active = PokemonSlot{};
+    else
+        owner.bench.take(std::size_t(slot - owner.bench.begin()));
 }
 
 void Game::promote(int player) {
@@ -290,7 +341,7 @@ void Game::takeBack(uint16_t uid, bool toDeck) {
     say(slot->card->name, toDeck ? " is shuffled into the deck" : " goes back to the hand");
     std::vector<const CardDef*> cards{slot->card};
     for (const CardDef* c : slot->below) cards.push_back(c);
-    if (slot->tool) cards.push_back(slot->tool);
+    for (const CardDef* t : slot->tools) cards.push_back(t);
     for (const CardDef* c : cards) toDeck ? p.deck.push_back(c) : toHand(owner, c);
     for (int t = 0; t < TypeCount; ++t) p.discardEnergy[t] += slot->energy[t];  // energy isn't a card (Remco)
     clearConditions(*slot);
@@ -361,8 +412,10 @@ bool Game::canUseAttack(const PokemonSlot& p, int owner, int attack) const {
 
 EnergyCounts Game::attackCost(const PokemonSlot& p, int owner, int attack) const {
     EnergyCounts cost = p.card->attacks[attack].cost;
-    int colorless = cost[int(Type::Colorless)] + sumMods(ModKind::AttackCost, p, owner);  // "cost 2 less {C}" stops at 0
-    cost[int(Type::Colorless)] = uint8_t(std::max(0, colorless));
+    int counts[TypeCount];
+    for (int t = 0; t < TypeCount; ++t) counts[t] = cost[t];
+    forEachMod(ModKind::AttackCost, &p, owner, [&](const Modifier& m) { counts[m.energy < 0 ? int(Type::Colorless) : m.energy] += m.amount; });
+    for (int t = 0; t < TypeCount; ++t) cost[t] = uint8_t(std::max(0, counts[t]));  // "cost 2 less {C}" stops at 0
     return cost;
 }
 
@@ -392,7 +445,7 @@ std::string Game::show(const PokemonSlot& slot, int owner) const {
     std::string energy;
     for (int t = 0; t < TypeCount; ++t) energy.append(slot.energy[t], typeLetter(Type(t)));
     if (!energy.empty()) s += " [" + energy + "]";
-    if (slot.tool) s += " +" + slot.tool->name;
+    for (const CardDef* t : slot.tools) s += " +" + t->name;
     constexpr const char* Names[] = {"Asleep", "Paralyzed", "Confused", "Poisoned", "Burned"};
     for (int i = 0; i < 5; ++i)
         if (slot.status & (1 << i)) s += std::string(" (") + Names[i] + ")";

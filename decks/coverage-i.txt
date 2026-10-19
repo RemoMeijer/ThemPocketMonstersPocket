@@ -1,0 +1,25 @@
+# Coverage batch 8, Fighting/Lightning/Darkness: knock-out triggers. Electrode and Spiritomb hit back, Passimian ex
+# passes its energy on, Conkeldurr may survive, Glimmora may give no points, Zoroark is protected after a knock-out,
+# Bewear knocks out by effect; Rescue Scarf, Lucky Egg, Lucky Mittens, Electrical Cord; Hala for Hariyama.
+energy: Fighting, Lightning, Darkness
+
+1 B4a-019  # Team Rocket's Voltorb
+1 B4a-020  # Team Rocket's Electrode (from Team Rocket's Voltorb)
+1 B2-103   # Spiritomb
+1 A3-104   # Passimian ex
+1 A3-094   # Timburr
+1 A3-095   # Gurdurr (from Timburr)
+1 A3-096   # Conkeldurr (from Gurdurr)
+1 B3a-044  # Glimmet
+1 B3a-045  # Glimmora (from Glimmet)
+1 A4a-049  # Zorua
+1 A4a-050  # Zoroark (from Zorua)
+1 A3-090   # Makuhita
+1 A3-091   # Hariyama (from Makuhita)
+1 A3a-057  # Stufful
+1 A3a-058  # Bewear (from Stufful)
+1 A4-155   # Rescue Scarf
+1 B3-148   # Lucky Egg
+1 B1-220   # Lucky Mittens
+1 A3a-065  # Electrical Cord
+1 B1-222   # Hala

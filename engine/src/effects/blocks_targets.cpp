@@ -14,7 +14,7 @@ struct Filter {
     uint16_t types = 0, energyTypes = 0;
     uint8_t stages = 0;
     int energy = 0;  // at least this much energy of energyTypes (0 = no test)
-    bool damaged = false, ex = false, notEx = false, mega = false, evolution = false, notSelf = false, ability = false, tool = false;
+    bool damaged = false, ex = false, notEx = false, mega = false, evolution = false, notSelf = false, notPicked = false, ability = false, tool = false;
     std::vector<std::string> names;
 
     bool matches(const PokemonSlot& p, const EffectCtx& ctx) const {
@@ -23,8 +23,8 @@ struct Filter {
             if (!energyTypes || (energyTypes & typeBit(Type(t)))) n += p.energy[t];
         return p.card->hasType(types) && (!stages || (stages & stageBit(p.card->stage))) && (!damaged || p.damage > 0) &&
                (!ex || p.card->ex) && (!notEx || !p.card->ex) && (!mega || p.card->mega) && (!evolution || p.card->isEvolution()) &&
-               (!notSelf || p.uid != ctx.self) && n >= energy && (!ability || !p.card->abilities.empty()) &&
-               (!tool || p.tool) &&
+               (!notSelf || p.uid != ctx.self) && (!notPicked || p.uid != ctx.picked) && n >= energy && (!ability || !p.card->abilities.empty()) &&
+               (!tool || !p.tools.empty()) &&
                (names.empty() || std::find(names.begin(), names.end(), p.card->name) != names.end());
     }
 };
@@ -42,6 +42,7 @@ Filter parseFilter(const SExpr& e, std::size_t from) {
         else if (w == "tool") f.tool = true;
         else if (w == "evolution") f.evolution = true;
         else if (w == "not-self") f.notSelf = true;
+        else if (w == "not-picked") f.notPicked = true;
         else if (w == "basic") f.stages |= stageBit(Stage::Basic);
         else if (w == "stage1") f.stages |= stageBit(Stage::Stage1);
         else if (w == "stage2") f.stages |= stageBit(Stage::Stage2);
@@ -178,7 +179,7 @@ public:
         switch (what_) {
             case HasDamage: return p->damage > 0;
             case HasStatus: return p->status & amount_;
-            case HasTool: return p->tool != nullptr;
+            case HasTool: return !p->tools.empty();
             case IsType: return p->card->hasType(types_);
             case IsEx: return p->card->ex;
             case IsBasic: return p->card->stage == Stage::Basic;

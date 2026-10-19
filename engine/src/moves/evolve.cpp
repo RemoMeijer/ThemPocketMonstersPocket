@@ -35,8 +35,8 @@ public:
             EffectCtx ctx{game, me};
             ctx.self = target.uid;
             target.card->onEvolve->run(ctx);
-            game.knockOutCheck();
         }
+        game.knockOutCheck();  // e.g. a Basic that had Starting Plains' +20 HP evolves into less HP than its damage
     }
 };
 }  // namespace

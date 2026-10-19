@@ -18,6 +18,7 @@ public:
         GameState& s = game.state();
         int me = s.current;
         const PokemonSlot& attacker = s.players[me].active;
+        uint16_t attackerUid = attacker.uid;
         const AttackDef& attack = attacker.card->attacks[a.index];
         game.say("P", me + 1, "'s ", attacker.card->name, " uses ", attack.name);
         // Confused, or an effect like "if the Defending Pokémon tries to use an attack, your opponent flips
@@ -39,7 +40,7 @@ public:
             s.players[me].attackTurn = s.turn;  // after the attack, which may ask "used … during your last turn"
             s.players[me].lastAttack = &attack;
         }
-        game.knockOutCheck(true);
+        game.knockOutCheck(attackerUid);
         if (s.phase == Phase::Main) game.endTurn();
     }
 };

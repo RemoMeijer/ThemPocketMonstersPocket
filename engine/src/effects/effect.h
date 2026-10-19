@@ -30,6 +30,9 @@ struct EffectCtx {
     bool healed = false;       // (heal …) removed some damage
     bool endsTurn = false;     // (end-turn): "Your turn ends." after the effect
     uint16_t attacker = 0;     // the Attacking Pokémon, for "when damaged by an attack" effects
+    const CardDef* card = nullptr;  // the card whose text runs, for a Tool's "discard this card"
+    bool noPoints = false;       // (no-points): the opponent gets no points for this knock-out
+    bool toHandInstead = false;  // (to-hand-instead): the knocked-out Pokémon goes to the hand (Rescue Scarf)
 };
 
 using Uids = FixedVec<uint16_t, 2 * (1 + rules::BenchSize)>;  // at most every Pokémon in play
