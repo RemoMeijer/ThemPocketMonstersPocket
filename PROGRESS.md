@@ -1,6 +1,6 @@
 # Progress
 
-Updated 2026-10-19, after coverage batch 7.
+Updated 2026-10-19, after coverage batch 7 (commit `c599c02`).
 
 This is the handoff file: what the project is, where it stands, what's open and what comes next. Read it first, then:
 - [CLAUDE.md](CLAUDE.md) for the working rules and commands;
@@ -128,7 +128,7 @@ No existing script changed in any batch unless the batch said so.
 | 4 (R5) | `962abbb` | 9 Stadiums: Mesagoza, Fragrant Forest, Area Zero, Kid's Room, Rainbow Cave, Arcade, Hiking Trail, Soothing Shore, Bounded Field. All 13 Stadiums now work | The Use Stadium move; the end-of-each-turn Stadium trigger; Weakness ×2; `draw-until`, `hand-to-deck`, `swap-for`, `cycle-energy` | none |
 | 5 | `ec9ebe8` | 9 Tools: Lum Berry, Sitrus Berry, Poison Barb, Dark Pendant, Steel Apron, Clear Veil, Metal Core Barrier, Protective Poncho, Heavy Helmet | The `on-damaged` and `at-end-of-each-turn` triggers; `no-conditions`, `prevent-effects`, `prevent-ability-damage`; `:bench`, `:min-retreat`; `half-hp`, `my-turn`, `status-count` | 7: Regice, Arceus ex, Wartortle, Jellicent, Dragalge ex, Blissey, TR Magmar |
 | 6 | `be4c2e5` | 5: Koga, Budding Expeditioner, Ilima, Parasol Lady, Elesa | `to-hand`, `to-deck`, `tools-to-hand`, `not-ex` | 3: Eldegoss, Dunsparce, Accelgor |
-| 7 | see `git log` | none | Memory of the last turn in the state: `ko-last-turn`, `used-last-turn`, `damaged-last-turn`, `points-last-turn`. Compiler only: "takes +N" next turn, "this Pokémon's attack does +N" next turn (one-attack cards only), "your Pokémon do +N" next turn | 33: 9 "Knocked Out last turn" (Marshadow, Lapras, Zarude, …), 7 Sweets Relay, 9 "+N next turn" (Togekiss, Donphan, Crabominable ex, …), 3 "your Pokémon +N next turn" (Oricorio, Meloetta, Happiny), 3 "takes +N" (Kommo-o, Lucario, Hariyama), Wobbuffet, Hisuian Basculegion |
+| 7 | `c599c02` | none | Memory of the last turn in the state: `ko-last-turn`, `used-last-turn`, `damaged-last-turn`, `points-last-turn`. Compiler only: "takes +N" next turn, "this Pokémon's attack does +N" next turn (one-attack cards only), "your Pokémon do +N" next turn | 33: 9 "Knocked Out last turn" (Marshadow, Lapras, Zarude, …), 7 Sweets Relay, 9 "+N next turn" (Togekiss, Donphan, Crabominable ex, …), 3 "your Pokémon +N next turn" (Oricorio, Meloetta, Happiny), 3 "takes +N" (Kommo-o, Lucario, Hariyama), Wobbuffet, Hisuian Basculegion |
 
 ## Rules
 
