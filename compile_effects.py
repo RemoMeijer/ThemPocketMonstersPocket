@@ -319,6 +319,16 @@ CLAUSES = [
      lambda m, c: ("post", f"(switch-in (choose opp bench{' basic' if m.group(1) else ''}{' damaged' if m.group(2) else ''}))")),
     (r"your turn ends", lambda m, c: ("post", "(end-turn)")),
     (r"discard this card", lambda m, c: ("post", "(discard-tools self)")),  # a Tool, from the Pokémon it's on
+    # Back to the hand or the deck
+    (r"put " + REF + r" into your hand", lambda m, c: ("post", f"(to-hand {target(m)})")),
+    (r"put 1 of your (?:" + E + r" )?Pokemon that has damage on it into your hand",
+     lambda m, c: ("post", f"(to-hand (choose my all{' (type ' + t(m.group(1)) + ')' if m.group(1) else ''} damaged))")),
+    (r"put 1 of your (?:" + E + r" )?Pokemon in play, except any Pokemon ex, into your hand",
+     lambda m, c: ("post", f"(to-hand (choose my all{' (type ' + t(m.group(1)) + ')' if m.group(1) else ''} not-ex))")),
+    (r"return all Pokemon Tools attached to each Pokemon \(both yours and your opponent's\) to their owner's hand",
+     lambda m, c: ("post", "(tools-to-hand (each both all tool))")),
+    (r"(you may )?shuffle this Pokemon and all attached cards into your deck",
+     lambda m, c: ("post", "(one-of (to-deck self) (nothing))" if m.group(1) else "(to-deck self)")),
     (r"draw cards until you have (\d+) cards in your hand", lambda m, c: ("post", f"(draw-until {m.group(1)})")),
     (r"shuffle an? (Basic )?Pokemon from your hand into your deck",
      lambda m, c: ("post", f"(hand-to-deck {'basic' if m.group(1) else 'pokemon'})")),
@@ -852,6 +862,9 @@ EXAMPLES = [
      "from it. If you do, discard this card.", "(at-end-of-each-turn (then (if (half-hp self) (heal self 30)) (discard-tools self)))"),
     ("Tool", "", "At the end of each turn, if the Pokémon this card is attached to is affected by any Special Conditions, it recovers from all "
      "of them, and discard this card.", "(at-end-of-each-turn (then (if (has-status self any) (cure self)) (discard-tools self)))"),
+    ("Supporter", "", "Put your Muk or Weezing in the Active Spot into your hand.",
+     '(play (to-hand (choose my active (name "Muk" "Weezing"))))'),
+    ("attack", "", "You may shuffle this Pokémon and all attached cards into your deck.", "(seq (hit) (one-of (to-deck self) (nothing)))"),
     ("ability", "", "If you have Arceus or Arceus ex in play, this Pokémon takes −30 damage from attacks.",
      '(passive (damage-taken -30 :needs "Arceus" "Arceus ex"))'),
 ]

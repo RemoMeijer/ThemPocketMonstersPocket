@@ -1,0 +1,19 @@
+# Coverage batch 6, Darkness/Water: back to the hand. Weezing and Muk for Koga, Colorless Dunsparce for Ilima
+# (and its own shuffle back into the deck), non-ex Water Pokémon for Parasol Lady, Tools for Elesa.
+energy: Darkness, Water
+
+2 B3-101   # Koffing
+1 B3-102   # Weezing (from Koffing)
+1 B1a-045  # Grimer
+1 B1a-046  # Muk (from Grimer)
+2 B3-130   # Dunsparce: may shuffle itself into the deck
+2 A1-053   # Squirtle
+1 A1-062   # Tentacool
+1 A1-222   # Koga
+1 A3-149   # Ilima
+1 B3-152   # Parasol Lady
+1 B3b-066  # Elesa
+2 A2-147   # Giant Cape
+1 A2-148   # Rocky Helmet
+2 P-A-001  # Potion
+1 P-A-007  # Professor's Research

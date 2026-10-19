@@ -274,6 +274,33 @@ void Game::clearConditions(PokemonSlot& slot) {
         if (timed[i].uid == slot.uid) timed.take(i);
 }
 
+void Game::takeBack(uint16_t uid, bool toDeck) {
+    int owner = 0;
+    PokemonSlot* slot = find(uid, &owner);
+    if (!slot) return;
+    PlayerState& p = s_.players[owner];
+    say(slot->card->name, toDeck ? " is shuffled into the deck" : " goes back to the hand");
+    std::vector<const CardDef*> cards{slot->card};
+    for (const CardDef* c : slot->below) cards.push_back(c);
+    if (slot->tool) cards.push_back(slot->tool);
+    for (const CardDef* c : cards) toDeck ? p.deck.push_back(c) : toHand(owner, c);
+    for (int t = 0; t < TypeCount; ++t) p.discardEnergy[t] += slot->energy[t];  // energy isn't a card (Remco)
+    clearConditions(*slot);
+    if (slot == &p.active)
+        p.active = PokemonSlot{};
+    else
+        p.bench.take(std::size_t(slot - p.bench.begin()));
+    if (toDeck) std::shuffle(p.deck.begin(), p.deck.end(), rng_);
+}
+
+void Game::toHand(int player, const CardDef* card) {
+    PlayerState& p = s_.players[player];
+    if (p.hand.size() < std::size_t(rules::HandLimit))
+        return p.hand.push_back(card);
+    p.discard.push_back(card);  // assumed: a full hand takes no more (DESIGN.md §10)
+    say("  P", player + 1, "'s hand is full: ", card->name, " goes to the discard pile");
+}
+
 void Game::draw(int player) {
     PlayerState& p = s_.players[player];
     if (p.deck.empty()) {

@@ -180,6 +180,50 @@ private:
     const Target* t_;
 };
 
+// (to-hand TARGET), (to-deck TARGET): the Pokémon, its evolutions and Tool back into its owner's hand or deck (Koga,
+// Eldegoss). Not on an opponent's Pokémon whose attack effects are prevented.
+class TakeBack : public Stmt {
+public:
+    TakeBack(const Target* t, bool toDeck) : t_(t), toDeck_(toDeck) {}
+    void run(EffectCtx& ctx) const override {
+        Uids targets;
+        t_->select(ctx, targets);
+        for (uint16_t uid : targets)
+            if (affects(ctx, uid)) ctx.game.takeBack(uid, toDeck_);
+    }
+    bool possible(EffectCtx& ctx) const override {
+        return anyCandidate(ctx, t_, [](const PokemonSlot&) { return true; });
+    }
+
+private:
+    const Target* t_;
+    bool toDeck_;
+};
+
+class ToolsToHand : public Stmt {  // (tools-to-hand TARGET): their Tools back into their owners' hands (Elesa)
+public:
+    explicit ToolsToHand(const Target* t) : t_(t) {}
+    void run(EffectCtx& ctx) const override {
+        Uids targets;
+        t_->select(ctx, targets);
+        for (uint16_t uid : targets) {
+            int owner = 0;
+            PokemonSlot* p = ctx.game.find(uid, &owner);
+            if (!p || !p->tool || !affects(ctx, uid)) continue;
+            ctx.game.say("  ", p->tool->name, " goes back to the hand");
+            const CardDef* tool = p->tool;
+            p->tool = nullptr;
+            ctx.game.toHand(owner, tool);
+        }
+    }
+    bool possible(EffectCtx& ctx) const override {
+        return anyCandidate(ctx, t_, [](const PokemonSlot& p) { return p.tool != nullptr; });
+    }
+
+private:
+    const Target* t_;
+};
+
 class DiscardTools : public Stmt {  // (discard-tools TARGET)
 public:
     explicit DiscardTools(const Target* t) : t_(t) {}
@@ -540,6 +584,9 @@ void addCardWords(Words& w) {
         }};
     }
     w.stmt["switch-in"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<SwitchIn>(b.target(arg(e, 0))); }};
+    w.stmt["to-hand"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<TakeBack>(b.target(arg(e, 0)), false); }};
+    w.stmt["to-deck"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<TakeBack>(b.target(arg(e, 0)), true); }};
+    w.stmt["tools-to-hand"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<ToolsToHand>(b.target(arg(e, 0))); }};
     w.stmt["discard-tools"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<DiscardTools>(b.target(arg(e, 0))); }};
     w.stmt["rare-candy"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<RareCandy>(); }};
     w.stmt["swap-pokemon"] = {0, 0, [](const SExpr&, ScriptBuilder& b) {

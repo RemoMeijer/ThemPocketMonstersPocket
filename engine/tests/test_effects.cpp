@@ -896,6 +896,52 @@ static void coverageBatchFiveBlocks() {
     }
 }
 
+// Batch 6: back to the hand (Remco): evolutions and Tool go along, energy to the discard pile, and with an empty
+// Bench the player has no Pokémon left and loses.
+static void backToTheHand() {
+    CardDef cape = trainer(TrainerKind::Tool, "Cape");
+    {
+        Table t;
+        CardDef koga = trainer(TrainerKind::Supporter, "Koga", "(to-hand (choose my active (name \"Evo1\")))");
+        GameState& s = t.position();
+        PlayerState& p = s.players[0];
+        t.game.evolve(p.active, &t.cards[10]);  // Evo1 on Mon0, with a Tool and one Water
+        p.active.tool = &cape;
+        t.bench(0, t.cards[3]);
+        p.hand.clear();
+        p.hand.push_back(&koga);
+        t.play(ActionKind::PlayTrainer, 0);
+        CHECK(p.hand.size() == 3 && p.discardEnergy[int(Type::Water)] == 1);
+        CHECK(p.active.card == &t.cards[3] && p.bench.empty() && s.phase == Phase::Main);
+    }
+    {
+        Table t;
+        CardDef koga = trainer(TrainerKind::Supporter, "Koga", "(to-hand (choose my active))");
+        GameState& s = t.position();
+        s.players[0].hand.clear();
+        s.players[0].hand.push_back(&koga);
+        t.play(ActionKind::PlayTrainer, 0);  // nothing on the Bench: a way to concede
+        CHECK(s.phase == Phase::Over && s.winner == 1);
+    }
+    {   // a full hand sends the rest to the discard pile (assumed); Elesa; shuffled into the deck
+        Table t;
+        GameState& s = t.position();
+        PlayerState& p = s.players[0];
+        while (p.hand.size() < std::size_t(rules::HandLimit)) p.hand.push_back(&t.cards[9]);
+        p.active.tool = &cape;
+        s.players[1].active.tool = &cape;
+        EffectCtx ctx{t.game, 0};
+        stmt("(tools-to-hand (each both all tool))")->run(ctx);
+        CHECK(!p.active.tool && p.hand.size() == std::size_t(rules::HandLimit) && p.discard.back() == &cape);
+        CHECK(!s.players[1].active.tool && s.players[1].hand.back() == &cape);
+        t.bench(0, t.cards[3]);
+        std::size_t deck = p.deck.size();
+        ctx.self = p.bench[0].uid;
+        stmt("(to-deck self)")->run(ctx);
+        CHECK(p.bench.empty() && p.deck.size() == deck + 1);
+    }
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -936,5 +982,6 @@ int main() {
     stadiumEndOfTurnComesLast();
     coverageBatchFourBlocks();
     coverageBatchFiveBlocks();
+    backToTheHand();
     return report("effects");
 }

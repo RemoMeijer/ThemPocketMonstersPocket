@@ -52,6 +52,10 @@ public:
     void clearConditions(PokemonSlot& slot);  // its Special Conditions and timed effects end (moved to Bench, evolved, gone)
     PokemonSlot* find(uint16_t uid, int* owner = nullptr);  // a Pokémon in play by identity
     void draw(int player);
+    // A Pokémon leaves play with its evolutions and Tool, into its owner's hand (Koga) or deck (Eldegoss); its
+    // energy goes to the discard pile (Remco). knockOutCheck() then moves up a new Active, or ends the game.
+    void takeBack(uint16_t uid, bool toDeck);
+    void toHand(int player, const CardDef* card);  // into the hand; a full hand sends it to the discard pile (assumed)
     void attachFromZone(int player, uint16_t uid, Type type, int count);  // new energy from the Energy Zone
 
     // --- Damage (game/damage.cpp) ---

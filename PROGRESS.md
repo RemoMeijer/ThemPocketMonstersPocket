@@ -4,14 +4,14 @@ Updated 2026-10-16.
 
 ## Where we are
 
-The **game engine** is most of the way there. It plays Pocket games by the rules Remco confirmed, for 84% of all cards, and an independent checker watches every move. The **simulator around it** hasn't started yet: playing many games at once, stats, finding decks and a better player.
+The **game engine** is most of the way there. It plays Pocket games by the rules Remco confirmed, for 85% of all cards, and an independent checker watches every move. The **simulator around it** hasn't started yet: playing many games at once, stats, finding decks and a better player.
 
 | Part | State |
 |---|---|
 | Rules core: setup, turns, Energy Zone, attacking, retreating, evolving, Trainers, Tools, Stadiums (always-on effects), abilities, Special Conditions, Checkup, damage, winning | Built and checked, Stadium actions (R5) included. Missing: the player choosing which energy to pay, discard or move |
 | Card data | Every set up to B4b: 2,319 unique cards from Limitless, cross-checked against deckgym-core |
-| Card effects | 1,955 of 2,319 cards (84%) playable. Trainers lag behind and are being added in batches (table below, Next step 1) |
-| Checks | 21 rule tests, 39 effect tests, 48 compiler self-test examples, `check_states` (28.2M moves over all 13 decks, 0 violations), and the memory and undefined-behaviour checker build is clean after coverage batch 4 (the tests plus `check_states` on the coverage decks) |
+| Card effects | 1,963 of 2,319 cards (85%) playable. Trainers lag behind and are being added in batches (table below, Next step 1) |
+| Checks | 21 rule tests, 40 effect tests, 50 compiler self-test examples, `check_states` (32.8M moves over all 14 decks, 0 violations), and the memory and undefined-behaviour checker build is clean after coverage batch 5 (the tests plus `check_states` on the coverage decks) |
 | Replayable games (seeds) | Not yet: every game seeds itself from `random_device` |
 | Simulation runner (many games, threads, stats) | Not started |
 | Finding decks (generate, play, rank) | Not started |
@@ -27,13 +27,13 @@ Code size: about 4,500 lines of C++ (engine and tests) and 900 lines of Python (
 
 | Kind | Playable |
 |---|---|
-| Pokémon | 1,838 / 2,167 |
-| Supporters | 63 / 82 |
+| Pokémon | 1,841 / 2,167 |
+| Supporters | 68 / 82 |
 | Items | 23 / 31 |
 | Tools | 18 / 26 |
 | Stadiums | 13 / 13 |
 
-Trainers matter most for deck finding because they go into most decks. They're being added in batches (Next, step 1). `decks/coverage-a.txt` and `coverage-b.txt` hold the batch 1 Trainers, `coverage-c.txt` the batch 2 ones, `coverage-d.txt` the batch 3 ones and `coverage-e.txt` the Stadiums and `coverage-f.txt` the Tools, so `check_states` plays them.
+Trainers matter most for deck finding because they go into most decks. They're being added in batches (Next, step 1). `decks/coverage-a.txt` and `coverage-b.txt` hold the batch 1 Trainers, `coverage-c.txt` the batch 2 ones, `coverage-d.txt` the batch 3 ones and `coverage-e.txt` the Stadiums, `coverage-f.txt` the Tools and `coverage-g.txt` the back-to-hand cards, so `check_states` plays them.
 
 The rest are mostly one-of-a-kind mechanics we chose to skip for now:
 - memory of last turn (Sweets Relay, "knocked out last turn");
@@ -98,6 +98,7 @@ Also answered on 2026-10-16:
 
 **Open questions:**
 - **Team Rocket's Thieving Machine:** the Item it takes from your opponent's discard pile, once you play it, goes to your discard pile, so it's yours from then on. Is that right, or does it go back to your opponent's discard pile? The engine assumes yours.
+- **Back into a full hand:** Koga with 10 cards in your hand, or Elesa returning a Tool to a full hand. Where do the extra cards go? The engine assumes the discard pile, since the hand stops at 10.
 
 ## Review (2026-10-16)
 
@@ -156,7 +157,10 @@ In order. Each step gets a plan first, then tests, `check_states` at 0 violation
      - New tests: `half-hp` and `my-turn`. New number: `status-count`.
      - Also unlocked Regice, Arceus ex, Wartortle, Jellicent, Dragalge ex, Blissey and Team Rocket's Magmar.
      - Heavy Helmet reads the current Retreat Cost, modifiers included.
-   - **Batch 6:** back to the hand: Koga, Budding Expeditioner, Ilima, Parasol Lady, Elesa.
+   - **Batch 6**, done 2026-10-19: back to the hand.
+     - Cards: Koga, Budding Expeditioner, Ilima, Parasol Lady, Elesa.
+     - New blocks: `to-hand`, `to-deck`, `tools-to-hand`, and the `not-ex` filter.
+     - Also unlocked Eldegoss, Dunsparce and Accelgor.
    - **After batch 6:** 122 of 152 Trainers. Left out:
      - knock-out triggers;
      - Ultra Beast, Ancient and Future cards: the data doesn't mark those traits;

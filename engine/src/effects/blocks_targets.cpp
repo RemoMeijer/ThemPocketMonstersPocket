@@ -9,12 +9,12 @@
 
 namespace {
 // Which Pokémon in a pool qualify: (type T…), (name "A" …), (has-energy N T…), basic, stage1, stage2,
-// evolution, damaged, ex, mega, has-ability, tool (has a Tool attached), not-self.
+// evolution, damaged, ex, not-ex, mega, has-ability, tool (has a Tool attached), not-self.
 struct Filter {
     uint16_t types = 0, energyTypes = 0;
     uint8_t stages = 0;
     int energy = 0;  // at least this much energy of energyTypes (0 = no test)
-    bool damaged = false, ex = false, mega = false, evolution = false, notSelf = false, ability = false, tool = false;
+    bool damaged = false, ex = false, notEx = false, mega = false, evolution = false, notSelf = false, ability = false, tool = false;
     std::vector<std::string> names;
 
     bool matches(const PokemonSlot& p, const EffectCtx& ctx) const {
@@ -22,7 +22,7 @@ struct Filter {
         for (int t = 0; t < TypeCount; ++t)
             if (!energyTypes || (energyTypes & typeBit(Type(t)))) n += p.energy[t];
         return p.card->hasType(types) && (!stages || (stages & stageBit(p.card->stage))) && (!damaged || p.damage > 0) &&
-               (!ex || p.card->ex) && (!mega || p.card->mega) && (!evolution || p.card->isEvolution()) &&
+               (!ex || p.card->ex) && (!notEx || !p.card->ex) && (!mega || p.card->mega) && (!evolution || p.card->isEvolution()) &&
                (!notSelf || p.uid != ctx.self) && n >= energy && (!ability || !p.card->abilities.empty()) &&
                (!tool || p.tool) &&
                (names.empty() || std::find(names.begin(), names.end(), p.card->name) != names.end());
@@ -36,6 +36,7 @@ Filter parseFilter(const SExpr& e, std::size_t from) {
         const std::string& w = a.list ? a.head() : a.atom;
         if (w == "damaged") f.damaged = true;
         else if (w == "ex") f.ex = true;
+        else if (w == "not-ex") f.notEx = true;
         else if (w == "mega") f.mega = true;
         else if (w == "has-ability") f.ability = true;
         else if (w == "tool") f.tool = true;
