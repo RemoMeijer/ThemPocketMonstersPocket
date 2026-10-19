@@ -43,11 +43,13 @@ private:
 // the Energy Zone, so "whenever you attach … from your Energy Zone" abilities don't trigger.
 class AttachFromDiscard : public Stmt {
 public:
-    AttachFromDiscard(const Target* t, int type, int n) : t_(t), type_(type), n_(n) {}  // type -1: any (Dragonair)
+    // type -1: any (Dragonair); -2: random Energy (Lusamine); -3: N different types, each to a chosen target (Sada)
+    AttachFromDiscard(const Target* t, int type, int n) : t_(t), type_(type), n_(n) {}
     void run(EffectCtx& ctx) const override {
         Uids targets;
         t_->select(ctx, targets);
         EnergyCounts& piles = ctx.game.state().players[ctx.player].discardEnergy;
+        if (type_ <= -2) return randomOrDifferent(ctx, targets, piles);
         // shortcut: "an Energy" takes the most plentiful type in the discard pile; the player should pick.
         int type = type_ >= 0 ? type_ : int(std::max_element(piles.begin(), piles.end()) - piles.begin());
         auto& pile = piles[type];
@@ -68,13 +70,35 @@ public:
     }
 
 private:
+    void randomOrDifferent(EffectCtx& ctx, const Uids& first, EnergyCounts& piles) const {
+        uint16_t used = 0;
+        for (int i = 0; i < n_; ++i) {
+            std::vector<int> units;  // one entry per Energy in the pile (random), or per type not used yet (different)
+            for (int t = 0; t < TypeCount; ++t)
+                for (int k = 0; k < (type_ == -2 ? piles[t] : (piles[t] && !(used & typeBit(Type(t))))); ++k) units.push_back(t);
+            if (units.empty()) return;
+            // shortcut: the different types come at random; the player should pick which type goes where
+            int t = units[std::uniform_int_distribution<std::size_t>(0, units.size() - 1)(ctx.game.rng())];
+            Uids targets;
+            if (type_ == -2) targets = first;
+            else t_->select(ctx, targets);  // "in any way you like": a choice for each Energy
+            int owner = 0;
+            PokemonSlot* p = targets.empty() ? nullptr : ctx.game.find(targets[0], &owner);
+            if (!p) return;
+            --piles[t];
+            ++p->energy[t];
+            used |= typeBit(Type(t));
+            if (ctx.game.logging()) ctx.game.say("  1 ", typeName(Type(t)), " energy from the discard pile -> ", ctx.game.show(*p, owner));
+        }
+    }
+
     const Target* t_;
     int type_;
     int n_;
 };
 
 // (cycle-energy): the energy waiting in your Energy Zone goes to the discard pile, the shown next one comes up
-// and a new next one is rolled, like an extra turn for the zone (Rainbow Cave, Remco).
+// and a new next one is rolled, like an extra turn for the zone (Rainbow Cave, ruling).
 class CycleEnergy : public Stmt {
 public:
     void run(EffectCtx& ctx) const override {
@@ -134,7 +158,7 @@ private:
 };
 // (move-energy FROM TO TYPE…|any N|all): move up to N energy (of those types) from the FROM Pokémon to TO.
 // (move-random-energy FROM TO N): the same with random energy.
-// shortcut: move-energy takes the first matching type, not the player's pick (Remco: the player picks); see PROGRESS.md step 4.
+// shortcut: move-energy takes the first matching type, not the player's pick (ruling: the player picks); see PROGRESS.md step 4.
 class MoveEnergy : public Stmt {
 public:
     MoveEnergy(const Target* from, const Target* to, uint16_t types, int count, bool random = false)
@@ -233,7 +257,65 @@ int randomEnergy(EffectCtx& ctx, const PokemonSlot& p, uint16_t types) {
     return -1;
 }
 
+namespace {
+// The 8 types the Energy Zone can make ({G} {R} {W} {L} {P} {F} {D} {M}: not Dragon or Colorless).
+Type randomZoneType(EffectCtx& ctx) {
+    static const Type types[] = {Type::Grass, Type::Fire, Type::Water, Type::Lightning, Type::Psychic, Type::Fighting,
+                                 Type::Darkness, Type::Metal};
+    return types[std::uniform_int_distribution<int>(0, 7)(ctx.game.rng())];
+}
+
+// (attach-random-type TARGET): "take a random Energy from among {G} … {M} from your Energy Zone and attach it"
+class AttachRandomType : public Stmt {
+public:
+    explicit AttachRandomType(const Target* t) : t_(t) {}
+    void run(EffectCtx& ctx) const override {
+        Uids targets;
+        t_->select(ctx, targets);
+        for (uint16_t uid : targets) ctx.game.attachFromZone(ctx.player, uid, randomZoneType(ctx), 1);
+    }
+    bool possible(EffectCtx& ctx) const override { return anyCandidate(ctx, t_, [](const PokemonSlot&) { return true; }); }
+
+private:
+    const Target* t_;
+};
+
+// (change-energy-type TARGET): a random Energy on it becomes a random type; (change-next-energy SIDE): that player's
+// next Energy Zone energy becomes a random type.
+class ChangeEnergyType : public Stmt {
+public:
+    ChangeEnergyType(const Target* t, bool next, bool opp) : t_(t), next_(next), opp_(opp) {}
+    void run(EffectCtx& ctx) const override {
+        if (next_) {
+            ctx.game.state().players[opp_ ? 1 - ctx.player : ctx.player].nextEnergy = randomZoneType(ctx);
+            return;
+        }
+        Uids targets;
+        t_->select(ctx, targets);
+        for (uint16_t uid : targets) {
+            PokemonSlot* p = ctx.game.find(uid);
+            if (!p || !affects(ctx, uid)) continue;
+            int t = randomEnergy(ctx, *p, 0);
+            if (t < 0) continue;
+            --p->energy[t];
+            ++p->energy[int(randomZoneType(ctx))];
+        }
+    }
+
+private:
+    const Target* t_;
+    bool next_, opp_;
+};
+}  // namespace
+
 void addEnergyWords(Words& w) {
+    w.stmt["attach-random-type"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<AttachRandomType>(b.target(arg(e, 0))); }};
+    w.stmt["change-energy-type"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<ChangeEnergyType>(b.target(arg(e, 0)), false, false);
+    }};
+    w.stmt["change-next-energy"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<ChangeEnergyType>(nullptr, true, oppArg(arg(e, 0)));
+    }};
     w.stmt["move-energy"] = {4, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         const SExpr& count = arg(e, argCount(e) - 1);
         uint16_t types = 0;
@@ -249,7 +331,9 @@ void addEnergyWords(Words& w) {
     }};
     w.stmt["cycle-energy"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<CycleEnergy>(); }};
     w.stmt["attach-from-discard"] = {3, 3, [](const SExpr& e, ScriptBuilder& b) {
-        return b.make<AttachFromDiscard>(b.target(arg(e, 0)), arg(e, 1).atom == "any" ? -1 : int(typeArg(arg(e, 1))), intArg(arg(e, 2)));
+        const std::string& type = arg(e, 1).atom;
+        int t = type == "any" ? -1 : type == "random" ? -2 : type == "different" ? -3 : int(typeArg(arg(e, 1)));
+        return b.make<AttachFromDiscard>(b.target(arg(e, 0)), t, intArg(arg(e, 2)));
     }};
     w.stmt["attach-energy"] = {2, 3, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<AttachEnergy>(b.target(arg(e, 0)), typeArg(arg(e, 1)), argCount(e) > 2 ? b.num(arg(e, 2)) : b.num(atomExpr("1")));

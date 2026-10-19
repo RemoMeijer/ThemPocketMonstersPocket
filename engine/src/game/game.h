@@ -55,7 +55,7 @@ public:
     PokemonSlot* find(uint16_t uid, int* owner = nullptr);  // a Pokémon in play by identity
     void draw(int player);
     // A Pokémon leaves play with its evolutions and Tool, into its owner's hand (Koga) or deck (Eldegoss); its
-    // energy goes to the discard pile (Remco). knockOutCheck() then moves up a new Active, or ends the game.
+    // energy goes to the discard pile (ruling). knockOutCheck() then moves up a new Active, or ends the game.
     void takeBack(uint16_t uid, bool toDeck);
     void discardFromPlay(uint16_t uid);  // the Pokémon and all its cards to the discard pile; no points (Klefki)
     void toHand(int player, const CardDef* card);  // into the hand; a full hand sends it to the discard pile (assumed)
@@ -65,13 +65,14 @@ public:
     // An attack's damage to one of the opponent's Pokémon, in a fixed order: base → the attacker's
     // modifiers → Weakness → the target's modifiers → at least 0. The first two only count against the
     // Active Pokémon. Then "when damaged by an attack" effects run. Returns the damage done.
-    int dealAttackDamage(int attacker, uint16_t attackerUid, uint16_t targetUid, int base, bool weakness = true);
+    int dealAttackDamage(int attacker, uint16_t attackerUid, uint16_t targetUid, int base, bool weakness = true,
+                         bool ignoreDefender = false);
     void putDamage(uint16_t uid, int amount);  // straight onto a Pokémon: to itself, abilities, Checkup
     bool protectedFromAttacks(uint16_t uid);   // from the effects of attacks: PreventAll or PreventEffects
 
     // --- Questions the rules ask; modifiers from abilities, Tools, the Stadium and timed effects answer them ---
     int maxHp(const PokemonSlot& p, int owner) const;
-    // Attached Energy as it counts, for costs and "for each Energy": a DoubleEnergy type counts twice (Serperior, Remco).
+    // Attached Energy as it counts, for costs and "for each Energy": a DoubleEnergy type counts twice (Serperior, ruling).
     EnergyCounts energyOf(const PokemonSlot& p, int owner) const;
     uint8_t blockedStatuses(const PokemonSlot& p, int owner) const;  // Special Conditions it can't have (NoConditions)
     int retreatCost(const PokemonSlot& p, int owner) const;
@@ -215,7 +216,7 @@ void Game::forEachMod(ModKind kind, const PokemonSlot* subject, int owner, Fn fn
                 break;
         }
         return subject->hasType(m.types) && (!m.stages || (m.stages & stageBit(subject->card->stage))) &&
-               (!m.evolvesFrom || m.evolvesFrom->has(subject->card->evolvesFrom)) &&
+               (!m.evolvesFrom || m.evolvesFrom->has(subject->card->evolvesFrom)) && (!m.traits || (m.traits & subject->card->traits)) &&
                (!m.withEnergy || hasEnergy(*subject, m.withEnergyTypes)) &&
                (!m.names || m.names->has(subject->card->name)) && (!m.notMega || !subject->card->mega) &&
                (!m.minRetreat || retreatCost(*subject, owner) >= m.minRetreat);

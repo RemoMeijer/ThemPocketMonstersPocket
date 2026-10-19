@@ -442,7 +442,7 @@ static void replacedStadiumKnocksOut() {
     CHECK(s.players[1].discard.size() == 2);         // Mon1 and the old Stadium
 }
 
-// Golisopod's "if this Pokémon moved from your Bench to the Active Spot this turn" (Remco): yes when it
+// Golisopod's "if this Pokémon moved from your Bench to the Active Spot this turn" (ruling): yes when it
 // evolved on the Bench and then moved up, or was benched this turn and then moved up; no when it moved up
 // as Wimpod and evolved after.
 static void movedToActiveBelongsToTheCard() {
@@ -482,7 +482,7 @@ static void movedToActiveBelongsToTheCard() {
     CHECK(test(t));
 }
 
-// An ability with nothing to do can't be used (Remco), the same rule as for Trainers.
+// An ability with nothing to do can't be used (ruling), the same rule as for Trainers.
 static void abilitiesNeedSomethingToDo() {
     Table t;
     t.cards[0].activated = stmt("(heal (each my all damaged) 20)");                         // Butterfree
@@ -497,7 +497,7 @@ static void abilitiesNeedSomethingToDo() {
     CHECK(!t.can(ActionKind::UseAbility));
 }
 
-// Wugtrio ex, "chosen at random 3 times … do 50 damage to it" (Remco): the hits on one Pokémon add up
+// Wugtrio ex, "chosen at random 3 times … do 50 damage to it" (ruling): the hits on one Pokémon add up
 // first and are dealt as one, so all three on a Weak Active is 150 + 20, and Giovanni's +10 counts once.
 static void randomHitsAddUpBeforeWeakness() {
     Table t;
@@ -742,7 +742,7 @@ static void stadiumActions() {
     CHECK(s.current == 1 && t.can(ActionKind::UseStadium));  // the other player, on their turn
 }
 
-// "At the end of each player's turn" Stadiums come last, after Checkup (Remco): Soothing Shore heals the
+// "At the end of each player's turn" Stadiums come last, after Checkup (ruling): Soothing Shore heals the
 // Poison damage of that same Checkup.
 static void stadiumEndOfTurnComesLast() {
     Table t;
@@ -897,7 +897,7 @@ static void coverageBatchFiveBlocks() {
     }
 }
 
-// Batch 6: back to the hand (Remco): evolutions and Tool go along, energy to the discard pile, and with an empty
+// Batch 6: back to the hand (ruling): evolutions and Tool go along, energy to the discard pile, and with an empty
 // Bench the player has no Pokémon left and loses.
 static void backToTheHand() {
     CardDef cape = trainer(TrainerKind::Tool, "Cape");
@@ -954,7 +954,7 @@ static void lastTurnMemory() {
         CHECK(s.players[0].scoredTurn == 5 && s.players[0].scored == 1);
         CHECK(s.players[1].active.damagedTurn == -1);  // the new Active wasn't hit
     }
-    {   // not a Knock Out by Poison at Checkup, but its point still counts as scored that turn (Remco)
+    {   // not a Knock Out by Poison at Checkup, but its point still counts as scored that turn (ruling)
         Table t;
         GameState& s = t.position();
         s.players[1].active.damage = 55;
@@ -1028,7 +1028,7 @@ static void lastTurnMemory() {
     }
 }
 
-// Batch 8: knock-out triggers. Triggers run first, then every knock-out counts, then the win rules (Remco).
+// Batch 8: knock-out triggers. Triggers run first, then every knock-out counts, then the win rules (ruling).
 static void knockOutTriggers() {
     auto revenge = [](Table& t) {  // Mon1: "If this Pokémon is in the Active Spot and is Knocked Out by … 50 damage"
         t.cards[1].onKnockedOut = stmt("(damage attacker 50)");
@@ -1083,7 +1083,7 @@ static void knockOutTriggers() {
     CardDef scarf = trainer(TrainerKind::Tool, "Scarf");
     scarf.onKnockedOut = stmt("(to-hand-instead)");
     scarf.onKnockedOutByAttack = true;
-    {   // Rescue Scarf: the Pokémon and its evolutions to the hand, the Scarf and the energy to the discard pile (Remco)
+    {   // Rescue Scarf: the Pokémon and its evolutions to the hand, the Scarf and the energy to the discard pile (ruling)
         Table t;
         GameState& s = t.position();
         PlayerState& p = s.players[1];
@@ -1193,7 +1193,7 @@ static void abilityBatch() {
         ctx.self = a.uid;
         CHECK(stmt("(seq (set-damage (* (energy self) 10)) (hit))") && t.game.energyOf(a, 0)[int(Type::Water)] == 4);
     }
-    {   // during Checkup, before Poison (Remco): at 0 damage the heal does nothing, then Poison does 10; Nihilego +10
+    {   // during Checkup, before Poison (ruling): at 0 damage the heal does nothing, then Poison does 10; Nihilego +10
         Table t;
         t.cards[0].duringCheckup = stmt("(heal (each my all damaged) 10)");
         t.cards[0].passive.push_back(mod("(poison-damage 10 :scope opp-active)"));
@@ -1303,6 +1303,116 @@ static void abilityBatch() {
     }
 }
 
+// Batch 10: the long tail.
+static void longTailBatch() {
+    {   // copy-attack: Mon1's 30-damage Splash used by Mon0, whose own attack does nothing else
+        Table t;
+        attackScript(t, "(seq (hit) (copy-attack opp-active))");
+        t.cards[0].attacks[0].damage = 0;
+        t.cards[1].attacks[0].damage = 40;
+        GameState& s = t.position();
+        t.play(ActionKind::Attack);
+        CHECK(s.players[1].active.damage == 40);
+    }
+    {   // :ignore-effects skips the defender's own modifiers (ruling: all of them); :no-weakness
+        Table t;
+        t.cards[1].passive.push_back(mod("(damage-taken -20)"));
+        attackScript(t, "(seq (hit :ignore-effects))");
+        GameState& s = t.position();
+        t.play(ActionKind::Attack);
+        CHECK(s.players[1].active.damage == 30);
+        Table u;
+        u.cards[1].weakness = Type::Water;
+        attackScript(u, "(seq (hit :no-weakness))");
+        GameState& s2 = u.position();
+        u.play(ActionKind::Attack);
+        CHECK(s2.players[1].active.damage == 30);
+    }
+    {   // remaining HP set to 10, never healed; halved to a whole 10; heal what (hit) dealt
+        Table t;
+        GameState& s = t.position();
+        EffectCtx ctx{t.game, 0};
+        stmt("(set-hp-left opp-active 10)")->run(ctx);
+        CHECK(s.players[1].active.damage == 50);
+        stmt("(set-hp-left opp-active 30)")->run(ctx);
+        CHECK(s.players[1].active.damage == 50);
+        s.players[1].active.damage = 0;
+        stmt("(halve-hp opp-active)")->run(ctx);  // 60 → 30 left
+        CHECK(s.players[1].active.damage == 30);
+        Table u;
+        attackScript(u, "(seq (hit) (heal self (dealt)))");
+        GameState& s2 = u.position();
+        s2.players[0].active.damage = 50;
+        u.play(ActionKind::Attack);
+        CHECK(s2.players[0].active.damage == 20);
+    }
+    {   // while-active lasts until it leaves the Active Spot; no-weakness timed
+        Table t;
+        attackScript(t, "(seq (hit) (effect while-active self (damage-dealt 30)))");
+        GameState& s = t.position();
+        t.play(ActionKind::Attack);
+        CHECK(s.timed.size() == 1);
+        t.bench(1, t.cards[3]);
+        t.play(ActionKind::EndTurn);
+        CHECK(s.timed.size() == 1);  // still there on P1's next turn
+        t.bench(0, t.cards[3]);
+        t.game.clearConditions(s.players[0].active);  // what moving to the Bench does
+        CHECK(s.timed.empty());
+    }
+    {   // Silcoon: a Stage 1 straight onto the Bench, with nothing under it
+        Table t;
+        attackScript(t, "(seq (hit) (search 2 bench (name \"Evo1\")))");
+        GameState& s = t.position();
+        s.players[0].deck.push_back(&t.cards[10]);
+        s.players[0].deck.push_back(&t.cards[10]);
+        t.play(ActionKind::Attack);
+        CHECK(s.players[0].bench.size() == 2 && s.players[0].bench[0].card == &t.cards[10] && s.players[0].bench[0].baseStage == 1);
+    }
+    {   // can't play Trainers; the knock-out counter; a random status it doesn't have yet
+        Table t;
+        CardDef potion = trainer(TrainerKind::Item, "Potion", "(heal (choose my all damaged) 20)");
+        GameState& s = t.position();
+        s.players[0].active.damage = 30;
+        s.players[0].hand.push_back(&potion);
+        CHECK(t.can(ActionKind::PlayTrainer));
+        EffectCtx opp{t.game, 1};
+        stmt("(effect opp-next-turn opp (cant-trainer))")->run(opp);
+        CHECK(!t.can(ActionKind::PlayTrainer));
+        s.players[1].active.damage = 30;
+        t.play(ActionKind::Attack);
+        CHECK(s.players[1].koCount == 1);
+        EffectCtx ctx{t.game, 1};
+        s.players[0].active.status = Poisoned;
+        stmt("(status-random opp-active poisoned burned)")->run(ctx);
+        CHECK(s.players[0].active.status == (Poisoned | Burned));
+    }
+    {   // traits (data/traits.tsv): Beastite +10 per point for an Ultra Beast; an Ancient capsule does nothing on others
+        Table t;
+        t.cards[0].traits = UltraBeast;
+        CardDef beastite = trainer(TrainerKind::Tool, "Beastite");
+        beastite.passive.push_back(mod("(damage-dealt 10 :trait ultra-beast :per-point)"));
+        CardDef capsule = trainer(TrainerKind::Tool, "Capsule");
+        capsule.passive.push_back(mod("(hp 40 :trait ancient)"));
+        GameState& s = t.position();
+        s.players[0].points = 2;
+        s.players[0].active.tools.push_back(&beastite);
+        s.players[1].active.tools.push_back(&capsule);
+        CHECK(t.game.maxHp(s.players[1].active, 1) == 60);
+        t.play(ActionKind::Attack);
+        CHECK(s.players[1].active.damage == 50);
+    }
+    {   // Lucky Ice Pop: back into the hand instead of the discard pile
+        Table t;
+        CardDef pop = trainer(TrainerKind::Item, "Pop", "(seq (heal my-active 20) (to-hand-instead))");
+        GameState& s = t.position();
+        s.players[0].active.damage = 30;
+        s.players[0].hand.clear();
+        s.players[0].hand.push_back(&pop);
+        t.play(ActionKind::PlayTrainer, 0);
+        CHECK(s.players[0].hand.size() == 1 && s.players[0].hand[0] == &pop && s.players[0].active.damage == 10);
+    }
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -1347,5 +1457,6 @@ int main() {
     lastTurnMemory();
     knockOutTriggers();
     abilityBatch();
+    longTailBatch();
     return report("effects");
 }

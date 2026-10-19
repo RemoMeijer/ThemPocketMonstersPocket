@@ -111,7 +111,7 @@ void Game::startTurn() {
             typeName(*p.nextEnergy), ")");
     }
     showBoard();
-    runTriggers(s_.current, &CardDef::startOfTurn, &CardDef::startOfTurnWhileActive);  // after the draw (Remco)
+    runTriggers(s_.current, &CardDef::startOfTurn, &CardDef::startOfTurnWhileActive);  // after the draw (ruling)
     knockOutCheck();
 }
 
@@ -137,8 +137,8 @@ void Game::endTurn() {
             source->endOfTurn->run(ctx);
         });
     }
-    // "At the end of each turn…" (Lum Berry, Sitrus Berry): both players' Pokémon, before Checkup (assumed, Remco's
-    // best guess: a Lum Berry cures Poison before it does damage).
+    // "At the end of each turn…" (Lum Berry, Sitrus Berry): both players' Pokémon, before Checkup (assumed, a best
+    // guess: a Lum Berry cures Poison before it does damage).
     for (int owner : {me, 1 - me}) {
         Uids each;
         if (s_.players[owner].active.card) each.push_back(s_.players[owner].active.uid);
@@ -153,7 +153,7 @@ void Game::endTurn() {
                 source->endOfEachTurn->run(ctx);
             });
     }
-    // "During Pokémon Checkup…" Abilities come first, before Poison and Burn (Remco); then Pokémon Checkup for both
+    // "During Pokémon Checkup…" Abilities come first, before Poison and Burn (ruling); then Pokémon Checkup for both
     // Active Pokémon (Special Conditions are only ever on an Active Pokémon).
     for (int p : {me, 1 - me}) runTriggers(p, &CardDef::duringCheckup, &CardDef::duringCheckupWhileActive);
     for (int p : {me, 1 - me}) {
@@ -183,7 +183,7 @@ void Game::endTurn() {
     }
     knockOutCheck();
     if (s_.phase == Phase::Over) return;
-    // "At the end of each player's turn, that player…" Stadiums come last, after Checkup (Remco, DESIGN.md §10).
+    // "At the end of each player's turn, that player…" Stadiums come last, after Checkup (ruling, DESIGN.md §10).
     if (s_.stadium && s_.stadium->endOfTurn) {
         say(s_.stadium->name, ": end of turn for P", me + 1);
         EffectCtx ctx{*this, me};
@@ -202,7 +202,7 @@ void Game::endTurn() {
 void Game::knockOutCheck(uint16_t attacker) {
     if (s_.phase == Phase::Over) return;
     // Knock-out triggers can do damage (Pyukumuku), so look again until nobody is left at 0 HP; only the first round
-    // comes from the attack. Every knock-out counts before anyone wins (Remco). The defender's go first.
+    // comes from the attack. Every knock-out counts before anyone wins (ruling). The defender's go first.
     for (;; attacker = 0) {
         Uids out;
         for (int p : {1 - s_.current, s_.current}) {
@@ -263,6 +263,7 @@ void Game::knockOut(uint16_t uid, uint16_t attacker) {
     if (!slot) return;  // no trigger takes it out of play today
     PlayerState& owner = s_.players[player];
     PlayerState& scorer = s_.players[1 - player];
+    ++owner.koCount;
     PokemonSlot* by = byAttack ? find(attacker) : nullptr;
     int points = slot->card->points + (by && wasActive ? sumMods(ModKind::ExtraPoint, *by, 1 - player) : 0);
     if (ctx.noPoints) points = 0;  // "your opponent can't get any points for it"
@@ -286,7 +287,7 @@ void Game::knockOut(uint16_t uid, uint16_t attacker) {
             mine.card = c;
             c->onKnocksOut->run(mine);
         });
-    // Its cards leave play: to the discard pile, or the Pokémon and its evolutions to the hand (Rescue Scarf, Remco).
+    // Its cards leave play: to the discard pile, or the Pokémon and its evolutions to the hand (Rescue Scarf, ruling).
     slot = find(uid, &player);
     std::vector<const CardDef*> pokemon{slot->card};
     pokemon.insert(pokemon.end(), slot->below.begin(), slot->below.end());
@@ -323,6 +324,7 @@ void Game::putIntoPlay(PokemonSlot& slot, const CardDef* card) {
     slot.card = card;
     slot.uid = s_.nextUid++;
     slot.enteredTurn = s_.turn;
+    slot.baseStage = uint8_t(card->stage);
 }
 
 void Game::evolve(PokemonSlot& slot, const CardDef* card) {
@@ -330,7 +332,7 @@ void Game::evolve(PokemonSlot& slot, const CardDef* card) {
     slot.card = card;
     slot.enteredTurn = s_.turn;
     slot.abilityTurn = -1;  // "once during your turn" belongs to the card: the new one may use its own (App)
-    slot.becameActiveTurn = -1;  // so does "moved from your Bench to the Active Spot this turn" (Remco)
+    slot.becameActiveTurn = -1;  // so does "moved from your Bench to the Active Spot this turn" (ruling)
     clearConditions(slot);  // evolving ends Special Conditions and effects on it
 }
 
@@ -370,7 +372,7 @@ void Game::takeBack(uint16_t uid, bool toDeck) {
     for (const CardDef* c : slot->below) cards.push_back(c);
     for (const CardDef* t : slot->tools) cards.push_back(t);
     for (const CardDef* c : cards) toDeck ? p.deck.push_back(c) : toHand(owner, c);
-    for (int t = 0; t < TypeCount; ++t) p.discardEnergy[t] += slot->energy[t];  // energy isn't a card (Remco)
+    for (int t = 0; t < TypeCount; ++t) p.discardEnergy[t] += slot->energy[t];  // energy isn't a card (ruling)
     clearConditions(*slot);
     if (slot == &p.active)
         p.active = PokemonSlot{};

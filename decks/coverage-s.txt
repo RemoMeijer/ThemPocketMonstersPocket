@@ -1,0 +1,21 @@
+# Coverage batch 10, Psychic/Fighting/Lightning: Ancient and Future Pokémon (data/traits.tsv) with the Booster Energy
+# Capsules, Professor Sada and Professor Turo, and Iron Valiant's cheaper Future attacks.
+energy: Psychic, Fighting, Lightning
+
+1 B3a-025  # Scream Tail (Ancient)
+1 B3b-035  # Flutter Mane (Ancient)
+2 B3a-034  # Great Tusk (Ancient)
+1 B3a-035  # Sandy Shocks (Ancient)
+1 B3a-036  # Koraidon ex (Ancient)
+1 B3a-027  # Iron Valiant (Future)
+1 B3a-028  # Iron Leaves (Future)
+1 B3a-029  # Iron Boulder (Future)
+1 B3a-030  # Iron Crown (Future)
+1 B3a-017  # Iron Hands (Future)
+1 B3a-018  # Iron Thorns (Future)
+1 B3a-019  # Miraidon ex (Future)
+2 B3a-069  # Ancient Booster Energy Capsule
+2 B3a-070  # Future Booster Energy Capsule
+1 B3a-072  # Professor Sada
+1 B3a-073  # Professor Turo
+1 P-A-007  # Professor's Research

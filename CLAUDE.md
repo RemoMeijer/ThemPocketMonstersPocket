@@ -1,10 +1,10 @@
 # Pokémon TCG Pocket simulator
 
-Remco's personal side project, not Odd.Bot work. A local git repo with no remote: commit each finished step. The generated `data/*.tsv` files are committed so data changes show up as diffs.
+A personal side project, not Odd.Bot work. A local git repo with no remote: commit each finished step. The generated `data/*.tsv` files are committed so data changes show up as diffs.
 
 ## Goal
 
-Run many simulated games and see which decks come out on top, as ideas for Remco to try in the game. A fast C++ engine plays Pokémon TCG Pocket games between decks, many at a time in memory.
+Run many simulated games and see which decks come out on top, as ideas to try in the game. A fast C++ engine plays Pokémon TCG Pocket games between decks, many at a time in memory.
 
 The current focus is a correct engine: the right cards and the right rules. Stats, deck search, a real player (bot) and maybe a small LLM come later.
 
@@ -14,8 +14,8 @@ The current focus is a correct engine: the right cards and the right rules. Stat
 - **Done:**
   - the rules core: milestones 1–2, the cleanup, rule fixes R1–R4, Trainers and abilities that need something to do before they can be used, and the 4 bug fixes from the 2026-10-16 review;
   - the effect system;
-  - card data from Limitless, every set up to B4b: 2,088 of 2,319 cards (90%) are playable;
-  - coverage batches 0–9 (argument-count check, 66 Trainers: 129 of 152 now; R5 Stadium actions: all 13 Stadiums; memory of the last turn; knock-out triggers; about 70 Abilities).
+  - card data from Limitless, every set up to B4b: 2,269 of 2,319 cards (97%) are playable;
+  - coverage batches 0–10 (Trainers: 144 of 152 now; all 13 Stadiums and all 26 Tools; memory of the last turn; knock-out triggers; about 70 Abilities; the long tail; Ultra Beast, Ancient and Future traits in `data/traits.tsv`).
 - **Next** (PROGRESS.md, "Next"):
   - card coverage: the most common missing attack texts, then the Trainers left out of batches 0–6;
   - effect-script checks (golden tests);
@@ -29,6 +29,7 @@ The current focus is a correct engine: the right cards and the right rules. Stat
 ```
 fetch_cards.py      Limitless → data/raw/limitless/  (two pages per set; re-run when a new set comes out)
 export_cards.py     those pages → data/cards.tsv     (drops Star/Crown/Shiny alt arts, dedupes, Fossils as Pokémon, FIXES)
+data/traits.tsv     Ultra Beast / Ancient / Future by card name, hand-made from Serebii (not in Limitless or deckgym)
 check_cards.py      cards.tsv vs deckgym-core's database, a second source: prints every difference
 check_all.sh        check_states over all decks in parallel (--row K: deck K against every deck)
 compile_effects.py  card text → data/effects.tsv   (sentence patterns → effect scripts, has a self-test)
@@ -107,13 +108,13 @@ For memory and undefined-behaviour checks, `engine/build-debug` is configured wi
 ## Working rules
 
 - **Step by step:** plan each milestone, explain it, and wait for a go before writing code.
-  - Exception: card-coverage batches run back to back, each with its own commit, and a progress report every two batches or so (Remco, 2026-10-19). Rule questions still go to Remco first.
+  - Exception: card-coverage batches run back to back, each with its own commit, and a progress report every two batches or so (2026-10-19). Rule questions are asked first. Big batches work best: survey many cards, ask every rule question at once, build with the quick checks, then run `./check_all.sh` and the sanitizer once and fix everything together.
 - **No card is special-cased in C++:**
   - card behaviour comes from data and effect scripts;
   - a new mechanic is a new block or modifier, used by every card with that text;
   - rare one-off mechanics are skipped on purpose: they stay unsupported and show up in `--coverage`.
 - **Rules:**
-  - never change a game rule on a guess: ask Remco first, since he can check in the app, and write his answer in DESIGN.md §10;
+  - never change a game rule on a guess: ask first (rules can be checked in the app), and write the answer in DESIGN.md §10;
   - rule numbers live in `core/rules.h`;
   - DESIGN.md §10 lists every rule; anything still guessed is marked "assumed" there and is an open question in PROGRESS.md;
   - don't present guesses as facts.

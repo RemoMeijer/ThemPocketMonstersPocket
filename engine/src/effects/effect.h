@@ -32,7 +32,10 @@ struct EffectCtx {
     uint16_t attacker = 0;     // the Attacking Pokémon, for "when damaged by an attack" effects
     const CardDef* card = nullptr;  // the card whose text runs, for a Tool's "discard this card"
     bool noPoints = false;       // (no-points): the opponent gets no points for this knock-out
-    bool toHandInstead = false;  // (to-hand-instead): the knocked-out Pokémon goes to the hand (Rescue Scarf)
+    bool toHandInstead = false;  // (to-hand-instead): the knocked-out Pokémon goes to the hand (Rescue Scarf), or the
+                                 // Item just played does (Lucky Ice Pop)
+    int dealt = 0;             // damage (hit) did, for "heal the same amount"
+    int copyDepth = 0;         // inside (copy-attack): a copied attack doesn't copy again
 };
 
 using Uids = FixedVec<uint16_t, 2 * (1 + rules::BenchSize)>;  // at most every Pokémon in play
@@ -131,7 +134,9 @@ Type typeArg(const SExpr& e);  // `water` → Type::Water
 uint16_t typeMask(const SExpr& e, std::size_t from);  // type atoms from argument `from` on
 bool oppArg(const SExpr& e);  // `my` → false, `opp` → true
 uint8_t parseStatuses(const SExpr& e, std::size_t from);  // asleep, paralyzed, confused, poisoned, burned, any
-void hit(EffectCtx& ctx);                 // the attack's main damage to the opponent's Active Pokémon
+// The attack's main damage to the opponent's Active Pokémon; "isn't affected by Weakness / by any effects on your
+// opponent's Active Pokémon" (all of them, ruling) turn the last two off.
+void hit(EffectCtx& ctx, bool weakness = true, bool ignoreDefender = false);
 bool affects(EffectCtx& ctx, uint16_t uid);  // false when an attack's effects are prevented on that Pokémon
 // Whether some Pokémon that t could pick passes test (for Stmt::possible).
 bool anyCandidate(EffectCtx& ctx, const Target* t, const std::function<bool(const PokemonSlot&)>& test);

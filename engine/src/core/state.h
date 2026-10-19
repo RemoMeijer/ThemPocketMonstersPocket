@@ -30,6 +30,7 @@ struct PokemonSlot {
 
     bool hasType(uint16_t mask) const { return card->hasType(mask) || (card->extraTypes & mask); }  // in play
     bool hitOnce = false;       // took damage from an attack since coming into play (Mimikyu ex)
+    uint8_t baseStage = 0;      // the stage it came into play as: 1 for a Silcoon put straight onto the Bench (ruling)
 
     int energyCount() const {
         int n = 0;
@@ -72,6 +73,7 @@ struct PlayerState {
     const AttackDef* lastAttack = nullptr;  // …and which one
     int scoredTurn = -1;        // turn they last got points…
     int scored = 0;             // …and how many that turn
+    int koCount = 0;            // times their Pokémon were Knocked Out this game
 };
 
 enum class Phase : uint8_t {

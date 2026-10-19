@@ -1,0 +1,23 @@
+# Coverage batch 10: long-tail cards, picked by script (whole lines, Fighting/Water/Lightning).
+energy: Fighting, Water, Lightning
+
+1 A1-217   # Dome Fossil
+1 A1-158   # Kabuto
+1 A1-159   # Kabutops
+1 A2-144   # Skull Fossil
+1 A2-088   # Cranidos
+1 A2-089   # Rampardos
+1 A3-098   # Rockruff
+1 A3-101   # Lycanroc
+1 A3a-034  # Passimian
+1 A4a-043  # Phanpy
+1 B1-124   # Hitmonchan ex
+1 B2-144   # Jaw Fossil
+1 B2-089   # Tyrunt
+1 B2-090   # Tyrantrum
+1 B2b-035  # Groudon
+1 B2b-054  # Axew
+1 B2b-055  # Fraxure
+1 B2b-056  # Haxorus
+1 B3-086   # Sawk
+1 B3a-035  # Sandy Shocks

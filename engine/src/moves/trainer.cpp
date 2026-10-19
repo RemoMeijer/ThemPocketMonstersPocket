@@ -11,6 +11,7 @@ public:
         const GameState& s = game.state();
         int me = s.current;
         const PlayerState& p = s.players[me];
+        if (game.playerHas(ModKind::CantPlayTrainer, me)) return;  // "can't play any Trainer cards"
         bool items = !game.playerHas(ModKind::CantPlayItem, me);
         bool supporters = p.supporterTurn != s.turn && !game.playerHas(ModKind::CantPlaySupporter, me) &&
                           (rules::SupporterOnFirstTurn || !game.firstTurnOfGame());
@@ -46,7 +47,8 @@ public:
         if (card->isTrainer(TrainerKind::Supporter)) p.supporterTurn = s.turn;
         EffectCtx ctx{game, me};
         card->play->run(ctx);
-        p.discard.push_back(card);
+        if (ctx.toHandInstead) game.toHand(me, card);  // "put this Lucky Ice Pop into your hand instead of the discard pile"
+        else p.discard.push_back(card);
         game.knockOutCheck();
         if (ctx.endsTurn && s.phase == Phase::Main) game.endTurn();  // "Your turn ends." (Kiawe)
     }
@@ -57,6 +59,7 @@ public:
     void addMoves(Game& game, std::vector<Action>& out) const override {
         int me = game.state().current;
         const PlayerState& p = game.state().players[me];
+        if (game.playerHas(ModKind::CantPlayTrainer, me)) return;
         for (std::size_t h = 0; h < p.hand.size(); ++h) {
             if (!p.hand[h]->isTrainer(TrainerKind::Tool)) continue;
             for (int t = -1; t < int(p.bench.size()); ++t)

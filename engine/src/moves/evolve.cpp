@@ -10,6 +10,7 @@ public:
         const GameState& s = game.state();
         int me = s.current;
         const PlayerState& p = s.players[me];
+        if (game.playerHas(ModKind::CantEvolve, me)) return;  // "can't play any Pokémon from their hand to evolve"
         bool firstTurn = game.ownFirstTurn(me);  // nobody evolves on their own first turn…
         for (std::size_t h = 0; h < p.hand.size(); ++h) {
             const CardDef* evolution = p.hand[h];

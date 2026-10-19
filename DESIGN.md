@@ -1,7 +1,8 @@
 # TCG Pocket engine: how card effects fit in
 
-Built: see PROGRESS.md for the current state.
-Written 2026-10-15. The counts in §1 come from the TCGdex data of that day (1,708 cards); the card data now comes from Limitless (2,319 cards, 2026-10-16).
+Written 2026-10-15 as the plan; §3–§9 updated 2026-10-19 to the engine as built (97% of 2,319 cards playable). PROGRESS.md has
+the current state and next steps. §1 is the original survey, made on the TCGdex data of 2026-10-15 (1,708 cards); the card
+data now comes from Limitless.
 
 ## 1. What has to fit in
 
@@ -94,14 +95,14 @@ The questions the engine asks modifiers are fixed, so the core knows every place
 - points scored for a knock-out;
 - energy provided.
 
-The events triggers can react to are also fixed:
-- turn start and turn end;
-- Pokémon Checkup;
-- energy attached;
-- damaged by an attack;
-- knocked out;
-- a Pokémon put into play or evolved;
-- a card played.
+The events triggers can react to are also fixed (the `CardDef` fields, one form each in `effects.tsv`):
+- the start of your turn, after the draw (`at-start-of-turn`);
+- the end of your turn (`at-end-of-turn`), the end of each turn before Checkup (`at-end-of-each-turn`), and during Checkup before Poison and Burn (`during-checkup`);
+- Energy attached from the Energy Zone, to this Pokémon (`on-attach`) or by the opponent (`on-opp-attach`);
+- this Pokémon damaged by an attack (`on-damaged`);
+- this Pokémon knocked out (`on-knocked-out`), or knocking out an opponent's Pokémon (`on-knocks-out`);
+- played from the hand to evolve (`on-evolve`) or onto the Bench (`on-bench`);
+- a Stadium's end of each player's turn (`stadium-end-of-turn`).
 
 ## 4. Effect scripts
 
@@ -109,28 +110,39 @@ Each effect text becomes a short script in a small language with nested brackets
 
 | Card text | Script |
 |---|---|
-| Flip 2 coins. This attack does 30 damage for each heads. | `(damage opp-active (* (coins 2) 30))` |
-| Flip a coin. If heads, this attack does 30 more damage. | `(if (coin) (bonus 30))` |
-| This Pokémon also does 20 damage to itself. | `(damage self 20)` |
-| Heal 30 damage from this Pokémon. | `(heal self 30)` |
-| Your opponent's Active Pokémon is now Poisoned. | `(status opp-active poisoned)` |
-| This attack also does 20 damage to 1 of your opponent's Benched Pokémon. | `(damage (choose opp-bench) 20)` |
-| During your opponent's next turn, this Pokémon takes −20 damage from attacks. | `(until opp-next-turn self (damage-taken -20))` |
-| Take a {P} Energy from your Energy Zone and attach it to this Pokémon. | `(attach-energy zone psychic self)` |
-| Put a random Basic Pokémon from your deck into your hand. (Poké Ball) | `(to-hand (random my-deck basic))` |
-| The Pokémon this card is attached to gets +20 HP. (Giant Cape) | `(while-attached (hp +20))` |
+| Flip 2 coins. This attack does 30 damage for each heads. | `(seq (flip 2) (set-damage (* heads 30)) (hit))` |
+| Flip a coin. If heads, this attack does 30 more damage. | `(seq (flip 1) (if heads (bonus 30)) (hit))` |
+| This Pokémon also does 20 damage to itself. | `(seq (hit) (damage self 20))` |
+| This attack also does 20 damage to 1 of your opponent's Benched Pokémon. | `(seq (hit) (damage (choose opp bench) 20))` |
+| During your opponent's next turn, this Pokémon takes −20 damage from attacks. | `(seq (hit) (effect opp-next-turn self (damage-taken -20)))` |
+| If any of your Pokémon were Knocked Out by damage from an attack during your opponent's last turn, this attack does 60 more damage. | `(seq (if (ko-last-turn) (bonus 60)) (hit))` |
+| Put a random Basic Pokémon from your deck into your hand. (Poké Ball) | `(play (search 1 hand basic))` |
+| The Pokémon this card is attached to gets +20 HP. (Giant Cape) | `(tool (hp 20))` |
+| If this Pokémon has a Pokémon Tool attached, attacks used by this Pokémon cost 1 less {G} Energy. (Cherubi) | `(passive (attack-cost -1 :energy grass :if (has-tool self)))` |
+| If this Pokémon is in the Active Spot and is Knocked Out by damage from an attack from your opponent's Pokémon, do 50 damage to the Attacking Pokémon. (Pyukumuku) | `(on-knocked-out :active :by-attack (damage attacker 50))` |
 
-**Vocabulary** (rough, it grows with the build order below):
+An attack is a statement where `(hit)` marks where its printed damage is dealt; `pre` parts change that damage first,
+`post` parts come after. A card part's top-level form says how it plugs in (§3).
+
+**Vocabulary** (2026-10-19, about 175 words; `load_scripts.cpp` and the `blocks_*.cpp` files define them, each with its
+argument count):
 
 | Kind | Words |
 |---|---|
-| Actions | `damage` `bonus` `heal` `status` `draw` `discard-energy` `attach-energy` `move-energy` `switch` `gust` `to-hand` `shuffle-hand` `reveal` `discard-tool` `discard-stadium` `copy-attack` `cancel` |
-| Targets | `self` `my-active` `opp-active` `(choose …)` `(random …)` `(each …)`. Filters: bench, type, stage, ex, names, ultra-beast, damaged |
-| Numbers | Plain numbers, `(coins n)`, `(coins-until-tails)`, `(count …)` for Benched Pokémon, attached energy, damage, points |
-| Conditions | `(if cond then else)`, `(coin)`, `(has-tool …)`, `(evolved-this-turn)`, `(energy-at-least …)`, `(points …)` |
-| Durations | `this-turn` `opp-next-turn` `my-next-turn` `while-active` `while-attached` `while-in-play` |
-| Modifiers | `(damage-taken n)` `(damage-dealt n)` `(hp n)` `(retreat-cost n)` `(attack-cost n type)` `(cant attack/retreat/evolve/supporter)` `(no-weakness)` `(no-abilities …)` |
-| Triggers | `(on energy-attached …)` `(on damaged-by-attack …)` `(on knocked-out …)` `(on end-of-turn …)` |
+| Forms | `play` `tool` `stadium` `stadium-action` `stadium-end-of-turn` `passive` `activated` (`:active`, `:bench`, `:repeat`) and the triggers in §3 (`:active`, `:by-attack`, `:type`) |
+| Flow | `seq` `if` (with an else) `then` ("if you do") `one-of` (the player picks) `repeat` `pick` `nothing` `cancel` `end-turn` `flip` `flip-until-tails` |
+| Damage | `hit` (`:no-weakness`, `:ignore-effects`) `bonus` `set-damage` `damage` `hits` (random picks, added up first) `move-damage` `set-hp-left` `halve-hp` `knock-out` `copy-attack` |
+| Conditions on Pokémon | `status` `status-random` `cure` `cure-random` `heal` |
+| Energy | `attach-energy` (from the Zone) `attach-random-type` `attach-from-discard` (a type, `any`, `random`, `different`) `discard-energy` `discard-random-energy` `discard-energy-among` `move-energy` `move-random-energy` `cycle-energy` `change-energy-type` `change-next-energy` |
+| Cards | `draw` `draw-until` `search` (hand or Bench) `dig` `from-discard` `hand-to-deck` `discard-from-hand` `discard-hand-to` `discard-hand-random-of` `mill` `hand-to-deck-random` `shuffle-hand-draw` `opp-hand-to-deck` `opp-hand-discard` `top-card-if` `swap-pokemon` `swap-for` `rare-candy` `evolve-from-deck` |
+| Board | `switch-in` `to-hand` `to-deck` `to-hand-instead` `discard-pokemon` `discard-tools` `discard-this` `tools-to-hand` `discard-stadium` `no-points` `effect` (a modifier for `this-turn`, `opp-next-turn`, `my-next-turn` or `while-active`) |
+| Targets | `self` `defending` `attacker` `picked` `my-active` `opp-active`, and pools `(choose …)` `(owner-chooses …)` `(random …)` `(each …)` over `my`/`opp`/`both` and `active`/`bench`/`all` |
+| Pokémon filters | `damaged` `ex` `not-ex` `mega` `basic` `stage1` `stage2` `evolution` `tool` `has-ability` `not-self` `not-picked` `not-new` `(type …)` `(name …)` `(name-has …)` `(evolves-from …)` `(has-energy …)` `(other-ability …)` `(max-hp …)` `(trait …)` |
+| Card filters | `pokemon` `basic` `stage1` `stage2` `trainer` `supporter` `item` `tool` `stadium` `mega` `(type …)` `(name …)` `(name-has …)` `(except …)` `(evolves-from …)` `(max-hp …)` `(has-attack …)` `(trait …)` |
+| Numbers | integers, `heads` `tails` `(* …)`, `energy` `energy-types` `types-on` `damage-on` `hp-left` `retreat-cost` `status-count` `count` `hand-size` `discard-count` `deck-count` `points` `points-needed` `points-last-turn` `tools` `ko-count` `with-attack` `dealt` |
+| Conditions | `>=` `<=` `=` `and` `or` `not`, `all-heads` `all-tails`, `has-damage` `has-tool` `has-status` `has-attack` `is-type` `is-ex` `is-basic` `is-evolution` `is-active` `half-hp` `at-zero` `energy-at-least` `extra-energy` `shared-energy` `exists` `moved-to-active` `evolved-this-turn` `evolved-from` `damaged-last-turn` `ko-last-turn` `used-last-turn` `healed` `played-supporter` `stadium-in-play` `my-turn` `first-turn` |
+| Modifiers | `damage-taken` `damage-dealt` `prevent-damage` `prevent-all` `prevent-effects` `prevent-flip` `prevent-first-hit` `prevent-ability-damage` `reflect` `hp` `retreat-cost` `no-retreat-cost` `cant-retreat` `cant-attack` `cant-use-attack` `attack-cost` `attack-flip` `cant-supporter` `cant-item` `cant-stadium` `cant-trainer` `cant-evolve` `cant-evolve-active` `cant-attach-to-active` `weakness-x2` `no-weakness` `no-conditions` `no-healing` `no-abilities` `poison-damage` `survive-at` `extra-point` `extra-tools` `extra-type` `double-energy` `evolve-early` `evolves-as` `previous-attacks` |
+| Modifier options | `:scope` (self, my-active, my-all, opp-active, opp-all, all) `:active` `:bench` `:type` `:stage` `:name` `:evolves-from` `:trait` `:with-energy` `:status` `:needs` `:if COND` `:from` `:from-ex` `:from-basic` `:vs-ex` `:not-mega` `:min-retreat` `:flip` `:energy` `:per-point` `:as` |
 
 **Where scripts come from:**
 1. **`compile_effects.py`:** a table of sentence patterns, each a regular expression with blanks for numbers, types and targets, mapped to a script template. It handles the common shapes automatically and grows the exporter we already have.
@@ -144,7 +156,7 @@ Each effect text becomes a short script in a small language with nested brackets
 
 What guards against it today:
 - `data/effects.tsv` is in git, so every regenerated script shows as a diff;
-- the compiler has a self-test (27 examples);
+- the compiler has a self-test (86 examples);
 - the coverage report;
 - unit tests for the blocks.
 
@@ -155,7 +167,7 @@ What guards against it today:
 
 **C++ side:** each script is parsed once when the cards load, into a tree of small block objects, one class per word. An unknown word makes the card unsupported and names the word. Nothing gets parsed during a game.
 
-This avoids writing C++ per card. There are about 60 building blocks, and adding a card is a data change.
+This avoids writing C++ per card. There are about 175 words, and adding a card is a data change, unless its text needs a new word.
 
 ## 5. Damage pipeline (one place, fixed order)
 
@@ -169,11 +181,15 @@ This is the official order from the "Detailed battle FAQ" (§10). Example: 10 da
 
 Damage to the Bench skips Weakness (Tips). The attacker's bonuses name the Active ("to your opponent's Active Pokémon"), so they don't apply on the Bench either. The defender's own modifiers do apply on the Bench (assumed, as in the paper game). Damage an attacker does to itself and damage from Checkup are put on directly.
 
-**After any damage** (attack, Bench, self, Checkup, ability), one knock-out check runs:
-- it scans every Pokémon in play, not only the Defending one;
-- it awards points: ex 2, Mega ex 3, adjusted by modifiers such as Dusknoir;
-- each side moves a new Pokémon to Active if needed;
-- then it checks for a winner.
+Two attack options skip parts of this order: `:no-weakness` skips step 3, and `:ignore-effects` skips step 4 entirely (all of
+the defender's Abilities, Tools and effects left by attacks). A defender with "no Weakness" skips step 3.
+
+**After any damage** (attack, Bench, self, Checkup, ability), one knock-out check runs as a loop:
+- it scans every Pokémon in play, not only the Defending one; "would be Knocked Out" effects (Hala, Conkeldurr) may leave 10 HP;
+- each knocked-out Pokémon's triggers run first, while its cards are still in play (Pyukumuku, Rescue Scarf, Dusknoir's "no points"), then the attacker's "knocks out" triggers;
+- it awards points: ex 2, Mega ex 3, plus effects such as Iris;
+- trigger damage can knock out more Pokémon, so it looks again until nothing is left at 0 HP;
+- only then come the win rules, and each side moves a new Pokémon to Active if needed.
 
 ## 6. Decisions inside effects
 
@@ -181,21 +197,21 @@ An effect asks the game `choose(player, options)`. The game turns the options in
 
 Promoting after a knock-out moves onto this same mechanism, which removes the special `Promote` phase. Random outcomes such as coins and random cards stay inside the engine and are never a player's choice.
 
-The trade-off is that the game doesn't pause mid-effect. That keeps it simple and fast. A future lookahead player branches on its main moves and makes these smaller choices with its own policy. If a search player has to branch on choices inside effects, the pending choice moves into the state instead (§12). Only 8 places call `choose()`.
+The trade-off is that the game doesn't pause mid-effect. That keeps it simple and fast. A future lookahead player branches on its main moves and makes these smaller choices with its own policy. If a search player has to branch on choices inside effects, the pending choice moves into the state instead (§12).
 
 ## 7. What the state needs to remember
 
 | Where | Added |
 |---|---|
-| Pokémon in play | Special Conditions (Asleep, Paralyzed and Confused replace each other; Poisoned and Burned stack on top), attached Tool, whether its top card used its ability this turn (see "Once per turn belongs to the card" below), damaged-by-attack turn, timed effects on it, counters ("this effect stacks") |
-| Player | Energy Zone *current and next*; energy in the discard pile, as a count per type; Supporter played this turn; Stadium played this turn; a record of this turn and last turn (attacks used, knock-outs suffered, evolutions); player-wide timed effects (Supporter lock) |
-| Game | The Stadium in play, who played it, and whether each player used its action this turn |
+| Pokémon in play | Special Conditions (Asleep, Paralyzed and Confused replace each other; Poisoned and Burned stack on top); its Tools (one, two with Revavroom); the turn it came into play, last became Active, last used its "once during your turn" Ability (see "Once per turn belongs to the card" below) and last took attack damage as the Active; whether an attack has hit it since it came into play (Mimikyu ex); the stage it came into play as (Silcoon); whether it's being knocked out by an effect rather than damage |
+| Player | Energy Zone *current and next*; energy in the discard pile, as a count per type; Supporter and Stadium played this turn, Stadium action used this turn; memory of earlier turns: the last turn one of their Pokémon was knocked out by an attack (and those types), their last attack and its turn, points scored that turn, knock-outs this game |
+| Game | The Stadium in play and who played it; timed effects on a Pokémon or on a player |
 
 Timed effects are small records: what it is, who it's on, and when it ends. The game removes them at the right turn boundary. Effects on a Pokémon also end when it goes to the Bench (official FAQ) or evolves (assumed, see §10).
 
-**Energy in the discard pile.** Energy that leaves play lands in its owner's discard pile, as a count per type. Remco checked this in the app for all of these. Cards such as Flame Patch, Professor Sada and some abilities attach energy from the discard pile, which only makes sense if it collects there. Energy isn't a card, so it doesn't go in the discard card list.
+**Energy in the discard pile.** Energy that leaves play lands in its owner's discard pile, as a count per type. This was checked in the app for all of these. Cards such as Flame Patch, Professor Sada and some abilities attach energy from the discard pile, which only makes sense if it collects there. Energy isn't a card, so it doesn't go in the discard card list.
 
-**Once per turn belongs to the card.** "Once during your turn" is tracked per card, not per spot on the board (Remco checked this in the app):
+**Once per turn belongs to the card.** "Once during your turn" is tracked per card, not per spot on the board (checked in the app):
 - A Pokémon uses its ability, evolves, and the evolved card can use its own ability in the same turn. Evolving resets the "used this turn" mark.
 - A Stadium with "Once during each player's turn, that player may…" gives each player one use per turn. If a new Stadium replaces it, the new card can be used too, even if the old one was used this turn. Only one Stadium can be played per turn (printed on the cards), so this can't repeat.
 - The same goes for any future "once during your turn" source: the mark sits on the card that has the text.
@@ -212,13 +228,15 @@ This is the cleanup from the last review, now shaped to carry effects.
 - **`Game` keeps only the turn flow:**
   ```
   start of turn  draw (also the first player on turn 1) → Energy Zone: current = next, roll a new
-                 next (no energy for the first player's turn 1) → start-of-turn triggers
+                 next (no energy for the first player's turn 1) → "at the beginning of your turn" Abilities
   main           moves until Attack or End turn
-  attack         can attack? → pay cost → effect script and damage pipeline → knock-out check
-  end of turn    unused Energy Zone energy → discard pile → end-of-turn triggers (abilities, Tools,
-                 the Stadium's "at the end of each player's turn") → "this turn" effects end →
-                 Pokémon Checkup (Poison, Burn, Sleep, Paralysis; the player whose turn ended first)
-                 → knock-out check → effects that ran "until the end of the opponent's next turn" end
+  attack         can attack? → pay cost → effect script and damage pipeline → knock-out loop (§5)
+  end of turn    unused Energy Zone energy → discard pile → "at the end of your turn" Abilities and Tools →
+                 "at the end of each turn" Abilities and Tools (both players: berries, Darkrai, Caterpie) →
+                 Pokémon Checkup: "during Checkup" Abilities, then Poison, Burn, Sleep, Paralysis (the player
+                 whose turn ended first) → knock-out loop → the Stadium's "at the end of each player's turn" →
+                 timed effects that end this turn → the next player's turn
+  ```
   ```
 - **Named rule checks** instead of bare conditions, for example `ownFirstTurn(state, player)` instead of `turn <= 2`.
 - **Fixed values (enums)** for category, stage and trainer kind, set when the cards load. ex is set by `export_cards.py` from the name ending in " ex"; Mega ex from "Mega … ex". Their points (2 and 3) are printed on the cards.
@@ -229,12 +247,13 @@ This is the cleanup from the last review, now shaped to carry effects.
 ```
 engine/src/
   core/      state.h  action.h  rules.h  fixed_vec.h  view.h
-  cards/     card.*   deck.*   (enums, ex/Mega/Fossil flags)
-  game/      game.*  (turn flow, knock-outs, Checkup)   damage.*  (pipeline)
-  moves/     move_rule.h + one file per kind of move
-  effects/   effect.h (Action, Modifier, Trigger)  script.* (parser)  blocks/ (one file per family)
-  players/   policy.h  random_policy.h
-export_cards.py, compile_effects.py → data/cards.tsv, data/effects.tsv  (+ data/effects_manual.tsv)
+  cards/     card.*  deck.*   (enums, ex/Mega/Fossil flags, traits)
+  game/      game.*  (turn flow, knock-out loop, Checkup, triggers)   damage.*  (pipeline)
+  moves/     move_rule.cpp + one file per kind of move
+  effects/   effect.h  modifier.h  script.* (parser)  builder.cpp  load_scripts.cpp  blocks_*.cpp (one file per family)
+  players/   policy.h
+engine/tests/  test_rules, test_effects, check_states (state checker; check_all.sh runs it on all cores)
+export_cards.py, compile_effects.py → data/cards.tsv, data/effects.tsv; data/traits.tsv by hand (Serebii)
 ```
 
 ## 10. Rules and where they come from
@@ -242,8 +261,8 @@ export_cards.py, compile_effects.py → data/cards.tsv, data/effects.tsv  (+ dat
 Updated 2026-10-19. One row per rule: what the engine does and how we know.
 
 **Sources**, strongest first:
-- **App:** Remco checked it in the game, 2026-10-16.
-- **Remco:** Remco's reading of the card text, not checked in the app.
+- **App:** checked in the game, 2026-10-16.
+- **Ruling:** how this project reads the card text, settled before it was built; not checked in the app.
 - **FAQ:** the official Pokémon Support [Battle Rules FAQ](https://support.pokemon.com/hc/en-us/articles/38906248102292-Pok%C3%A9mon-TCG-Pocket-Battle-Rules-FAQ).
 - **pokemon.com:** the official [deck-building guide](https://www.pokemon.com/us/strategy/learn-how-to-build-a-deck-in-pokemon-tcg-pocket).
 - **Card:** printed on the cards (rule boxes, Stadium text).
@@ -272,31 +291,31 @@ Updated 2026-10-19. One row per rule: what the engine does and how we know.
 | 1 Supporter per turn, also on the first player's turn 1 | App (turn 1); assumed (1 per turn) | ✓ |
 | Items: any number per turn | Assumed | ✓ |
 | A Trainer can only be played when its effect has something to do: no Potion without damage, no Rare Candy without a Stage 2 to put down | App | ✓ Each effect block checks this |
-| The same goes for "once during your turn" abilities: no Psy Shadow without a Psychic Active | Remco | ✓ |
-| When a Pokémon has more than one type of energy, the player picks which type is paid for a retreat, discarded or moved | Remco | ✗ the engine picks; step 4 in PROGRESS.md |
+| The same goes for "once during your turn" abilities: no Psy Shadow without a Psychic Active | Ruling | ✓ |
+| When a Pokémon has more than one type of energy, the player picks which type is paid for a retreat, discarded or moved | Ruling | ✗ the engine picks; step 4 in PROGRESS.md |
 | An effect that starts something can always be played, even if it can never pay off: Blaine without Ninetales, X Speed after retreating or with a Retreat Cost of 0 | App | ✓ timed effects always count as something to do |
 | 1 Tool per Pokémon | App | ✓ |
 | 1 Stadium per turn; it replaces the one in play; a Stadium with the same name can't be played | Card (Mesagoza), App | ✓ |
 | Retreat once per turn, paying the Retreat Cost | App | ✓ Which energy is paid is picked automatically (shortcut) |
 | No evolving on your own first turn, or on a Pokémon's first turn in play | Tips | ✓ |
 | "Once during your turn" abilities: once per card, so an evolved Pokémon can use its own ability the same turn | App | ✓ evolving resets the mark (R3) |
-| "If this Pokémon moved from your Bench to the Active Spot this turn" (Golisopod, Scizor, Basculin, Crobat): it counts for the card now on top. Evolved on the Bench then moved up, or benched this turn then moved up: yes. Moved up as Wimpod, then evolved: no | Remco | ✓ evolving resets the mark, like R3 |
+| "If this Pokémon moved from your Bench to the Active Spot this turn" (Golisopod, Scizor, Basculin, Crobat): it counts for the card now on top. Evolved on the Bench then moved up, or benched this turn then moved up: yes. Moved up as Wimpod, then evolved: no | Ruling | ✓ evolving resets the mark, like R3 |
 | Stadium actions ("once during each player's turn"): once per player per turn, per Stadium card; a new Stadium can be used again | App | ✓ the Use Stadium move (R5) |
-| Stadium effects "at the end of each player's turn" (Hiking Trail, Soothing Shore) come last: after the end-of-turn abilities and after Pokémon Checkup | Remco | ✓ |
-| Rainbow Cave: discarding the Energy Zone's energy works like an extra turn for the zone: the shown next energy becomes the current one, and a new next one is rolled | Remco | ✓ |
+| Stadium effects "at the end of each player's turn" (Hiking Trail, Soothing Shore) come last: after the end-of-turn abilities and after Pokémon Checkup | Ruling | ✓ |
+| Rainbow Cave: discarding the Energy Zone's energy works like an extra turn for the zone: the shown next energy becomes the current one, and a new next one is rolled | Ruling | ✓ |
 | Attacking ends the turn; attacks with no cost can be used on the first player's turn 1 | FAQ | ✓ |
 | Turn limit 30 (both players' turns together), then a tie | App | ✓ |
 | **Damage** | | |
 | Order: base → attacker's effects → Weakness → defender's effects → floor at 0 at the end | Battle FAQ | ✓ (R2) |
 | Weakness +20, only on the Active Pokémon | Tips | ✓ |
-| Bounded Field: Weakness ×2 takes the place of +20 in the damage order (base → attacker's effects → ×2 → defender's effects) | Remco | ✓ |
+| Bounded Field: Weakness ×2 takes the place of +20 in the damage order (base → attacker's effects → ×2 → defender's effects) | Ruling | ✓ |
 | Damage from an attack's text ("do 20 damage to each of your opponent's Pokémon", Lurantis) gets Weakness when it hits the Active Pokémon | Tips (only the Bench is excluded); deckgym-core's Lurantis test | ✓ |
-| Random multi-hit attacks (Wugtrio ex: "chosen at random 3 times… do 50 damage to it"): the picks on one Pokémon add up first and are dealt as one, so Weakness and "+N damage" count once. All 3 on a Weak Active: 150 + 20 | Remco | ✓ `(hits …)` |
+| Random multi-hit attacks (Wugtrio ex: "chosen at random 3 times… do 50 damage to it"): the picks on one Pokémon add up first and are dealt as one, so Weakness and "+N damage" count once. All 3 on a Weak Active: 150 + 20 | Ruling | ✓ `(hits …)` |
 | The defender's "takes −N" effects also apply on the Bench | Assumed | ✓ |
 | **Special Conditions** | | |
 | Only the Active Pokémon has them. Asleep, Paralyzed and Confused replace each other; Poisoned and Burned stack | Tips | ✓ |
 | Checkup after every turn, for both players, the player whose turn ended first. Order: Poison, Burn, Asleep, Paralyzed. Knock-outs happen together at the end | Tips | ✓ |
-| Lum Berry, Sitrus Berry ("at the end of each turn") act before Pokémon Checkup, so a Lum Berry cures Poison before it does damage | Assumed (Remco's best guess, to double-check) | ✓ |
+| Lum Berry, Sitrus Berry ("at the end of each turn") act before Pokémon Checkup, so a Lum Berry cures Poison before it does damage | Assumed (best guess, to double-check) | ✓ |
 | Poison 10; Burn 20, then a flip (heads recovers) | Tips | ✓ |
 | Asleep: can't attack or retreat; a flip at every Checkup, heads wakes it | Tips | ✓ |
 | Paralyzed: can't attack or retreat; recovers at the Checkup after its owner's next turn | Tips | ✓ A Pokémon paralyzing itself would recover a turn early, but no card does that |
@@ -311,46 +330,54 @@ Updated 2026-10-19. One row per rule: what the engine does and how we know.
 | An empty deck doesn't lose; there's just no draw | Tips | ✓ |
 | Only knock-outs score; a Pokémon discarded by an effect gives no points | FAQ | ✓ |
 | A card taken from the opponent (Team Rocket's Thieving Machine) becomes the taker's: once played it goes to the taker's discard pile | Assumed | ✓ open question in PROGRESS.md |
-| A Pokémon put back into the hand (Koga, Ilima) takes its evolution cards and Tool with it; its energy goes to the discard pile | Remco | ✓ |
-| Putting your Active Pokémon back into the hand is allowed with an empty Bench: with no Pokémon left in play, that player loses (a way to concede) | Remco | ✓ |
+| A Pokémon put back into the hand (Koga, Ilima) takes its evolution cards and Tool with it; its energy goes to the discard pile | Ruling | ✓ |
+| Putting your Active Pokémon back into the hand is allowed with an empty Bench: with no Pokémon left in play, that player loses (a way to concede) | Ruling | ✓ |
 | A card put back into a full hand (10 cards) goes to the discard pile instead | Assumed | ✓ open question in PROGRESS.md |
 | Both Active Pokémon knocked out by one attack: the defending player picks a new Active first, then the attacking player, then Pokémon Checkup | App | ✓ |
 | **Knock-outs** | | |
-| Knock-out triggers ("If this Pokémon is Knocked Out…", Rescue Scarf, Pyukumuku) run first; then every knock-out of that moment counts, and only then the win rules apply | Remco | ✓ |
-| Both at 3 or more points at once: a player with Pokémon left wins; Pokémon on both sides or on neither is a tie. More points (4 against 3) don't matter | Remco | ✓ |
+| Knock-out triggers ("If this Pokémon is Knocked Out…", Rescue Scarf, Pyukumuku) run first; then every knock-out of that moment counts, and only then the win rules apply | Ruling | ✓ |
+| Both at 3 or more points at once: a player with Pokémon left wins; Pokémon on both sides or on neither is a tie. More points (4 against 3) don't matter | Ruling | ✓ |
 | Knock-out triggers of one moment: the defender's Pokémon first, each with its Ability and then its Tools; the attacker's "knocks out" triggers after each knock-out | Assumed | ✓ |
-| Rescue Scarf: the Pokémon and its evolution cards go to the hand; the Scarf and the energy go to the discard pile; the opponent still gets the points | Remco | ✓ |
-| Lucky Mittens: one card per Pokémon knocked out | Remco | ✓ |
+| Rescue Scarf: the Pokémon and its evolution cards go to the hand; the Scarf and the energy go to the discard pile; the opponent still gets the points | Ruling | ✓ |
+| Lucky Mittens: one card per Pokémon knocked out | Ruling | ✓ |
 | "Is Knocked Out" by an effect (Bewear, Galarian Cursola) isn't "Knocked Out by damage from an attack" (no Rescue Scarf, Hala, revenge bonus) | Assumed | ✓ |
 | Electrical Cord with one Benched Pokémon moves only 1 Energy ("1 Energy each to 2") | Assumed | ✓ |
 | **Abilities** | | |
-| "During Pokémon Checkup" Abilities (Garganacl, Glaceon ex, Flygon ex) act first in Checkup, before Poison and Burn | Remco | ✓ |
-| "At the end of each turn" and "At the end of your opponent's turn" Abilities (Darkrai, Caterpie) act before Checkup | Remco | ✓ |
-| "At the beginning of your turn" (Meloetta) comes after the turn's draw and new Energy | Remco | ✓ |
-| Serperior's "each {G} Energy provides 2 {G} Energy": every count sees 2 per {G}: attack and retreat costs, "for each Energy attached", HP per Energy | Remco | ✓ |
+| "During Pokémon Checkup" Abilities (Garganacl, Glaceon ex, Flygon ex) act first in Checkup, before Poison and Burn | Ruling | ✓ |
+| "At the end of each turn" and "At the end of your opponent's turn" Abilities (Darkrai, Caterpie) act before Checkup | Ruling | ✓ |
+| "At the beginning of your turn" (Meloetta) comes after the turn's draw and new Energy | Ruling | ✓ |
+| Serperior's "each {G} Energy provides 2 {G} Energy": every count sees 2 per {G}: attack and retreat costs, "for each Energy attached", HP per Energy | Ruling | ✓ |
 | An effect that discards Energy still discards real Energy: a doubled {G} goes as one | Assumed | ✓ |
-| Urshifu's second type counts for "{X} Pokémon" effects only; Weakness always uses the printed type | Remco | ✓ |
-| Jolteon ex reacts to every Energy attached from the Energy Zone, by an effect too | Remco | ✓ |
-| Dusknoir may move damage that knocks itself out; the opponent scores | Remco | ✓ |
+| Urshifu's second type counts for "{X} Pokémon" effects only; Weakness always uses the printed type | Ruling | ✓ |
+| Jolteon ex reacts to every Energy attached from the Energy Zone, by an effect too | Ruling | ✓ |
+| Dusknoir may move damage that knocks itself out; the opponent scores | Ruling | ✓ |
 | "You may" on a "when you put this Pokémon onto your Bench" Ability: the player chooses | Card | ✓ |
 | Alolan Muk turns off Basic Pokémon's Abilities, not their Tools, and not a Fossil's rule (a Fossil has no Ability) | Assumed | ✓ |
 | Under Claydol, a Potion can't be played: it has nothing to do | Assumed (as "Trainers need something to do") | ✓ |
 | Misdreavus's "your opponent reveals their hand" does nothing in the engine: it's information only | Assumed | ✓ |
 | Evolving from the deck by an effect (Caterpie, Porygon2, Magikarp) ignores the usual timing limits | Assumed | ✓ |
 | A Pokémon whose HP drops below its damage because it lost Energy (Reuniclus retreating) is knocked out at once | Assumed (like a Stadium's +HP going away) | ✓ |
+| **Long tail (batch 10)** | | |
+| "This attack's damage isn't affected by any effects on your opponent's Active Pokémon" ignores all of the defender's effects: its Abilities, its Tools and effects left by attacks | Ruling | ✓ |
+| Silcoon and Cascoon's "put … onto your Bench" puts Stage 1 Pokémon there with nothing under them; they evolve as usual | Ruling | ✓ |
+| Ultra Beast, Ancient and Future: Serebii's lists, by card name, in `data/traits.tsv`. Serebii also lists the three Necrozma promos (Dawn Wings, Dusk Mane, Ultra Necrozma ex) as Ultra Beasts | Fan (Serebii) | ✓ open question in PROGRESS.md |
+| "Its remaining HP is now N" never heals a Pokémon that has less left | Assumed | ✓ |
+| "Halve its remaining HP, rounded down" rounds down to a whole 10 | Assumed | ✓ |
+| A copied attack (Mew ex, Ditto, Clefairy) needs no Energy, acts for the Pokémon that copies it, and can't copy again | Assumed | ✓ |
+| "Can't play any Trainer cards" covers Items, Supporters, Tools and Stadiums | Card (they're all Trainer cards) | ✓ |
 | **Card names** | | |
-| A named Pokémon means exactly that name: "Crabominable" doesn't cover Crabominable ex. A card that includes an ex names it | Remco | ✓ |
+| A named Pokémon means exactly that name: "Crabominable" doesn't cover Crabominable ex. A card that includes an ex names it | Ruling | ✓ |
 | **Memory of the last turn** | | |
 | "Your opponent's last turn" is the turn just before this one; "your last turn" is your turn before that | Card | ✓ |
-| "Knocked Out by damage from an attack": Active or Benched Pokémon knocked out by the opponent's attack. Not Poison or Burn at Checkup, not Ability damage | Remco | ✓ |
-| A point scored at Checkup at the end of a player's turn counts as "during their last turn" (Hisuian Basculegion) | Remco | ✓ |
-| An attack that doesn't happen (Confused, or a coin-flip effect, tails) wasn't "used" (Sweets Relay) | Remco | ✓ |
+| "Knocked Out by damage from an attack": Active or Benched Pokémon knocked out by the opponent's attack. Not Poison or Burn at Checkup, not Ability damage | Ruling | ✓ |
+| A point scored at Checkup at the end of a player's turn counts as "during their last turn" (Hisuian Basculegion) | Ruling | ✓ |
+| An attack that doesn't happen (Confused, or a coin-flip effect, tails) wasn't "used" (Sweets Relay) | Ruling | ✓ |
 
 ## 11. Build order
 
 Each step adds tests for its blocks, adds rules to the state checker (`check_states`), and reports the new card coverage.
 
-Status 2026-10-19: steps 0–6 are built, Stadium actions (R5) included, and step 7 is ongoing (84% of cards playable; coverage batches in PROGRESS.md).
+Status 2026-10-19: steps 0–7 are built: 2,269 of 2,319 cards (97%) are playable after coverage batches 0–10 (PROGRESS.md). The 50 left are one-offs.
 
 | Step | What | Unlocks |
 |---|---|---|

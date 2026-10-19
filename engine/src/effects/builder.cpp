@@ -73,6 +73,8 @@ Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
         {"evolve-early", ModKind::EvolveEarly},     {"evolves-as", ModKind::EvolvesAs},
         {"no-abilities", ModKind::NoAbilities},     {"extra-type", ModKind::ExtraType},
         {"double-energy", ModKind::DoubleEnergy},   {"previous-attacks", ModKind::PreviousAttacks},
+        {"no-weakness", ModKind::NoWeakness},       {"cant-trainer", ModKind::CantPlayTrainer},
+        {"cant-evolve", ModKind::CantEvolve},
     };
     static const std::unordered_map<std::string, ModScope> scopes = {
         {"self", ModScope::Self},           {"my-active", ModScope::MyActive}, {"my-all", ModScope::MyAll},
@@ -103,6 +105,13 @@ Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
             m.vsEx = true;
         } else if (a.atom == ":from-ex") {
             m.fromEx = true;
+        } else if (a.atom == ":from-basic") {
+            m.fromBasic = true;
+        } else if (a.atom == ":per-point") {
+            m.perPoint = true;
+        } else if (a.atom == ":trait" && i + 1 < argCount(e)) {
+            m.traits |= traitFromName(arg(e, ++i).atom);
+            if (!m.traits) scriptFail("unknown trait", e);
         } else if (a.atom == ":not-mega") {
             m.notMega = true;
         } else if (a.atom == ":flip") {
@@ -179,10 +188,10 @@ bool oppArg(const SExpr& e) {
     return e.atom == "opp";
 }
 
-void hit(EffectCtx& ctx) {
+void hit(EffectCtx& ctx, bool weakness, bool ignoreDefender) {
     if (ctx.stopped || ctx.damage <= 0) return;
     const PokemonSlot& defender = ctx.game.state().players[1 - ctx.player].active;
-    if (defender.card) ctx.game.dealAttackDamage(ctx.player, ctx.self, defender.uid, ctx.damage);
+    if (defender.card) ctx.dealt += ctx.game.dealAttackDamage(ctx.player, ctx.self, defender.uid, ctx.damage, weakness, ignoreDefender);
 }
 
 bool affects(EffectCtx& ctx, uint16_t uid) {

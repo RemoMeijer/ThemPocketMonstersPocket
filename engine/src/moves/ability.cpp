@@ -15,7 +15,7 @@ public:
             if (!c.activated || (p.abilityTurn == s.turn && !c.activatedRepeat) || (c.activatedWhileActive && t >= 0) ||
                 (c.activatedWhileBenched && t < 0) || game.abilitiesOff(p))
                 continue;
-            // Like a Trainer, an ability needs something to do: no Psy Shadow without a Psychic Active (Remco).
+            // Like a Trainer, an ability needs something to do: no Psy Shadow without a Psychic Active (ruling).
             EffectCtx ctx{game, me};
             ctx.self = p.uid;
             if (p.card->activated->possible(ctx)) out.push_back({ActionKind::UseAbility, 0, int8_t(t)});

@@ -18,8 +18,9 @@ struct CardFilter {
     TrainerKind kind = TrainerKind::None;
     uint16_t types = 0;
     std::vector<std::string> names;
-    std::string nameHas, except, evolvesFrom;
+    std::string nameHas, except, evolvesFrom, attack;  // attack: has an attack with that name (Puppy Pile)
     int maxHp = 0;
+    uint8_t traits = 0;  // (trait ancient)
 
     bool matches(const CardDef* c) const {
         return (!pokemon || c->isPokemon()) && (!basic || c->isBasic()) &&
@@ -28,7 +29,9 @@ struct CardFilter {
                (!types || (c->isPokemon() && c->hasType(types))) &&
                (names.empty() || std::find(names.begin(), names.end(), c->name) != names.end()) &&
                (nameHas.empty() || c->name.find(nameHas) != std::string::npos) && (except.empty() || c->name != except) &&
-               (evolvesFrom.empty() || c->evolvesFrom == evolvesFrom) && (!maxHp || (c->isPokemon() && c->hp <= maxHp));
+               (evolvesFrom.empty() || c->evolvesFrom == evolvesFrom) && (!maxHp || (c->isPokemon() && c->hp <= maxHp)) &&
+               (attack.empty() || std::any_of(c->attacks.begin(), c->attacks.end(), [&](const AttackDef& a) { return a.name == attack; })) &&
+               (!traits || (traits & c->traits));
     }
 };
 
@@ -54,6 +57,8 @@ CardFilter parseCardFilter(const SExpr& e, std::size_t from) {
         else if (w == "name" && a.list)
             for (std::size_t n = 0; n < argCount(a); ++n) f.names.push_back(arg(a, n).atom);
         else if (w == "evolves-from" && a.list) f.evolvesFrom = arg(a, 0).atom;
+        else if (w == "has-attack" && a.list) f.attack = arg(a, 0).atom, f.pokemon = true;
+        else if (w == "trait" && a.list) f.traits = traitFromName(arg(a, 0).atom), f.pokemon = true;
         else scriptFail("unknown card filter '" + a.text() + "'", e);
     }
     return f;
@@ -84,7 +89,8 @@ public:
         for (int i = n_->eval(ctx); i > 0; --i) {
             std::vector<std::size_t> hits;
             for (std::size_t k = 0; k < p.deck.size(); ++k)
-                if (f_.matches(p.deck[k]) && (!bench_ || p.deck[k]->isBasic())) hits.push_back(k);
+                // a card that names them may put Stage 1 cards straight onto the Bench (Silcoon, ruling)
+                if (f_.matches(p.deck[k]) && (!bench_ || p.deck[k]->isBasic() || !f_.names.empty())) hits.push_back(k);
             if (hits.empty() || (bench_ ? p.bench.full() : p.hand.size() >= std::size_t(rules::HandLimit))) return;
             std::size_t k = hits[std::uniform_int_distribution<std::size_t>(0, hits.size() - 1)(ctx.game.rng())];
             const CardDef* card = p.deck.take(k);
@@ -102,7 +108,7 @@ public:
         const PlayerState& p = ctx.game.state().players[ctx.player];
         if (bench_ && p.bench.full()) return false;
         for (const CardDef* c : p.deck)
-            if (f_.matches(c) && (!bench_ || c->isBasic())) return true;
+            if (f_.matches(c) && (!bench_ || c->isBasic() || !f_.names.empty())) return true;
         return false;
     }
 
@@ -367,17 +373,162 @@ private:
     CardFilter f_;
 };
 
-class DiscardCount : public Num {  // (discard-count SIDE FILTER…): matching cards in that discard pile
+class DiscardCount : public Num {  // (discard-count SIDE FILTER…), (deck-count SIDE FILTER…): matching cards in that pile
 public:
-    DiscardCount(bool opp, CardFilter f) : opp_(opp), f_(std::move(f)) {}
+    DiscardCount(bool opp, CardFilter f, bool deck = false) : opp_(opp), f_(std::move(f)), deck_(deck) {}
     int eval(EffectCtx& ctx) const override {
+        const PlayerState& p = ctx.game.state().players[sidePlayer(ctx, opp_)];
         int n = 0;
-        for (const CardDef* c : ctx.game.state().players[sidePlayer(ctx, opp_)].discard) n += f_.matches(c);
+        for (const CardDef* c : deck_ ? p.deck : p.discard) n += f_.matches(c);
         return n;
     }
 
 private:
     bool opp_;
+    CardFilter f_;
+    bool deck_;
+};
+
+class PlayerNum : public Num {  // (points SIDE), (tools SIDE): Tools on all their Pokémon, (ko-count SIDE)
+public:
+    enum What { Points, Tools, KoCount };
+    PlayerNum(What what, bool opp) : what_(what), opp_(opp) {}
+    int eval(EffectCtx& ctx) const override {
+        const PlayerState& p = ctx.game.state().players[sidePlayer(ctx, opp_)];
+        if (what_ == Points) return p.points;
+        if (what_ == KoCount) return p.koCount;
+        int n = p.active.card ? int(p.active.tools.size()) : 0;
+        for (const PokemonSlot& b : p.bench) n += int(b.tools.size());
+        return n;
+    }
+
+private:
+    What what_;
+    bool opp_;
+};
+
+class WithAttack : public Num {  // Pokémon in play and cards in the hand with an attack of that name (Puppy Pile)
+public:
+    WithAttack(bool opp, CardFilter f) : opp_(opp), f_(std::move(f)) {}
+    int eval(EffectCtx& ctx) const override {
+        const PlayerState& p = ctx.game.state().players[sidePlayer(ctx, opp_)];
+        int n = p.active.card && f_.matches(p.active.card);
+        for (const PokemonSlot& b : p.bench) n += f_.matches(b.card);
+        for (const CardDef* c : p.hand) n += f_.matches(c);
+        return n;
+    }
+
+private:
+    bool opp_;
+    CardFilter f_;
+};
+
+// (copy-attack TARGET [:random] [:not-ex]): choose (or pick at random) one attack of those Pokémon and use it as this
+// attack: no Energy needed, and "this Pokémon" is still the user. A copied attack doesn't copy again.
+class CopyAttack : public Stmt {
+public:
+    CopyAttack(const Target* t, bool random, bool notEx) : t_(t), random_(random), notEx_(notEx) {}
+    void run(EffectCtx& ctx) const override {
+        if (ctx.copyDepth) return;
+        std::vector<const AttackDef*> options = attacks(ctx);
+        if (options.empty()) return;
+        std::size_t k = random_ ? std::uniform_int_distribution<std::size_t>(0, options.size() - 1)(ctx.game.rng())
+                                : std::size_t(ctx.game.choose(ctx.player, int(options.size())));
+        const AttackDef* a = options[k];
+        ctx.game.say("  uses ", a->name);
+        EffectCtx copy = ctx;
+        copy.copyDepth = 1;
+        copy.attackDef = a;
+        copy.damage = a->damage;
+        copy.stopped = false;
+        if (a->script) a->script->run(copy);
+        else hit(copy);
+        ctx.endsTurn |= copy.endsTurn;
+        ctx.dealt += copy.dealt;
+    }
+    bool possible(EffectCtx& ctx) const override { return !attacks(ctx).empty(); }
+
+private:
+    std::vector<const AttackDef*> attacks(EffectCtx& ctx) const {
+        Uids from;
+        t_->candidates(ctx, from);
+        std::vector<const AttackDef*> out;
+        for (uint16_t uid : from)
+            if (const PokemonSlot* p = ctx.game.find(uid); p && uid != ctx.self && !(notEx_ && p->card->ex))
+                for (const AttackDef& a : p->card->attacks) out.push_back(&a);
+        return out;
+    }
+
+    const Target* t_;
+    bool random_, notEx_;
+};
+
+// (opp-hand-to-deck FILTER…), (opp-hand-discard FILTER…): you choose a matching card in your opponent's hand; it's
+// shuffled into their deck (Silver) or discarded (Absol).
+class OppHandToDeck : public Stmt {
+public:
+    OppHandToDeck(CardFilter f, bool discard = false) : f_(std::move(f)), discard_(discard) {}
+    void run(EffectCtx& ctx) const override {
+        PlayerState& p = ctx.game.state().players[1 - ctx.player];
+        std::vector<std::size_t> hits;
+        for (std::size_t i = 0; i < p.hand.size(); ++i)
+            if (f_.matches(p.hand[i])) hits.push_back(i);
+        if (hits.empty()) return;
+        const CardDef* c = p.hand.take(hits[ctx.game.choose(ctx.player, int(hits.size()))]);
+        if (discard_) {
+            p.discard.push_back(c);
+            ctx.game.say("  ", c->name, " is discarded from the opponent's hand");
+            return;
+        }
+        p.deck.push_back(c);
+        std::shuffle(p.deck.begin(), p.deck.end(), ctx.game.rng());
+        ctx.game.say("  ", c->name, " is shuffled into the opponent's deck");
+    }
+
+private:
+    CardFilter f_;
+    bool discard_;
+};
+
+// (top-card-if FILTER…): look at your top card; matching, it goes into your hand, else to the bottom (Mythical Slab).
+class TopCardIf : public Stmt {
+public:
+    explicit TopCardIf(CardFilter f) : f_(std::move(f)) {}
+    void run(EffectCtx& ctx) const override {
+        PlayerState& p = ctx.game.state().players[ctx.player];
+        if (p.deck.empty()) return;
+        const CardDef* c = p.deck.pop_back();
+        if (f_.matches(c)) {
+            ctx.game.toHand(ctx.player, c);
+            return;
+        }
+        p.deck.push_back(c);  // the last element is the top: move it to the front
+        std::rotate(p.deck.begin(), p.deck.end() - 1, p.deck.end());
+    }
+    bool possible(EffectCtx& ctx) const override { return !ctx.game.state().players[ctx.player].deck.empty(); }
+
+private:
+    CardFilter f_;
+};
+
+// (discard-hand-random-of SIDE N FILTER…): N random matching cards from that hand to the discard pile.
+class DiscardHandRandomOf : public Stmt {
+public:
+    DiscardHandRandomOf(bool opp, int n, CardFilter f) : opp_(opp), n_(n), f_(std::move(f)) {}
+    void run(EffectCtx& ctx) const override {
+        PlayerState& p = ctx.game.state().players[sidePlayer(ctx, opp_)];
+        for (int i = 0; i < n_; ++i) {
+            std::vector<std::size_t> hits;
+            for (std::size_t k = 0; k < p.hand.size(); ++k)
+                if (f_.matches(p.hand[k])) hits.push_back(k);
+            if (hits.empty()) return;
+            p.discard.push_back(p.hand.take(hits[std::uniform_int_distribution<std::size_t>(0, hits.size() - 1)(ctx.game.rng())]));
+        }
+    }
+
+private:
+    bool opp_;
+    int n_;
     CardFilter f_;
 };
 
@@ -440,21 +591,21 @@ private:
     CardFilter hand_, deck_;
 };
 
-class DrawUntil : public Stmt {  // (draw-until N): draw until your hand holds N cards
+class DrawUntil : public Stmt {  // (draw-until N): draw until your hand holds N cards (N may be (hand-size opp))
 public:
-    explicit DrawUntil(int n) : n_(n) {}
+    explicit DrawUntil(const Num* n) : n_(n) {}
     void run(EffectCtx& ctx) const override {
         PlayerState& p = ctx.game.state().players[ctx.player];
-        while (p.hand.size() < std::size_t(n_) && !p.deck.empty() && p.hand.size() < std::size_t(rules::HandLimit))
-            ctx.game.draw(ctx.player);
+        std::size_t n = std::size_t(std::max(0, n_->eval(ctx)));
+        while (p.hand.size() < n && !p.deck.empty() && p.hand.size() < std::size_t(rules::HandLimit)) ctx.game.draw(ctx.player);
     }
     bool possible(EffectCtx& ctx) const override {
         const PlayerState& p = ctx.game.state().players[ctx.player];
-        return p.hand.size() < std::size_t(n_) && !p.deck.empty();
+        return int(p.hand.size()) < n_->eval(ctx) && !p.deck.empty();
     }
 
 private:
-    int n_;
+    const Num* n_;
 };
 
 // (hand-to-deck FILTER…): shuffle a matching card from your hand (your choice) into your deck (Area Zero).
@@ -613,7 +764,8 @@ public:
     void run(EffectCtx& ctx) const override {
         Uids targets;
         t_->select(ctx, targets);
-        for (uint16_t uid : targets) ctx.game.discardFromPlay(uid);
+        for (uint16_t uid : targets)
+            if (affects(ctx, uid)) ctx.game.discardFromPlay(uid);
     }
 
 private:
@@ -624,7 +776,7 @@ private:
 // evolve it" (Caterpie, Porygon2). An effect, so the usual timing limits don't apply; no "when you play it" Ability.
 class EvolveFromDeck : public Stmt {
 public:
-    explicit EvolveFromDeck(const Target* t) : t_(t) {}
+    EvolveFromDeck(const Target* t, CardFilter f) : t_(t), f_(std::move(f)) {}
     void run(EffectCtx& ctx) const override {
         Uids targets;
         t_->select(ctx, targets);
@@ -635,7 +787,7 @@ public:
             PlayerState& ps = ctx.game.state().players[owner];
             std::vector<std::size_t> hits;
             for (std::size_t k = 0; k < ps.deck.size(); ++k)
-                if (ps.deck[k]->isEvolution() && ps.deck[k]->evolvesFrom == p->card->name) hits.push_back(k);
+                if (ps.deck[k]->isEvolution() && ps.deck[k]->evolvesFrom == p->card->name && f_.matches(ps.deck[k])) hits.push_back(k);
             if (hits.empty()) continue;
             const CardDef* card = ps.deck.take(hits[std::uniform_int_distribution<std::size_t>(0, hits.size() - 1)(ctx.game.rng())]);
             ctx.game.say("  ", p->card->name, " evolves into ", card->name, " from the deck");
@@ -647,12 +799,15 @@ public:
             int owner = 0;
             ctx.game.find(p.uid, &owner);
             const auto& deck = ctx.game.state().players[owner].deck;
-            return std::any_of(deck.begin(), deck.end(), [&](const CardDef* c) { return c->isEvolution() && c->evolvesFrom == p.card->name; });
+            return std::any_of(deck.begin(), deck.end(), [&](const CardDef* c) {
+                return c->isEvolution() && c->evolvesFrom == p.card->name && f_.matches(c);
+            });
         });
     }
 
 private:
     const Target* t_;
+    CardFilter f_;  // the evolution card must match (Quick-Grow Extract: a {G} Pokémon)
 };
 
 class FirstTurn : public Cond {  // (first-turn): it's the player's own first turn (Wimpod, Zeraora)
@@ -786,7 +941,7 @@ void addCardWords(Words& w) {
     w.stmt["swap-for"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<SwapPokemon>(CardFilter{}, parseCardFilter(e, 0));
     }};
-    w.stmt["draw-until"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<DrawUntil>(intArg(arg(e, 0))); }};
+    w.stmt["draw-until"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<DrawUntil>(b.num(arg(e, 0))); }};
     w.stmt["hand-to-deck"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<HandToDeck>(parseCardFilter(e, 0));
     }};
@@ -803,7 +958,8 @@ void addCardWords(Words& w) {
     w.stmt["dig"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) { return b.make<Dig>(intArg(arg(e, 0)), parseCardFilter(e, 1)); }};
     w.stmt["effect"] = {3, 3, [](const SExpr& e, ScriptBuilder& b) {
         const std::string& d = arg(e, 0).atom;
-        int turns = d == "this-turn" ? 0 : d == "opp-next-turn" ? 1 : d == "my-next-turn" ? 2 : -1;
+        // while-active: "until this Pokémon leaves the Active Spot"; going to the Bench ends it (clearConditions)
+        int turns = d == "this-turn" ? 0 : d == "opp-next-turn" ? 1 : d == "my-next-turn" ? 2 : d == "while-active" ? 1000000 : -1;
         if (turns < 0) scriptFail("unknown duration '" + d + "'", e);
         const std::string& who = arg(e, 1).atom;
         static const char* whos[] = {"self", "defending", "my-active", "opp-active", "me", "opp"};
@@ -824,7 +980,33 @@ void addCardWords(Words& w) {
         return b.make<MoveDamage>(b.target(arg(e, 0)), b.target(arg(e, 1)), arg(e, 2).atom == "all" ? -1 : intArg(arg(e, 2)));
     }};
     w.stmt["discard-pokemon"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<DiscardPokemon>(b.target(arg(e, 0))); }};
-    w.stmt["evolve-from-deck"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<EvolveFromDeck>(b.target(arg(e, 0))); }};
+    w.stmt["evolve-from-deck"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<EvolveFromDeck>(b.target(arg(e, 0)), parseCardFilter(e, 1));
+    }};
+    w.num["points"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<PlayerNum>(PlayerNum::Points, oppArg(arg(e, 0))); }};
+    w.num["tools"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<PlayerNum>(PlayerNum::Tools, oppArg(arg(e, 0))); }};
+    w.num["ko-count"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<PlayerNum>(PlayerNum::KoCount, oppArg(arg(e, 0))); }};
+    w.num["deck-count"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<DiscardCount>(oppArg(arg(e, 0)), parseCardFilter(e, 1), true);
+    }};
+    w.num["with-attack"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) {  // (with-attack SIDE "A"): in play and in the hand
+        CardFilter f;
+        f.attack = arg(e, 1).atom;
+        return b.make<WithAttack>(oppArg(arg(e, 0)), f);
+    }};
+    w.stmt["copy-attack"] = {1, 3, [](const SExpr& e, ScriptBuilder& b) {
+        bool random = false, notEx = false;
+        for (std::size_t i = 1; i < argCount(e); ++i) (arg(e, i).atom == ":random" ? random : notEx) = true;
+        return b.make<CopyAttack>(b.target(arg(e, 0)), random, notEx);
+    }};
+    w.stmt["opp-hand-to-deck"] = {0, AnyCount, [](const SExpr& e, ScriptBuilder& b) { return b.make<OppHandToDeck>(parseCardFilter(e, 0)); }};
+    w.stmt["opp-hand-discard"] = {0, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<OppHandToDeck>(parseCardFilter(e, 0), true);
+    }};
+    w.stmt["top-card-if"] = {0, AnyCount, [](const SExpr& e, ScriptBuilder& b) { return b.make<TopCardIf>(parseCardFilter(e, 0)); }};
+    w.stmt["discard-hand-random-of"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<DiscardHandRandomOf>(oppArg(arg(e, 0)), intArg(arg(e, 1)), parseCardFilter(e, 2));
+    }};
     w.cond["first-turn"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<FirstTurn>(); }};
     w.stmt["no-points"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<NoPoints>(); }};
     w.stmt["to-hand-instead"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<ToHandInstead>(); }};

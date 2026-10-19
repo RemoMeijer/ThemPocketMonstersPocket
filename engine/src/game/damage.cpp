@@ -19,7 +19,7 @@ PokemonSlot* Game::find(uint16_t uid, int* owner) {
     return nullptr;
 }
 
-int Game::dealAttackDamage(int attacker, uint16_t attackerUid, uint16_t targetUid, int base, bool weakness) {
+int Game::dealAttackDamage(int attacker, uint16_t attackerUid, uint16_t targetUid, int base, bool weakness, bool ignoreDefender) {
     int owner = 0;
     PokemonSlot* target = find(targetUid, &owner);
     PokemonSlot* source = find(attackerUid);
@@ -28,23 +28,25 @@ int Game::dealAttackDamage(int attacker, uint16_t attackerUid, uint16_t targetUi
     int damage = base;
     if (active)
         forEachMod(ModKind::DamageDealt, source, attacker, [&](const Modifier& m) {
-            if (!m.vsEx || target->card->ex) damage += m.amount;
+            if (!m.vsEx || target->card->ex) damage += m.perPoint ? m.amount * s_.players[attacker].points : m.amount;
         });
     // Weakness counts whenever the attack does damage, even after step 2 took it to 0 or below: the floor
     // is only at the end (official battle FAQ, DESIGN.md §5).
-    bool weak = weakness && active && base > 0 && target->card->weakness && source->card->type == target->card->weakness;
+    bool weak = weakness && active && base > 0 && target->card->weakness && source->card->type == target->card->weakness &&
+                (ignoreDefender || !hasMod(ModKind::NoWeakness, *target, owner));
     if (weak) damage = hasMod(ModKind::WeaknessTimesTwo, *source, attacker) ? damage * 2 : damage + rules::WeaknessBonus;
-    forEachMod(ModKind::DamageTaken, target, owner, [&](const Modifier& m) {
+    if (!ignoreDefender) forEachMod(ModKind::DamageTaken, target, owner, [&](const Modifier& m) {
         if (source->hasType(m.fromTypes) && (!m.fromEx || source->card->ex) && (!m.flip || (damage > 0 && flip())))
             damage += m.amount;  // :flip: "If any damage is done to this Pokémon by attacks, flip a coin" (Bastiodon)
     });
-    bool prevented = hasMod(ModKind::PreventAll, *target, owner);
-    forEachMod(ModKind::PreventDamage, target, owner, [&](const Modifier& m) {
-        prevented |= (!m.amount || damage <= m.amount) && (!m.fromEx || source->card->ex);
+    bool prevented = !ignoreDefender && hasMod(ModKind::PreventAll, *target, owner);
+    if (!ignoreDefender) forEachMod(ModKind::PreventDamage, target, owner, [&](const Modifier& m) {
+        prevented |= (!m.amount || damage <= m.amount) && (!m.fromEx || source->card->ex) &&
+                     (!m.fromBasic || source->card->stage == Stage::Basic);
     });
-    if (!prevented && damage > 0 && !target->hitOnce && hasMod(ModKind::PreventFirstHit, *target, owner)) prevented = true;
+    if (!ignoreDefender && !prevented && damage > 0 && !target->hitOnce && hasMod(ModKind::PreventFirstHit, *target, owner)) prevented = true;
     if (damage > 0) target->hitOnce = true;  // "first damaged by an attack after coming into play" (Mimikyu ex)
-    if (!prevented && damage > 0 && hasMod(ModKind::PreventFlip, *target, owner)) prevented = flip();
+    if (!ignoreDefender && !prevented && damage > 0 && hasMod(ModKind::PreventFlip, *target, owner)) prevented = flip();
     damage = prevented ? 0 : std::max(0, damage);
     target->damage += damage;
     if (log_)
@@ -101,7 +103,7 @@ void Game::attachFromZone(int player, uint16_t uid, Type type, int count) {
         card->onAttach->run(ctx);
     }
     // The other player's "whenever your opponent attaches an Energy from their Energy Zone…" (Jolteon ex): every
-    // attach from the Zone, by an effect too (Remco).
+    // attach from the Zone, by an effect too (ruling).
     PlayerState& other = s_.players[1 - owner];
     Uids watchers;
     if (other.active.card) watchers.push_back(other.active.uid);

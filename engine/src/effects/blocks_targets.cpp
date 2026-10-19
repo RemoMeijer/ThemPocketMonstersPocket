@@ -17,6 +17,10 @@ struct Filter {
     bool damaged = false, ex = false, notEx = false, mega = false, evolution = false, notSelf = false, notPicked = false, ability = false, tool = false;
     std::vector<std::string> names;
     std::string otherAbility;  // (other-ability "A"): it has an Ability not named A (Unown)
+    std::string nameHas, evolvesFrom;  // (name-has "Team Rocket"), (evolves-from "Eevee")
+    bool notNew = false;       // not-new: not put into play this turn (Quick-Grow Extract)
+    int maxHp = 0;             // (max-hp N): a maximum HP of N or less (Wallace)
+    uint8_t traits = 0;        // (trait ultra-beast|ancient|future)
 
     bool matches(const PokemonSlot& p, const EffectCtx& ctx) const {
         int n = 0, owner = 0;
@@ -31,6 +35,9 @@ struct Filter {
                (!notSelf || p.uid != ctx.self) && (!notPicked || p.uid != ctx.picked) && n >= energy && (!ability || !p.card->abilities.empty()) &&
                (!tool || !p.tools.empty()) &&
                (otherAbility.empty() || (!p.card->abilities.empty() && p.card->abilities[0].name != otherAbility)) &&
+               (nameHas.empty() || p.card->name.find(nameHas) != std::string::npos) &&
+               (evolvesFrom.empty() || p.card->evolvesFrom == evolvesFrom) && (!notNew || p.enteredTurn < ctx.game.state().turn) &&
+               (!maxHp || (ctx.game.find(p.uid, &owner), ctx.game.maxHp(p, owner) <= maxHp)) && (!traits || (traits & p.card->traits)) &&
                (names.empty() || std::find(names.begin(), names.end(), p.card->name) != names.end());
     }
 };
@@ -55,6 +62,14 @@ Filter parseFilter(const SExpr& e, std::size_t from) {
         else if (w == "type" && a.list) f.types |= typeMask(a, 0);
         else if (w == "has-energy" && a.list) f.energy = intArg(arg(a, 0)), f.energyTypes = typeMask(a, 1);
         else if (w == "other-ability" && a.list) f.otherAbility = arg(a, 0).atom;
+        else if (w == "name-has" && a.list) f.nameHas = arg(a, 0).atom;
+        else if (w == "evolves-from" && a.list) f.evolvesFrom = arg(a, 0).atom;
+        else if (w == "not-new") f.notNew = true;
+        else if (w == "max-hp" && a.list) f.maxHp = intArg(arg(a, 0));
+        else if (w == "trait" && a.list) {
+            f.traits |= traitFromName(arg(a, 0).atom);
+            if (!f.traits) scriptFail("unknown trait", e);
+        }
         else if (w == "name" && a.list)
             for (std::size_t n = 0; n < argCount(a); ++n) f.names.push_back(arg(a, n).atom);
         else scriptFail("unknown filter '" + a.text() + "'", e);
@@ -174,7 +189,7 @@ private:
 class PokemonTest : public Cond {
 public:
     enum What { HasDamage, HasStatus, HasTool, IsType, IsEx, IsBasic, IsEvolution, EnergyAtLeast, ExtraEnergy,
-                MovedToActive, EvolvedThisTurn, DamagedLastTurn, IsActive, Exists, HalfHp };
+                MovedToActive, EvolvedThisTurn, DamagedLastTurn, IsActive, AtZero, Exists, HalfHp };
     PokemonTest(What what, const Target* t, int amount, uint16_t types) : what_(what), t_(t), amount_(amount), types_(types) {}
 
     bool test(EffectCtx& ctx) const override {
@@ -197,6 +212,11 @@ public:
             case MovedToActive: return p->becameActiveTurn == turn;
             case EvolvedThisTurn: return !p->below.empty() && p->enteredTurn == turn;
             case DamagedLastTurn: return p->damagedTurn == turn - 1;
+            case AtZero: {  // "is Knocked Out by damage from this attack": checked before the knock-out happens
+                int owner = 0;
+                ctx.game.find(p->uid, &owner);
+                return p->damage >= ctx.game.maxHp(*p, owner);
+            }
             case IsActive: {
                 int owner = 0;
                 ctx.game.find(p->uid, &owner);
@@ -246,6 +266,43 @@ private:
     const Target* t_;
     int amount_;
     uint16_t types_;
+};
+
+// (evolved-from TARGET "X"): it evolved from X during this turn (Weavile from Sneasel).
+class EvolvedFrom : public Cond {
+public:
+    EvolvedFrom(const Target* t, std::string name) : t_(t), name_(std::move(name)) {}
+    bool test(EffectCtx& ctx) const override {
+        const PokemonSlot* p = first(ctx, t_);
+        return p && !p->below.empty() && p->enteredTurn == ctx.game.state().turn && p->below.back()->name == name_;
+    }
+
+private:
+    const Target* t_;
+    std::string name_;
+};
+
+// (shared-energy A B N): both have N or more Energy of one same type attached.
+class SharedEnergy : public Cond {
+public:
+    SharedEnergy(const Target* a, const Target* b, int n) : a_(a), b_(b), n_(n) {}
+    bool test(EffectCtx& ctx) const override {
+        const PokemonSlot* a = first(ctx, a_);
+        const PokemonSlot* b = first(ctx, b_);
+        if (!a || !b) return false;
+        int oa = 0, ob = 0;
+        ctx.game.find(a->uid, &oa);
+        ctx.game.find(b->uid, &ob);
+        EnergyCounts ea = ctx.game.energyOf(*a, oa), eb = ctx.game.energyOf(*b, ob);
+        for (int t = 0; t < TypeCount; ++t)
+            if (ea[t] >= n_ && eb[t] >= n_) return true;
+        return false;
+    }
+
+private:
+    const Target* a_;
+    const Target* b_;
+    int n_;
 };
 
 class HasAttack : public Cond {  // (has-attack T "A"): the Pokémon has an attack named A (Psychic, the Supporter)
@@ -332,6 +389,13 @@ void addTargetWords(Words& w) {
         pool.items[0].atom = "each";
         return b.make<PokemonNum>(PokemonNum::EnergyTypes, b.target(pool), 0);
     }};
+    w.cond["evolved-from"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<EvolvedFrom>(b.target(arg(e, 0)), arg(e, 1).atom); }};
+    w.cond["shared-energy"] = {3, 3, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<SharedEnergy>(b.target(arg(e, 0)), b.target(arg(e, 1)), intArg(arg(e, 2)));
+    }};
+    w.num["types-on"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) {  // energy types on that Pokémon
+        return b.make<PokemonNum>(PokemonNum::EnergyTypes, b.target(arg(e, 0)), 0);
+    }};
     w.cond["has-attack"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<HasAttack>(b.target(arg(e, 0)), arg(e, 1).atom);
     }};
@@ -351,6 +415,7 @@ void addTargetWords(Words& w) {
     test("evolved-this-turn", PokemonTest::EvolvedThisTurn);
     test("damaged-last-turn", PokemonTest::DamagedLastTurn);
     test("is-active", PokemonTest::IsActive);
+    test("at-zero", PokemonTest::AtZero);
     test("half-hp", PokemonTest::HalfHp);
     w.cond["has-status"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<PokemonTest>(PokemonTest::HasStatus, b.target(arg(e, 0)), statusMask(e, 1), 0);

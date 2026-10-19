@@ -1,0 +1,22 @@
+# Coverage batch 10, Grass/Darkness/Metal: Ultra Beasts (data/traits.tsv) with Beast Wall, Beastite and Lusamine,
+# and Celesteela switching between Ultra Beasts.
+energy: Grass, Darkness, Metal
+
+1 A3a-006  # Buzzwole ex
+1 B2-014   # Buzzwole
+1 A3a-007  # Pheromosa
+1 B4-016   # Pheromosa
+1 A3a-008  # Kartana
+1 B2b-048  # Kartana
+1 A3a-042  # Nihilego
+1 A3a-043  # Guzzlord ex
+1 B2-109   # Guzzlord
+1 A3a-044  # Poipole
+1 A3a-045  # Naganadel (from Poipole)
+1 A3a-053  # Stakataka
+1 A3a-062  # Celesteela
+1 A3a-063  # Beast Wall
+2 A3a-066  # Beastite
+1 A3a-069  # Lusamine
+2 P-A-005  # Poké Ball
+1 P-A-007  # Professor's Research

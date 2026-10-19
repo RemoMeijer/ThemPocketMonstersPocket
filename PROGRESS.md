@@ -1,6 +1,6 @@
 # Progress
 
-Updated 2026-10-19, after coverage batch 9.
+Updated 2026-10-19, after coverage batch 10.
 
 This is the handoff file: what the project is, where it stands, what's open and what comes next. Read it first, then:
 - [CLAUDE.md](CLAUDE.md) for the working rules and commands;
@@ -8,25 +8,25 @@ This is the handoff file: what the project is, where it stands, what's open and 
 
 ## At a glance
 
-A C++ simulator for Pokémon TCG Pocket. The goal is to play many games between decks and see which decks come out on top, as ideas for Remco to try in the game. It's Remco's personal side project, in a local git repo with no remote.
+A C++ simulator for Pokémon TCG Pocket. The goal is to play many games between decks and see which decks come out on top, as ideas to try in the game. It's a personal side project, in a local git repo with no remote.
 
-- **Engine:** most of the way there. It plays games by the rules Remco confirmed, for 90% of all cards, and an independent checker watches every move.
+- **Engine:** most of the way there. It plays games by the settled rules, for 97% of all cards, and an independent checker watches every move.
 - **Around the engine:** not started yet. That means running many games at once, stats, finding decks and a better player.
 
 | Part | State |
 |---|---|
 | Rules core: setup, turns, Energy Zone, attacking, retreating, evolving, Trainers, Tools, Stadiums with their actions (R5), abilities, Special Conditions, Checkup, damage, winning | Built and checked. Missing: the player picking which energy type to pay, discard or move (the engine picks; step 4 under Next) |
 | Card data | Every set up to B4b: 2,319 unique cards from Limitless, cross-checked against deckgym-core |
-| Card effects | 2,088 of 2,319 cards playable (90%). Trainers: 129 of 152 |
-| Checks | 21 rule tests, 43 effect tests, 77 compiler self-test examples. `check_states`: 0 violations over 21 decks. Sanitizer build (memory and undefined behaviour) clean |
+| Card effects | 2,269 of 2,319 cards playable (97%). Trainers: 144 of 152 |
+| Checks | 21 rule tests, 44 effect tests, 86 compiler self-test examples. `check_states`: 0 violations over 26 decks. Sanitizer build (memory and undefined behaviour) clean |
 | Replayable games (seeds) | Not yet: every game seeds itself from `random_device` |
 | Simulation runner (many games, threads, stats) | Not started |
 | Finding decks (generate, play, rank) | Not started |
 | Players | Random only. About 70% of random-vs-random games end in a draw at the turn cap; that's accepted for now |
 
 - **Code size:** about 4,150 lines of C++ in the engine, 1,850 in tests, and 1,130 of Python (card data, plus the 900-line effect compiler).
-- **Script language:** about 140 words.
-- **Effect scripts:** 1,319 scripts in `data/effects.tsv`.
+- **Script language:** about 175 words.
+- **Effect scripts:** 1,500 scripts in `data/effects.tsv`. **Traits:** `data/traits.tsv` (Ultra Beast, Ancient, Future by card name, from Serebii).
 
 ## Card coverage
 
@@ -34,28 +34,27 @@ A C++ simulator for Pokémon TCG Pocket. The goal is to play many games between 
 
 | Kind | Playable | At the 2026-10-16 review |
 |---|---|---|
-| Pokémon | 1,959 / 2,167 | 1,808 |
-| Supporters | 70 / 82 | 40 |
-| Items | 23 / 31 | 14 |
-| Tools | 23 / 26 | 6 |
+| Pokémon | 2,125 / 2,167 | 1,808 |
+| Supporters | 77 / 82 | 40 |
+| Items | 28 / 31 | 14 |
+| Tools | 26 / 26 | 6 |
 | Stadiums | 13 / 13 | 3 |
-| **All** | **2,088 / 2,319 (90%)** | 1,871 (80%) |
+| **All** | **2,269 / 2,319 (97%)** | 1,871 (80%) |
 
-**Trainers still missing (23):**
-- **Need a Pokémon trait the data doesn't mark (7):** Ultra Beasts (Beastite, Beast Wall, Lusamine), Ancient (Ancient Booster Energy Capsule, Professor Sada), Future (Future Booster Energy Capsule, Professor Turo). Neither Limitless nor deckgym-core says which Pokémon have these traits, so it would take a hand-made list.
-- **One-offs (16):** Penny, Will, Drayden, May, Silver, Prank Spinner, Team Rocket's Boss, Quick-Grow Extract, Wallace, Acerola, Eevee Bag, Maintenance, Mythical Slab, Lucky Ice Pop, Puppy-Loving Girl, Clemont's Backpack.
+**Trainers still missing (8):** each needs a mechanic of its own: Penny (another Supporter's effect), Will (the next coin
+flip is heads), Drayden (one more pick for Draco Meteor), May ("for each Pokémon you put into your hand"), Prank Spinner
+(one card from both hands), Team Rocket's Boss ("any number" from the opponent's hand), Maintenance (the card itself counts
+in the hand while it's checked), Clemont's Backpack (a bonus on the Bench).
 
-**Pokémon still missing (208):** a long tail. The most common missing text is on 5 cards, and most are on 1 or 2. The biggest groups (`engine/build/tcgp --coverage` and `python3 compile_effects.py` list them):
-- **"When you play this Pokémon from your hand to evolve…" Abilities whose effect isn't built** (5).
-- **Puppy Pile** (5).
-- **"This attack's damage isn't affected by Weakness / by effects on the Active"** (5).
-- **Abilities left out of batch 9:** Iron Valiant (needs the Future trait), Victini and Gholdengo (flip the coins again).
-- **Simple conditions, 2 cards each:** "has no damage on it", "has an Ability", "more remaining HP than this Pokémon", "Evolution Pokémon on your Bench", "exactly N, N or N cards in your hand", "more Energy attached than", "N or more of the same type of Energy", "If Durant is on your Bench", "Both Active Pokémon are now Confused".
-- **Copying attacks:** "… and use it as this attack", as in Mew ex's Genome Hacking.
-- **Choices like "choose either Poisoned or Confused"**.
-- **Left out of batch 7:** Toxtricity (its bonus and its Paralysis sit in one clause, which can't run both before and after the damage), Archeops (a "+20 next turn" on the Bench).
+**Pokémon still missing (42):** all one-offs.
+- **Copying:** both Ditto ("If this Pokémon doesn't have the necessary Energy to use that attack"), Mew B2b (from hand and deck), Smeargle (a Supporter's effect), Quagsire (a random attack can't be used).
+- **Timing:** "the first time this Pokémon has used an attack" (Iron Bundle ex, Flutter Mane ex); damage at the end of the opponent's next turn (Mismagius, Meowscarada ex, Armaldo); Galarian Stunfisk (when the opponent retreats); Gothitelle (when they attach).
+- **Costs and counts:** cheaper attacks under a condition (Boltund, Veluza); "This effect stacks" (Miltank, Mega Mawile ex); Sweets Relay used this game (Alcremie); discards by choice (Gyarados, Vespiquen ex, Slowking, Camerupt).
+- **Reveal or mill and check the card:** Dugtrio, Golurk, Pachirisu, Team Rocket's Wobbuffet.
+- **Others:** devolving (Celebi A4a), losing Abilities (Budew), attacking twice (Mega Kangaskhan ex), Tools into the deck (Hoopa), moving Energy freely (Delcatty), damage per Energy on the target (Tapu Lele), Poison or Burn amount (Toxicroak, Toxapex), "Uxie and Azelf on your Bench" (Mesprit), healing a Pokémon ex with Energy (Arboliva), Unown CHECK, Ambipom (with Lucky Mittens), Archeops and Toxtricity (left out of batch 7), Victini and Gholdengo (flip again).
+- **Card data:** Flareon B4-022 reads "Discard Fire{R} Energy" on Limitless, which looks like a typo for "a {R} Energy"; check Serebii, then put it in `FIXES`.
 
-**Test decks:** `decks/coverage-a.txt` … `coverage-n.txt` hold the cards of each batch, so `check_states` plays them in random games. The other 7 decks (`pikachu`, `charizard`, `abilities`, …) are the older test decks.
+**Test decks:** `decks/coverage-a.txt` … `coverage-s.txt` hold the cards of each batch, so `check_states` plays them in random games. The other 7 decks (`pikachu`, `charizard`, `abilities`, …) are the older test decks.
 
 ## Checks: how to run them, and the last results
 
@@ -71,11 +70,11 @@ engine/build/tcgp --coverage
 
 The sanitizer build is `engine/build-debug`, configured with `-fsanitize=address,undefined`. It's about 8× slower: `./check_all.sh engine/build-debug/check_states`, or `check_states` on 2–4 decks.
 
-Last results, 2026-10-19 after batch 9:
+Last results, 2026-10-19 after batch 10:
 - all tests pass;
-- the self-test passes (77 examples);
-- `check_states` (`./check_all.sh`): all 21 decks, 71M moves, 0 violations;
-- sanitizer build: tests plus `check_states` on `coverage-k` … `coverage-n` (one process per deck), clean: no runtime errors, 0 violations.
+- the self-test passes (86 examples);
+- `check_states` (`./check_all.sh`): all 26 decks, 107M moves, 0 violations;
+- sanitizer build: tests plus `check_states` on `coverage-o` … `coverage-s` (one process per deck), clean: no runtime errors, 0 violations.
 
 **Speed:** about 2,000 games/s on one thread with full state checking after every move (measured 2026-10-16). The engine alone is faster but hasn't been measured. deckgym-core quotes about 3,300 random games/s.
 
@@ -102,7 +101,7 @@ Last results, 2026-10-19 after batch 9:
 - **Whitney** also cured Poison and Burn: `cure` ignored its list.
 - **Replacing an HP Stadium** left Pokémon with too much damage in play. Playing a Stadium now runs the knock-out check.
 
-**2026-10-16, Remco's rule answers, built:**
+**2026-10-16, rulings, built:**
 - **Golisopod's "moved to the Active Spot this turn"** belongs to the card on top.
 - **Abilities** need something to do, like Trainers.
 - **Random multi-hit attacks** (Wugtrio ex) add up the hits on each Pokémon first, then deal them once, so Weakness and bonuses count once.
@@ -131,18 +130,20 @@ No existing script changed in any batch unless the batch said so.
 | 7 | `c599c02` | none | Memory of the last turn in the state: `ko-last-turn`, `used-last-turn`, `damaged-last-turn`, `points-last-turn`. Compiler only: "takes +N" next turn, "this Pokémon's attack does +N" next turn (one-attack cards only), "your Pokémon do +N" next turn | 33: 9 "Knocked Out last turn" (Marshadow, Lapras, Zarude, …), 7 Sweets Relay, 9 "+N next turn" (Togekiss, Donphan, Crabominable ex, …), 3 "your Pokémon +N next turn" (Oricorio, Meloetta, Happiny), 3 "takes +N" (Kommo-o, Lucario, Hariyama), Wobbuffet, Hisuian Basculegion |
 | 8 | `3dfc7a5` | 6: Rescue Scarf, Lucky Egg, Lucky Mittens, Electrical Cord, Hala, Iris | Knock-outs as a loop: triggers first, then points, then the win rules. `on-knocked-out` (`:active`, `:by-attack`), `on-knocks-out`, `no-points`, `to-hand-instead`, `knock-out`, `discard-this`, `not-picked`. Modifiers `survive-at` (`:flip`), `extra-point`, `extra-tools`, and the options `:if COND` and `:energy T`. A Pokémon holds a list of Tools (two for Revavroom). Fixed on the way: Sweets Relay read a missing "last attack" on turn 1 (batch 7), and evolving into less HP than the damage (after Starting Plains' +20) didn't knock out | 14: Team Rocket's Electrode, Spiritomb, Galarian Cursola, Passimian ex, Zoroark, Garchomp B4a, Dusknoir B1, Glimmora, Conkeldurr, Ursaluna, Bewear, Cherubi, Revavroom, Pyukumuku |
 | 9 | `0ca479c` | 1: Memory Light | Ability forms `during-checkup`, `at-start-of-turn`, `on-bench`, `on-opp-attach`; activated `:bench` and `:repeat`. Words `move-damage`, `discard-from-hand`, `discard-pokemon`, `evolve-from-deck`, `first-turn`, `is-active`, `hp-left`, `other-ability`. Modifiers `cant-stadium`, `cant-evolve-active`, `no-healing`, `poison-damage`, `prevent-first-hit`, `evolve-early`, `evolves-as :as`, `no-abilities`, `extra-type`, `double-energy`, `previous-attacks`; options `:evolves-from`, `:with-energy`, `:status`, `:flip` on damage-taken, `:energy` per Energy on hp. `Game::energyOf` (Serperior), `attacksOf` (Celebi), `abilitiesOff` (Alolan Muk), `PokemonSlot::hasType` (Urshifu). Fixed on the way: retreat payment with a doubled Energy; "you have X in play" read "Arceus or Arceus ex" and "another Beldum" as one name; the checker's plain-board, evolve, retreat, repeat-Ability and draw checks | 71, among them Serperior ×2, Celebi, Alolan Muk, both Urshifu, Eevee and Eevee ex, Jolteon ex, Glaceon ex, Vaporeon, Sylveon, Garganacl, Flygon ex, Darkrai, Caterpie, Miraidon ex, Koraidon ex, Dusknoir, Klefki, Claydol, Mimikyu ex, Regigigas, the two Unown, Reuniclus, Comfey, Teal Mask Ogerpon ex, and five "discard a card from your hand" attackers |
+| 10 | see `git log` | 15: Beast Wall, Beastite, Lusamine, the Booster Energy Capsules, Professor Sada, Professor Turo, Silver, Acerola, Quick-Grow Extract, Wallace, Lucky Ice Pop, Eevee Bag, Mythical Slab, Puppy-Loving Girl | Traits (`data/traits.tsv`, `(trait …)`, `:trait`, `:per-point`); `(hit :no-weakness :ignore-effects)`; duration `while-active`; `copy-attack`, `set-hp-left`, `halve-hp`, `status-random`, `attach-random-type`, `change-energy-type`, `change-next-energy`, `opp-hand-to-deck`, `opp-hand-discard`, `top-card-if`, `discard-hand-random-of`, attach-from-discard `random` and `different`; numbers `points`, `tools`, `ko-count`, `deck-count`, `types-on`, `with-attack`, `dealt`; tests `evolved-from`, `shared-energy`, `at-zero`; filters `name-has`, `evolves-from`, `not-new`, `max-hp`, `trait`, `has-attack`; modifiers `no-weakness`, `cant-trainer`, `cant-evolve`, `:from-basic`. Stage 1 cards onto the Bench (Silcoon). Compiler: "If …," may split at any comma; joined multi-sentence rules | about 166, among them Mew ex, Ditto-like copiers, Hitmonchan ex, Starmie, Silcoon, Cascoon, Kingambit, Gholdengo ex, Iron Moth, the Puppy Pile family, Manaphy, Carbink |
 
 ## Rules
 
 DESIGN.md §10 lists every rule the engine follows, with its source:
-- **App:** Remco checked it in the game;
-- **Remco:** his reading of the card text;
+- **App:** checked in the game;
+- **Ruling:** how the card text is read here;
 - **FAQ, Tips, Card:** official sources;
 - **Assumed:** no source.
 
-**The rule for changes:** a game rule only changes after Remco has clarified it. Never change one on a guess; ask, then write his answer into §10.
+**The rule for changes:** a game rule only changes once it's settled. Never change one on a guess: ask, then write the answer into §10.
 
-**Answered by Remco and built** (newest first):
+**Settled and built** (newest first):
+- "This attack's damage isn't affected by any effects on your opponent's Active Pokémon" ignores all of the defender's effects (Abilities, Tools, attack effects). Silcoon and Cascoon go onto the Bench as Stage 1 Pokémon. Traits come from Serebii.
 - "During Pokémon Checkup" Abilities act first in Checkup, before Poison and Burn. "At the end of each turn" / "of your opponent's turn" Abilities (Darkrai, Caterpie) act before Checkup. "At the beginning of your turn" (Meloetta) comes after the draw.
 - Serperior's "each {G} Energy provides 2": literally 1 Energy = 2, for costs, retreat, "for each Energy attached" and HP per Energy.
 - Urshifu's second type only counts for "{X} Pokémon" effects; Weakness always uses the printed type.
@@ -165,19 +166,21 @@ DESIGN.md §10 lists every rule the engine follows, with its source:
 - Earlier (sources in §10): R1–R4; Trainers need something to do; effects that start something can always be played (Blaine, X Speed); after a double knock-out, the defending player picks a new Active first.
 
 **Assumed, and still to confirm:**
+- "Its remaining HP is now N" never heals; "halve its remaining HP, rounded down" rounds to a whole 10; a copied attack needs no Energy and can't copy again.
 - An effect that discards Energy discards real Energy: a doubled {G} (Serperior) goes as one.
 - Alolan Muk turns off Basic Pokémon's Abilities, not their Tools and not a Fossil's rule. Under Claydol a Potion can't be played (nothing to do). Misdreavus's "reveal their hand" does nothing in the engine.
 - Evolving from the deck by an effect (Caterpie, Porygon2, Magikarp) ignores the usual timing limits. A Pokémon whose HP drops below its damage because it lost Energy (Reuniclus retreating) is knocked out at once.
 - "Is Knocked Out" by an effect (Bewear, Galarian Cursola) isn't "Knocked Out by damage from an attack": no Rescue Scarf, Hala or revenge bonus.
 - Electrical Cord with one Benched Pokémon moves only 1 Energy ("1 Energy each to 2").
 - Knock-out triggers of one moment run the defender's Pokémon first, each with its Ability and then its Tools; the attacker's "knocks out" triggers run after each knock-out.
-- Lum Berry and Sitrus Berry act at the end of each turn, before Checkup. That's Remco's best guess; he said he'd double-check.
+- Lum Berry and Sitrus Berry act at the end of each turn, before Checkup. That's a best guess, still to double-check.
 - Which Energy Zone type comes up is random and even across the deck's types.
 - Dealing an opening hand reshuffles until the top 5 cards hold a Basic.
 - A defender's "takes −N damage" also applies on the Bench.
 - Evolving ends other effects on the Pokémon.
 
-**Open questions for Remco:**
+**Open questions:**
+- **Necrozma:** Serebii lists Dawn Wings Necrozma, Dusk Mane Necrozma and Ultra Necrozma ex (P-A promos) as Ultra Beasts; `data/traits.tsv` follows it. Are they Ultra Beasts in the app?
 - **Team Rocket's Thieving Machine:** once you play the Item it took, does it go to your discard pile (assumed) or back to your opponent's?
 - **Back into a full hand:** when Koga or Elesa puts cards into a hand that already holds 10, the engine sends the extra cards to the discard pile (assumed).
 - **Berries:** confirm "before Checkup".
@@ -186,12 +189,13 @@ DESIGN.md §10 lists every rule the engine follows, with its source:
 
 These are marked `shortcut:` in the code:
 - **Energy type when paying for a retreat or discarding:** the engine picks the most plentiful type. The player should pick.
-- **Energy type when moving energy** (Elemental Switch, Dawn, "Move an Energy"): the engine takes the first matching type. Remco says the player picks.
+- **Energy type when moving energy** (Elemental Switch, Dawn, "Move an Energy"): the engine takes the first matching type; the player should pick.
 - **Fossils:** a Fossil can't be discarded from play by choice.
 - **"Look at the top cards and put them back in any order"** (Hiker, Morty) does nothing.
 - **Clemont's Backpack:** its "+20 to your opponent's Pokémon" isn't supported, because damage bonuses only count against the Active. The card stays unsupported.
 - **Timed effects:** at most 16 at once; past that, the oldest is dropped. This has never happened in a game.
 - **Dragonair's "attach an Energy from your discard pile":** takes the most plentiful type there; the player should pick.
+- **Professor Sada's "3 different types … in any way you like":** the types come at random; the player should pick which type goes where.
 - **"During your next turn, this Pokémon's X attack does +N":** the bonus has no per-attack filter, so the compiler only accepts it on cards with one attack (all of them today).
 
 ## Known weak spots and risks
@@ -209,18 +213,16 @@ These are marked `shortcut:` in the code:
 
 ## Next
 
-In order. Each step gets a short plan, then tests, `check_states` at 0 violations, a sanitizer run and a commit. For coverage batches, Remco said (2026-10-19): commit freely, run batches back to back, and report every two batches or so. Rules still go to him first. He also prefers **big batches**: survey many cards, ask all rule questions at once, build them all with only the quick checks (tests, self-test), then run `./check_all.sh` and the sanitizer once and fix everything together.
+In order. Each step gets a short plan, then tests, `check_states` at 0 violations, a sanitizer run and a commit. For coverage batches (2026-10-19): commit freely, run batches back to back, and report every two batches or so. Rule questions are asked first. **Big batches** work best: survey many cards, ask all rule questions at once, build them all with only the quick checks (tests, self-test), then run `./check_all.sh` and the sanitizer once and fix everything together.
 
 1. **More card coverage, in batches.** Candidates, in the order I'd suggest:
-   - **Batch 10, the long tail of simple conditions and numbers** (one big batch): "has no damage on it", "has an Ability", "more remaining HP than this Pokémon", "Evolution Pokémon on your Bench", "exactly N cards in your hand", "isn't affected by Weakness / by effects", "discard a card from your hand".
-   - **Traits:** a hand-made list of Ultra Beasts and Ancient/Future Pokémon, from Serebii, would unlock 7 Trainers plus some Pokémon. Ask Remco first, since it's card data.
-   - **One-offs:** only if a deck needs them.
-2. **Effect-script checks:** real-card golden tests, meaning card text plus its expected script, a few per sentence family; a review of the `effects.tsv` diff for each new set; and `data/effects_manual.tsv` for odd cards. Remco chose to do this after coverage.
+   - The 50 cards left are one-offs (see "Card coverage"). Worth doing when a deck needs them; Mesprit and Arboliva are easy.
+2. **Effect-script checks:** real-card golden tests, meaning card text plus its expected script, a few per sentence family; a review of the `effects.tsv` diff for each new set; and `data/effects_manual.tsv` for odd cards. Planned for after coverage.
 3. **Seeds:** one seed per game, from which the shuffles, coins and random player all follow. Then failures can be replayed, and two decks can be compared on the same luck.
-4. **Player choices the engine makes today:** which energy type to pay, discard or move (Remco: the player picks), and discarding a Fossil.
+4. **Player choices the engine makes today:** which energy type to pay, discard or move (the player should pick), and discarding a Fossil.
 5. **The simulation runner (milestone 3):** many games over threads; win, draw and loss per pairing with a confidence interval; the first player alternates. About 2,400 games per pairing give ±2%.
 6. **Finding decks (milestone 4):** generate legal decks around Pokémon lines, play them against each other, rank them, and list the top ones to try in the game.
-7. **A minimal player** (attach energy, attack when possible), if the random player's draws and bias get in the way of step 6. No real bots yet (Remco).
+7. **A minimal player** (attach energy, attack when possible), if the random player's draws and bias get in the way of step 6. No real bots yet.
 
 Dropped: R6, source tags on each constant in `rules.h`. DESIGN.md §10 already gives each rule's source.
 
@@ -230,7 +232,7 @@ Dropped: R6, source tags on each constant in `rules.h`. DESIGN.md §10 already g
 - **No card is special-cased in C++.**
   - A new mechanic becomes a new block or modifier, used by every card with that text.
   - Rare one-of-a-kind mechanics stay unsupported on purpose and show up in `--coverage`.
-- **Rules:** never change one on a guess. Ask Remco; he checks in the app. His answers go into DESIGN.md §10.
+- **Rules:** never change one on a guess. Ask first; rules get checked in the app. Answers go into DESIGN.md §10.
 - **Git:** a local repo with no remote; commit each finished step, with the attribution line from CLAUDE.md. The generated `data/*.tsv` files are committed so data changes show up as diffs.
 - **Ignore Star, Crown and Shiny cards:** they're alt-art reprints.
 - **The APK in `apkm/` and `x/` is unused,** and its assets are encrypted. We don't decrypt them.

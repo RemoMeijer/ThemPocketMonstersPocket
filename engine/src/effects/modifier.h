@@ -42,6 +42,9 @@ enum class ModKind : uint8_t {
     ExtraType,           // while in play it is also of these `types` (Urshifu); read once when the cards load
     DoubleEnergy,        // each attached Energy of type `energy` counts as 2 (Serperior); doesn't stack
     PreviousAttacks,     // can use the attacks of the cards it evolved from (Celebi, Memory Light)
+    NoWeakness,          // has no Weakness
+    CantPlayTrainer,     // player-wide: no Trainer cards at all from the hand (Items, Supporters, Tools, Stadiums)
+    CantEvolve,          // player-wide: can't play a Pokémon from the hand to evolve any of their Pokémon
 };
 
 // Who a modifier applies to, seen from the player who owns its source.
@@ -56,7 +59,10 @@ struct Modifier {
     uint16_t types = 0;        // affected Pokémon must have one of these types (bit per Type; 0 = any)
     uint8_t stages = 0;        // affected Pokémon must be one of these stages (bit per Stage; 0 = any)
     uint16_t fromTypes = 0;    // DamageTaken: only damage from attackers of these types (0 = any)
-    bool fromEx = false;       // DamageTaken: only damage from a Pokémon ex
+    bool fromEx = false;       // DamageTaken, PreventDamage: only damage from a Pokémon ex
+    bool fromBasic = false;    // PreventDamage: only damage from a Basic Pokémon
+    uint8_t traits = 0;        // affected Pokémon must have one of these Trait bits (Ultra Beast, Ancient, Future)
+    bool perPoint = false;     // DamageDealt: amount for each point its owner has gotten (Beastite)
     bool notMega = false;      // affected Pokémon must not be a Mega Evolution Pokémon ex
     uint8_t minRetreat = 0;    // affected Pokémon must have a Retreat Cost of at least this (Heavy Helmet)
     const NameList* names = nullptr;  // affected Pokémon must have one of these names (nullptr = any)
@@ -74,5 +80,6 @@ struct Modifier {
 
 inline bool playerWide(ModKind k) {
     return k == ModKind::CantPlaySupporter || k == ModKind::CantPlayItem || k == ModKind::CantAttachToActive ||
-           k == ModKind::CantPlayStadium || k == ModKind::CantEvolveActive;
+           k == ModKind::CantPlayStadium || k == ModKind::CantEvolveActive || k == ModKind::CantPlayTrainer ||
+           k == ModKind::CantEvolve;
 }

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <fstream>
 #include <stdexcept>
 
@@ -175,9 +176,26 @@ CardDb CardDb::load(const std::string& cards, const std::string& scripts) {
         if (c.stage == Stage::Stage1) parentOf.emplace(c.name, c.evolvesFrom);
     for (CardDef& c : db.cards_)
         if (c.stage == Stage::Stage2 && parentOf.count(c.evolvesFrom)) c.evolvesFromBasic = parentOf[c.evolvesFrom];
+    // Ultra Beast, Ancient and Future aren't in the card data: a hand-made list by name, from Serebii.
+    if (std::ifstream traits(std::filesystem::path(cards).parent_path() / "traits.tsv"); traits) {
+        std::getline(traits, line);  // header
+        std::unordered_map<std::string, uint8_t> byName;
+        while (std::getline(traits, line)) {
+            auto tab = line.find('\t');
+            uint8_t t = tab == std::string::npos ? 0 : traitFromName(line.substr(tab + 1));
+            if (!t) throw std::runtime_error("bad line in traits.tsv: " + line);
+            byName[line.substr(0, tab)] |= t;
+        }
+        for (CardDef& c : db.cards_)
+            if (auto it = byName.find(c.name); it != byName.end()) c.traits = it->second;
+    }
     if (!scripts.empty()) db.attachScripts(scripts);
     for (CardDef& c : db.cards_) markSupported(c);
     return db;
+}
+
+uint8_t traitFromName(const std::string& name) {
+    return name == "ultra-beast" ? UltraBeast : name == "ancient" ? Ancient : name == "future" ? Future : 0;
 }
 
 const CardDef* CardDb::find(const std::string& id) const {

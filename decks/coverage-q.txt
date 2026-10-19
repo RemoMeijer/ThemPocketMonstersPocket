@@ -1,0 +1,22 @@
+# Coverage batch 10: long-tail cards, picked by script (whole lines, Grass/Fire/Dragon).
+energy: Grass, Fire
+
+1 A3-009   # Rowlet
+1 A3-011   # Dartrix
+1 A3-012   # Decidueye ex
+1 A4-022   # Heracross
+1 A4-013   # Hoppip
+1 A4-014   # Skiploom
+1 A4a-003  # Jumpluff ex
+1 A4-011   # Ledyba
+1 B2-002   # Ledian
+1 A2-008   # Roselia
+1 B2-005   # Roserade
+1 B2-014   # Buzzwole
+1 B2a-012  # Capsakid
+1 B2a-013  # Scovillain
+1 B3-003   # Heracross
+1 B3-018   # Durant
+2 B1-003   # Wurmple
+1 B4-002   # Silcoon
+1 B4-004   # Cascoon

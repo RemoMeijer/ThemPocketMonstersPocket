@@ -6,9 +6,13 @@
 #include "game/game.h"
 
 namespace {
-class Hit : public Stmt {  // (hit): the attack's damage, at this point in its text
+class Hit : public Stmt {  // (hit [:no-weakness] [:ignore-effects]): the attack's damage, at this point in its text
 public:
-    void run(EffectCtx& ctx) const override { hit(ctx); }
+    Hit(bool weakness, bool ignore) : weakness_(weakness), ignore_(ignore) {}
+    void run(EffectCtx& ctx) const override { hit(ctx, weakness_, ignore_); }
+
+private:
+    bool weakness_, ignore_;
 };
 
 // (bonus N), (set-damage N): change the attack's damage before (hit).
@@ -62,7 +66,7 @@ private:
 };
 
 // (hits TIMES TARGET N): pick TARGET TIMES times, add up N per pick, then damage each picked Pokémon once,
-// so Weakness and "+N damage" count once per Pokémon, not per pick (Remco: "chosen at random 3 times").
+// so Weakness and "+N damage" count once per Pokémon, not per pick (ruling: "chosen at random 3 times").
 class Hits : public Stmt {
 public:
     Hits(const Num* times, const Target* t, const Num* n) : times_(times), t_(t), n_(n) {}
@@ -142,6 +146,64 @@ private:
     uint8_t mask_;
 };
 
+// (set-hp-left TARGET N): "its remaining HP is now N" (never heals: assumed); (halve-hp TARGET): "halve its remaining
+// HP, rounded down" to a whole 10 (assumed).
+class SetHpLeft : public Stmt {
+public:
+    SetHpLeft(const Target* t, int n) : t_(t), n_(n) {}
+    void run(EffectCtx& ctx) const override {
+        Uids targets;
+        t_->select(ctx, targets);
+        for (uint16_t uid : targets) {
+            int owner = 0;
+            PokemonSlot* p = ctx.game.find(uid, &owner);
+            if (!p || !affects(ctx, uid)) continue;
+            int hp = ctx.game.maxHp(*p, owner), left = hp - p->damage;
+            int now = n_ >= 0 ? n_ : left / 2 / 10 * 10;
+            if (now < left) p->damage = hp - now;
+            if (ctx.game.logging()) ctx.game.say("  -> ", ctx.game.show(*p, owner));
+        }
+    }
+
+private:
+    const Target* t_;
+    int n_;  // -1: half
+};
+
+// (status-random TARGET S…): one of these Special Conditions at random, not one it already has (Dustox).
+class StatusRandom : public Stmt {
+public:
+    StatusRandom(const Target* t, uint8_t mask) : t_(t), mask_(mask) {}
+    void run(EffectCtx& ctx) const override {
+        Uids targets;
+        t_->select(ctx, targets);
+        for (uint16_t uid : targets) {
+            int owner = 0;
+            PokemonSlot* p = ctx.game.find(uid, &owner);
+            if (!p || p != &ctx.game.state().players[owner].active || !affects(ctx, uid)) continue;
+            std::vector<uint8_t> left;
+            for (uint8_t bit = 1; bit && bit <= Burned; bit = uint8_t(bit << 1))
+                if ((mask_ & bit) && !(p->status & bit)) left.push_back(bit);
+            if (left.empty()) continue;
+            uint8_t s = left[std::uniform_int_distribution<std::size_t>(0, left.size() - 1)(ctx.game.rng())];
+            if (s & uint8_t(~ctx.game.blockedStatuses(*p, owner))) {
+                if (s & ReplacingStatuses) p->status &= ~ReplacingStatuses;
+                p->status |= s;
+            }
+            if (ctx.game.logging()) ctx.game.say("  -> ", ctx.game.show(*p, owner));
+        }
+    }
+
+private:
+    const Target* t_;
+    uint8_t mask_;
+};
+
+class Dealt : public Num {  // (dealt): the damage (hit) did to the opponent's Active Pokémon
+public:
+    int eval(EffectCtx& ctx) const override { return ctx.dealt; }
+};
+
 class Healed : public Cond {  // (healed)
 public:
     bool test(EffectCtx& ctx) const override { return ctx.healed; }
@@ -179,11 +241,26 @@ private:
 }  // namespace
 
 void addDamageWords(Words& w) {
-    w.stmt["hit"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Hit>(); }};
+    w.stmt["hit"] = {0, 2, [](const SExpr& e, ScriptBuilder& b) {
+        bool weakness = true, ignore = false;
+        for (std::size_t i = 0; i < argCount(e); ++i) {
+            const std::string& o = arg(e, i).atom;
+            if (o == ":no-weakness") weakness = false;
+            else if (o == ":ignore-effects") ignore = true;
+            else scriptFail("unknown hit option", e);
+        }
+        return b.make<Hit>(weakness, ignore);
+    }};
     w.stmt["bonus"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<AttackDamage>(false, b.num(arg(e, 0))); }};
     w.stmt["set-damage"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<AttackDamage>(true, b.num(arg(e, 0))); }};
     w.stmt["cancel"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Cancel>(); }};
     w.stmt["damage"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Damage>(b.target(arg(e, 0)), b.num(arg(e, 1))); }};
+    w.stmt["set-hp-left"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<SetHpLeft>(b.target(arg(e, 0)), intArg(arg(e, 1))); }};
+    w.stmt["halve-hp"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<SetHpLeft>(b.target(arg(e, 0)), -1); }};
+    w.stmt["status-random"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<StatusRandom>(b.target(arg(e, 0)), parseStatuses(e, 1));
+    }};
+    w.num["dealt"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Dealt>(); }};
     w.stmt["hits"] = {3, 3, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<Hits>(b.num(arg(e, 0)), b.target(arg(e, 1)), b.num(arg(e, 2)));
     }};

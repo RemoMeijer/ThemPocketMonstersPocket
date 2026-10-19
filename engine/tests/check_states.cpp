@@ -112,12 +112,12 @@ void checkState(const Game& game, const Deck* decks[2]) {
             // puts a Stage 2 straight onto its Basic.
             bool rareCandy = slot->card->stage == Stage::Stage2 && slot->below.size() == 1 &&
                              slot->card->evolvesFromBasic == slot->below[0]->name;
-            EXPECT(int(slot->below.size()) == stageOf(slot->card) || rareCandy);
+            EXPECT(int(slot->below.size()) == stageOf(slot->card) - slot->baseStage || rareCandy);  // Silcoon: base 1
             for (std::size_t b = 0; b < slot->below.size() && !rareCandy; ++b) {
                 const CardDef* above = b + 1 < slot->below.size() ? slot->below[b + 1] : slot->card;
                 const Modifier* as = passiveOf(*slot->below[b], ModKind::EvolvesAs);  // Eevee ex
                 EXPECT(above->evolvesFrom == slot->below[b]->name || (as && as->as->has(above->evolvesFrom)));
-                EXPECT(stageOf(slot->below[b]) == int(b));
+                EXPECT(stageOf(slot->below[b]) == int(b) + slot->baseStage);
             }
         }
     }

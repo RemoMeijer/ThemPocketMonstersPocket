@@ -18,6 +18,9 @@ const char* typeName(Type t);
 char typeLetter(Type t);
 constexpr uint16_t typeBit(Type t) { return uint16_t(1u << int(t)); }
 
+enum Trait : uint8_t { UltraBeast = 1, Ancient = 2, Future = 4 };
+uint8_t traitFromName(const std::string& name);  // "ultra-beast", "ancient", "future"; 0 if unknown
+
 // Energy per type: what is attached to a Pokémon, or what an attack costs (Colorless = any type).
 using EnergyCounts = std::array<uint8_t, TypeCount>;
 bool canPay(const EnergyCounts& attached, const EnergyCounts& cost);
@@ -59,6 +62,7 @@ struct CardDef {
     std::vector<AbilityDef> abilities;
     std::string effect;            // a Trainer's (or Fossil's) text
     int points = 1;                // points the opponent scores for knocking it out
+    uint8_t traits = 0;            // Trait bits, from data/traits.tsv (Serebii): Ultra Beast, Ancient, Future
 
     // Built from the card's effect scripts (data/effects.tsv).
     std::vector<Modifier> passive;     // always on: its ability, or the Tool / Stadium card itself
@@ -97,7 +101,7 @@ struct CardDef {
     bool isEvolution() const { return isPokemon() && !evolvesFrom.empty(); }
     bool isTrainer(TrainerKind k) const { return category == Category::Trainer && trainer == k; }
     bool hasType(uint16_t mask) const { return !mask || (type && (mask & typeBit(*type))); }
-    uint16_t extraTypes = 0;  // also these types while in play (Urshifu's Double Type); never for Weakness (Remco)
+    uint16_t extraTypes = 0;  // also these types while in play (Urshifu's Double Type); never for Weakness (ruling)
 };
 
 class CardDb {

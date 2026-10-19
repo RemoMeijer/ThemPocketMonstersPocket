@@ -1,0 +1,23 @@
+# Coverage batch 10: long-tail cards, picked by script (whole lines, Psychic/Darkness/Metal).
+energy: Psychic, Darkness, Metal
+
+1 A1a-032  # Mew ex
+1 A2-075   # Uxie
+1 A1-115   # Abra
+1 A1-116   # Kadabra
+1 A2b-031  # Alakazam
+1 A2b-035  # Giratina ex
+1 A1-206   # Eevee
+1 A3b-033  # Sylveon
+1 A3b-035  # Mimikyu
+1 A4-081   # Natu
+1 A4-082   # Xatu
+1 A4-090   # Munna
+1 A4-091   # Musharna
+1 A4a-036  # Latias
+1 B1-110   # Yamask
+1 B1-111   # Cofagrigus
+1 B1a-037  # Xerneas
+1 B2-058   # Galarian Ponyta
+1 B2-059   # Galarian Rapidash
+1 B3a-025  # Scream Tail
