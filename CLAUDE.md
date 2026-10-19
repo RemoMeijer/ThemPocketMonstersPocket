@@ -17,7 +17,7 @@ The current focus is a correct engine: the right cards and the right rules. Stat
   - card data from Limitless, every set up to B4b: 2,269 of 2,319 cards (97%) are playable;
   - coverage batches 0–10 (Trainers: 144 of 152 now; all 13 Stadiums and all 26 Tools; memory of the last turn; knock-out triggers; about 70 Abilities; the long tail; Ultra Beast, Ancient and Future traits in `data/traits.tsv`).
 - **Next** (PROGRESS.md, "Next"):
-  - card coverage: the most common missing attack texts, then the Trainers left out of batches 0–6;
+  - card coverage is basically done: the 50 cards left are one-offs (PROGRESS.md "Card coverage"), done when a deck needs them;
   - effect-script checks (golden tests);
   - seeds;
   - player choices;
@@ -127,8 +127,14 @@ For memory and undefined-behaviour checks, `engine/build-debug` is configured wi
   - the APK's assets are encrypted and we don't decrypt them.
 - **Before calling something done:**
   - the tests pass;
-  - `check_states` reports 0 violations;
-  - `compile_effects.py`'s self-test passes;
+  - `./check_all.sh` reports 0 violations, and the sanitizer build is clean on the new decks;
+  - `compile_effects.py`'s self-test passes, and no existing script in `data/effects.tsv` changed unless that was the point;
   - after a data change, `check_cards.py` reports 0 differences;
-  - when adding patterns, compare a sample of compiled scripts with their card text.
+  - when adding patterns, check every new script against its card text.
+- **Keeping the context small** (a long session fills up fast):
+  - one session per batch or milestone; PROGRESS.md is the handoff, so a fresh session starts from it, not from the chat;
+  - print only what's needed: counts and the failing lines (`tail`, `grep`, `head`), never whole files or full logs;
+  - hand bulk reading to a subagent that reports only the result, e.g. "check these 150 new scripts against their card text, list only the mismatches";
+  - write longer edits as a script file in the scratchpad and run it, instead of repeating code in the chat;
+  - keep reasoning to short notes.
 - **Known shortcuts:** marked `shortcut:` in the code and listed in PROGRESS.md.
