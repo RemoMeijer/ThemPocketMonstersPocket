@@ -28,6 +28,9 @@ struct PokemonSlot {
     int damagedTurn = -1;       // turn it last took damage from an attack while in the Active Spot
     bool koByEffect = false;    // "is Knocked Out" by an effect, not by damage (Bewear, Galarian Cursola)
 
+    bool hasType(uint16_t mask) const { return card->hasType(mask) || (card->extraTypes & mask); }  // in play
+    bool hitOnce = false;       // took damage from an attack since coming into play (Mimikyu ex)
+
     int energyCount() const {
         int n = 0;
         for (auto e : energy) n += e;

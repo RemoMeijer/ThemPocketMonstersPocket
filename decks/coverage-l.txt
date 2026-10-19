@@ -1,0 +1,23 @@
+# Coverage batch 9, Water/Lightning/Fighting: Eevee evolving early and Eevee ex into any Eeveelution, Jolteon ex on
+# the opponent's attach, Glaceon ex and Garganacl at Checkup, Miraidon ex and Koraidon ex from the Bench, Zeraora,
+# the two Urshifu, Eiscue and two Falinks.
+energy: Water, Lightning, Fighting
+
+2 B1-184   # Eevee: may evolve early while Active
+1 A3b-056  # Eevee ex: evolves into any Eeveelution
+1 A1a-019  # Vaporeon (from Eevee): moves {W} as often as you like
+1 A2a-022  # Glaceon ex (from Eevee): 10 at Checkup
+1 B1-081   # Jolteon ex (from Eevee)
+1 B3b-030  # Sylveon (from Eevee): heals with a Tool
+1 B3a-019  # Miraidon ex
+1 B3a-036  # Koraidon ex
+1 A3a-021  # Zeraora
+1 B3a-031  # Nacli
+1 B3a-032  # Naclstack (from Nacli)
+1 B3a-033  # Garganacl (from Naclstack): heals 10 at Checkup
+1 B3-097   # Kubfu
+1 B3-051   # Rapid Strike Urshifu (from Kubfu): {W} and {F}
+1 B3-113   # Single Strike Urshifu (from Kubfu): {F} and {D}
+1 B1-080   # Eiscue
+2 B2-092   # Falinks: stronger with another
+1 A2b-021  # Tatsugiri

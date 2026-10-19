@@ -35,10 +35,15 @@ int Game::dealAttackDamage(int attacker, uint16_t attackerUid, uint16_t targetUi
     bool weak = weakness && active && base > 0 && target->card->weakness && source->card->type == target->card->weakness;
     if (weak) damage = hasMod(ModKind::WeaknessTimesTwo, *source, attacker) ? damage * 2 : damage + rules::WeaknessBonus;
     forEachMod(ModKind::DamageTaken, target, owner, [&](const Modifier& m) {
-        if (source->card->hasType(m.fromTypes) && (!m.fromEx || source->card->ex)) damage += m.amount;
+        if (source->hasType(m.fromTypes) && (!m.fromEx || source->card->ex) && (!m.flip || (damage > 0 && flip())))
+            damage += m.amount;  // :flip: "If any damage is done to this Pokémon by attacks, flip a coin" (Bastiodon)
     });
     bool prevented = hasMod(ModKind::PreventAll, *target, owner);
-    forEachMod(ModKind::PreventDamage, target, owner, [&](const Modifier& m) { prevented |= !m.amount || damage <= m.amount; });
+    forEachMod(ModKind::PreventDamage, target, owner, [&](const Modifier& m) {
+        prevented |= (!m.amount || damage <= m.amount) && (!m.fromEx || source->card->ex);
+    });
+    if (!prevented && damage > 0 && !target->hitOnce && hasMod(ModKind::PreventFirstHit, *target, owner)) prevented = true;
+    if (damage > 0) target->hitOnce = true;  // "first damaged by an attack after coming into play" (Mimikyu ex)
     if (!prevented && damage > 0 && hasMod(ModKind::PreventFlip, *target, owner)) prevented = flip();
     damage = prevented ? 0 : std::max(0, damage);
     target->damage += damage;
@@ -90,9 +95,24 @@ void Game::attachFromZone(int player, uint16_t uid, Type type, int count) {
     find(uid, &owner);
     const CardDef* card = target->card;
     if (card->onAttach && (!card->onAttachTypes || (card->onAttachTypes & typeBit(type))) &&
-        (!card->onAttachWhileActive || target == &s_.players[owner].active)) {
+        (!card->onAttachWhileActive || target == &s_.players[owner].active) && !abilitiesOff(*target)) {
         EffectCtx ctx{*this, owner};
         ctx.self = uid;
         card->onAttach->run(ctx);
+    }
+    // The other player's "whenever your opponent attaches an Energy from their Energy Zone…" (Jolteon ex): every
+    // attach from the Zone, by an effect too (Remco).
+    PlayerState& other = s_.players[1 - owner];
+    Uids watchers;
+    if (other.active.card) watchers.push_back(other.active.uid);
+    for (const PokemonSlot& b : other.bench) watchers.push_back(b.uid);
+    for (uint16_t w : watchers) {
+        const PokemonSlot* p = find(w);
+        if (!p || !p->card->onOppAttach || abilitiesOff(*p) || (p->card->onOppAttachWhileActive && p != &other.active)) continue;
+        say("  ", p->card->name, " reacts");
+        EffectCtx ctx{*this, 1 - owner};
+        ctx.self = w;
+        ctx.picked = uid;
+        p->card->onOppAttach->run(ctx);
     }
 }

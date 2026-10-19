@@ -76,6 +76,15 @@ struct CardDef {
     bool onKnockedOutWhileActive = false;  // only when Knocked Out in the Active Spot
     bool onKnockedOutByAttack = false;     // only by damage from an attack from the opponent's Pokémon
     const Stmt* onKnocksOut = nullptr;   // "If your opponent's Pokémon is Knocked Out by damage from this Pokémon's attacks…"
+    const Stmt* duringCheckup = nullptr; // "During Pokémon Checkup…" (every Checkup, before Poison and Burn)
+    bool duringCheckupWhileActive = false;
+    const Stmt* startOfTurn = nullptr;   // "At the beginning of your turn…" (after the draw)
+    bool startOfTurnWhileActive = false;
+    const Stmt* onBench = nullptr;       // "When you put this Pokémon from your hand onto your Bench, you may…"
+    const Stmt* onOppAttach = nullptr;   // "Whenever your opponent attaches an Energy from their Energy Zone…" (picked = that Pokémon)
+    bool onOppAttachWhileActive = false;
+    bool activatedWhileBenched = false;  // "if this Pokémon is on your Bench"
+    bool activatedRepeat = false;        // "As often as you like during your turn"
     uint16_t onAttachTypes = 0;        // 0 = any type
     bool onAttachWhileActive = false;
 
@@ -88,6 +97,7 @@ struct CardDef {
     bool isEvolution() const { return isPokemon() && !evolvesFrom.empty(); }
     bool isTrainer(TrainerKind k) const { return category == Category::Trainer && trainer == k; }
     bool hasType(uint16_t mask) const { return !mask || (type && (mask & typeBit(*type))); }
+    uint16_t extraTypes = 0;  // also these types while in play (Urshifu's Double Type); never for Weakness (Remco)
 };
 
 class CardDb {

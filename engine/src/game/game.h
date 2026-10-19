@@ -57,6 +57,7 @@ public:
     // A Pokémon leaves play with its evolutions and Tool, into its owner's hand (Koga) or deck (Eldegoss); its
     // energy goes to the discard pile (Remco). knockOutCheck() then moves up a new Active, or ends the game.
     void takeBack(uint16_t uid, bool toDeck);
+    void discardFromPlay(uint16_t uid);  // the Pokémon and all its cards to the discard pile; no points (Klefki)
     void toHand(int player, const CardDef* card);  // into the hand; a full hand sends it to the discard pile (assumed)
     void attachFromZone(int player, uint16_t uid, Type type, int count);  // new energy from the Energy Zone
 
@@ -70,16 +71,48 @@ public:
 
     // --- Questions the rules ask; modifiers from abilities, Tools, the Stadium and timed effects answer them ---
     int maxHp(const PokemonSlot& p, int owner) const;
+    // Attached Energy as it counts, for costs and "for each Energy": a DoubleEnergy type counts twice (Serperior, Remco).
+    EnergyCounts energyOf(const PokemonSlot& p, int owner) const;
+    uint8_t blockedStatuses(const PokemonSlot& p, int owner) const;  // Special Conditions it can't have (NoConditions)
     int retreatCost(const PokemonSlot& p, int owner) const;
     bool canRetreat(const PokemonSlot& p, int owner) const;
+    // "Basic Pokémon in play … have no Abilities" (Alolan Muk). Read straight from the cards in play, not through the
+    // modifiers, which ask this. Fossils have no Ability, so their rule stays.
+    bool abilitiesOff(const PokemonSlot& p) const {
+        if (p.card->abilities.empty()) return false;
+        for (const PlayerState& ps : s_.players) {
+            auto silences = [&](const PokemonSlot& src) {
+                for (const Modifier& m : src.card->passive)
+                    if (m.kind == ModKind::NoAbilities && &src != &p && (!m.stages || (m.stages & stageBit(p.card->stage))))
+                        return true;
+                return false;
+            };
+            if (ps.active.card && silences(ps.active)) return true;
+            for (const PokemonSlot& b : ps.bench)
+                if (silences(b)) return true;
+        }
+        return false;
+    }
     bool toolRoom(const PokemonSlot& p, int owner) const {  // one Tool, more with ExtraTools (Revavroom)
         return !p.tools.full() && int(p.tools.size()) < 1 + sumMods(ModKind::ExtraTools, p, owner);
     }
     bool canUseAttack(const PokemonSlot& p, int owner, int attack) const;
     EnergyCounts attackCost(const PokemonSlot& p, int owner, int attack) const;
+    // Its attacks, then those of the cards it evolved from when it may use them (Celebi, Memory Light).
+    FixedVec<const AttackDef*, 8> attacksOf(const PokemonSlot& p, int owner) const {
+        FixedVec<const AttackDef*, 8> out;
+        for (const AttackDef& a : p.card->attacks) out.push_back(&a);
+        if (!p.below.empty() && hasMod(ModKind::PreviousAttacks, p, owner))
+            for (const CardDef* c : p.below)
+                for (const AttackDef& a : c->attacks)
+                    if (!out.full()) out.push_back(&a);
+        return out;
+    }
     int sumMods(ModKind kind, const PokemonSlot& subject, int owner) const;
     bool hasMod(ModKind kind, const PokemonSlot& subject, int owner) const;
     bool playerHas(ModKind kind, int player) const;  // player-wide modifiers, e.g. "can't play Supporters"
+    template <class Fn>
+    void forEachModOf(ModKind kind, const PokemonSlot& subject, int owner, Fn fn) const { forEachMod(kind, &subject, owner, fn); }
 
     // fn(card) for the Pokémon's own card, then each of its Tools; skips any that left it on the way.
     template <class Fn>
@@ -87,7 +120,7 @@ public:
         const PokemonSlot* p = find(uid);
         if (!p) return;
         FixedVec<const CardDef*, 3> cards;
-        cards.push_back(p->card);
+        if (!abilitiesOff(*p)) cards.push_back(p->card);
         for (const CardDef* t : p->tools) cards.push_back(t);
         for (const CardDef* c : cards)
             if ((p = find(uid)) && (c == p->card || std::find(p->tools.begin(), p->tools.end(), c) != p->tools.end())) fn(c);
@@ -115,10 +148,16 @@ private:
     void startTurn();
     void showBoard();
     void knockOut(uint16_t uid, uint16_t attacker);
+    void runTriggers(int player, const Stmt* CardDef::*form, bool CardDef::*whileActive);  // its Pokémon's, Active first
     void survive(PokemonSlot& slot, int owner);
     void promote(int player);
     template <class Fn>
     void forEachMod(ModKind kind, const PokemonSlot* subject, int owner, Fn fn) const;
+    static bool hasEnergy(const PokemonSlot& p, uint16_t types) {  // any Energy of these types (0 = any)
+        for (int t = 0; t < TypeCount; ++t)
+            if (p.energy[t] && (!types || (types & typeBit(Type(t))))) return true;
+        return false;
+    }
     bool inPlay(int player, const NameList& names) const {
         const PlayerState& p = s_.players[player];
         if (p.active.card && names.has(p.active.card->name)) return true;
@@ -175,14 +214,17 @@ void Game::forEachMod(ModKind kind, const PokemonSlot* subject, int owner, Fn fn
             case ModScope::All:
                 break;
         }
-        return subject->card->hasType(m.types) && (!m.stages || (m.stages & stageBit(subject->card->stage))) &&
+        return subject->hasType(m.types) && (!m.stages || (m.stages & stageBit(subject->card->stage))) &&
+               (!m.evolvesFrom || m.evolvesFrom->has(subject->card->evolvesFrom)) &&
+               (!m.withEnergy || hasEnergy(*subject, m.withEnergyTypes)) &&
                (!m.names || m.names->has(subject->card->name)) && (!m.notMega || !subject->card->mega) &&
                (!m.minRetreat || retreatCost(*subject, owner) >= m.minRetreat);
     };
     for (int p = 0; p < 2; ++p) {
         auto visit = [&](const PokemonSlot& source) {
-            for (const Modifier& m : source.card->passive)
-                if (applies(m, p, &source)) fn(m);
+            if (!abilitiesOff(source))
+                for (const Modifier& m : source.card->passive)
+                    if (applies(m, p, &source)) fn(m);
             for (const CardDef* tool : source.tools)
                 for (const Modifier& m : tool->passive)
                     if (applies(m, p, &source)) fn(m);

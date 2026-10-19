@@ -1,0 +1,25 @@
+# Coverage batch 9, Grass/Psychic/Darkness: passive Abilities. Serperior doubles {G}, the other Serperior gets HP per
+# {G}, Lilligant +20 HP, Comfey and Ogerpon ex block conditions, Alolan Muk turns Basics' Abilities off, Celebi and
+# Memory Light give earlier attacks, Caterpie evolves at the end of the opponent's turn, Darkrai and Nihilego.
+energy: Grass, Psychic, Darkness
+
+1 A1a-004  # Snivy
+1 A1a-005  # Servine (from Snivy)
+1 A1a-006  # Serperior (from Servine): each {G} counts as 2
+1 B4a-005  # Serperior (from Servine): +30 HP per {G}
+1 A1-029   # Petilil
+1 B1-018   # Lilligant (from Petilil): your {G} Pokémon +20 HP
+1 A3-080   # Comfey
+1 B2-017   # Teal Mask Ogerpon ex
+1 A3-110   # Alolan Grimer
+1 B2-097   # Alolan Muk (from Alolan Grimer): Basics have no Abilities
+1 B3-004   # Celebi
+1 B3b-001  # Caterpie
+1 B3b-002  # Metapod (from Caterpie)
+1 B4-017   # Poltchageist: heals when benched
+1 A3a-042  # Nihilego: Poison +10
+1 B2b-040  # Darkrai: 20 to a sleeping Active
+1 B3-115   # Bombirdier
+1 A4a-068  # Memory Light
+1 P-A-005  # Poké Ball
+1 P-A-007  # Professor's Research

@@ -1,0 +1,25 @@
+# Coverage batch 9, Water/Lightning/Fighting: more passives. The two Unown need each other, Porygon2 and Magikarp
+# evolve from the deck, Snorlax blocks Stadiums, Snorlax ex heals, Regigigas can't attack alone, Aerodactyl ex,
+# Ariados, Alolan Raichu, Wimpod, Shaymin, Giratina and Ting-Lu.
+energy: Water, Lightning, Fighting
+
+1 A4-084   # Unown GUARD
+1 A4-085   # Unown POWER
+1 A1-209   # Porygon
+1 A4-136   # Porygon2 (from Porygon)
+1 A3b-057  # Snorlax ex
+1 B3b-055  # Snorlax
+1 A4-073   # Slowpoke
+1 B3-134   # Regigigas
+1 A2a-069  # Shaymin
+1 A2-078   # Giratina
+1 B1-050   # Magikarp
+1 A1-078   # Gyarados (from Magikarp)
+1 A3-021   # Wimpod
+1 A1-094   # Pikachu
+1 B2-050   # Alolan Raichu (from Pikachu)
+1 B2a-062  # Ting-Lu
+1 A1-218   # Old Amber
+1 A1a-046  # Aerodactyl ex (from Old Amber)
+1 A4-110   # Spinarak
+1 B1a-006  # Ariados (from Spinarak)

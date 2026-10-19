@@ -1,4 +1,5 @@
 // Putting Basic Pokémon into play: the Active one during setup, and onto the Bench.
+#include "effects/effect.h"
 #include "game/game.h"
 #include "moves/moves.h"
 
@@ -36,6 +37,14 @@ public:
         p.bench.push_back({});
         game.putIntoPlay(p.bench.back(), p.hand.take(a.index));
         game.say("P", me + 1, " benches ", p.bench.back().card->name);
+        // "When you put this Pokémon from your hand onto your Bench, you may…" (not during setup)
+        const PokemonSlot& placed = p.bench.back();
+        if (game.state().phase == Phase::Main && placed.card->onBench && !game.abilitiesOff(placed)) {
+            EffectCtx ctx{game, me};
+            ctx.self = placed.uid;
+            placed.card->onBench->run(ctx);
+            game.knockOutCheck();
+        }
     }
 };
 }  // namespace

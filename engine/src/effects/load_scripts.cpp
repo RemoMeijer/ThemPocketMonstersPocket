@@ -12,6 +12,11 @@
 //              (on-knocked-out [:active] [:by-attack] STMT)  "If this Pokémon is Knocked Out…" ([:by-attack]: by damage
 //                                                      from an attack from the opponent's Pokémon; attacker = that Pokémon)
 //              (on-knocks-out STMT)                    "If your opponent's Pokémon is Knocked Out by damage from this Pokémon's attacks…"
+//              (during-checkup [:active] STMT)         "During Pokémon Checkup…" (before Poison and Burn)
+//              (at-start-of-turn [:active] STMT)       "At the beginning of your turn…" (after the draw)
+//              (on-bench STMT)                         "When you put this Pokémon from your hand onto your Bench, you may…"
+//              (on-opp-attach [:active] STMT)          "Whenever your opponent attaches an Energy from their Energy Zone…"
+//              (activated [:active|:bench] [:repeat] STMT)  :bench: only on the Bench; :repeat: "As often as you like"
 //   card       (play STMT)     an Item or Supporter
 //              (tool MOD…)     a Tool: modifiers for the Pokémon it is attached to
 //              (at-end-of-turn [:active] STMT)  a Tool that does something at the end of your turn (self = its Pokémon)
@@ -41,17 +46,26 @@ std::vector<std::string> splitTabs(const std::string& line) {
 }
 
 // Options before the statement: :active, :by-attack and :type T…. Returns the position of the statement.
-std::size_t options(const SExpr& e, bool& whileActive, bool& byAttack, uint16_t& types) {
+struct Options {
+    bool whileActive = false, whileBenched = false, byAttack = false, repeat = false;
+    uint16_t types = 0;
+};
+
+std::size_t options(const SExpr& e, Options& o) {
     std::size_t i = 0;
     for (; i < argCount(e); ++i) {
         const SExpr& a = arg(e, i);
         if (a.list) break;
         if (a.atom == ":active") {
-            whileActive = true;
+            o.whileActive = true;
+        } else if (a.atom == ":bench") {
+            o.whileBenched = true;
         } else if (a.atom == ":by-attack") {
-            byAttack = true;
+            o.byAttack = true;
+        } else if (a.atom == ":repeat") {
+            o.repeat = true;
         } else if (a.atom == ":type") {
-            while (i + 1 < argCount(e) && !arg(e, i + 1).list && arg(e, i + 1).atom[0] != ':') types |= typeBit(typeArg(arg(e, ++i)));
+            while (i + 1 < argCount(e) && !arg(e, i + 1).list && arg(e, i + 1).atom[0] != ':') o.types |= typeBit(typeArg(arg(e, ++i)));
         } else {
             scriptFail("unknown option '" + a.atom + "'", e);
         }
@@ -61,26 +75,43 @@ std::size_t options(const SExpr& e, bool& whileActive, bool& byAttack, uint16_t&
 }
 
 void modifiers(CardDef& c, const SExpr& e, ScriptBuilder& b, ModScope scope) {
-    for (std::size_t i = 0; i < argCount(e); ++i) c.passive.push_back(b.modifier(arg(e, i), scope));
+    for (std::size_t i = 0; i < argCount(e); ++i) {
+        Modifier m = b.modifier(arg(e, i), scope);
+        if (m.kind == ModKind::ExtraType) c.extraTypes |= m.types;  // a card fact, not a question the rules ask
+        else c.passive.push_back(m);
+    }
 }
 
 void readAbility(CardDef& c, const SExpr& e, ScriptBuilder& b) {
     const std::string& form = e.head();
     if (form == "passive") return modifiers(c, e, b, ModScope::Self);
-    bool whileActive = false, byAttack = false;
-    uint16_t types = 0;
-    std::size_t at = options(e, whileActive, byAttack, types);
+    Options o;
+    std::size_t at = options(e, o);
     const Stmt* stmt = b.stmt(arg(e, at));
+    bool whileActive = o.whileActive, byAttack = o.byAttack;
     if (form == "activated") {
         c.activated = stmt;
         c.activatedWhileActive = whileActive;
+        c.activatedWhileBenched = o.whileBenched;
+        c.activatedRepeat = o.repeat;
     } else if (form == "at-end-of-turn") {
         c.endOfTurn = stmt;
         c.endOfTurnWhileActive = whileActive;
     } else if (form == "on-attach") {
         c.onAttach = stmt;
-        c.onAttachTypes = types;
+        c.onAttachTypes = o.types;
         c.onAttachWhileActive = whileActive;
+    } else if (form == "during-checkup") {
+        c.duringCheckup = stmt;
+        c.duringCheckupWhileActive = whileActive;
+    } else if (form == "at-start-of-turn") {
+        c.startOfTurn = stmt;
+        c.startOfTurnWhileActive = whileActive;
+    } else if (form == "on-bench") {
+        c.onBench = stmt;
+    } else if (form == "on-opp-attach") {
+        c.onOppAttach = stmt;
+        c.onOppAttachWhileActive = whileActive;
     } else if (form == "on-evolve") {
         c.onEvolve = stmt;
     } else if (form == "on-damaged") {

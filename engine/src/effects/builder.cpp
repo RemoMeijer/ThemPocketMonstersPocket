@@ -67,7 +67,12 @@ Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
         {"no-conditions", ModKind::NoConditions},   {"prevent-effects", ModKind::PreventEffects},
         {"prevent-ability-damage", ModKind::PreventAbilityDamage},
         {"extra-tools", ModKind::ExtraTools},       {"survive-at", ModKind::SurviveAt},
-        {"extra-point", ModKind::ExtraPoint},
+        {"extra-point", ModKind::ExtraPoint},       {"cant-stadium", ModKind::CantPlayStadium},
+        {"cant-evolve-active", ModKind::CantEvolveActive}, {"no-healing", ModKind::NoHealing},
+        {"poison-damage", ModKind::PoisonDamage},   {"prevent-first-hit", ModKind::PreventFirstHit},
+        {"evolve-early", ModKind::EvolveEarly},     {"evolves-as", ModKind::EvolvesAs},
+        {"no-abilities", ModKind::NoAbilities},     {"extra-type", ModKind::ExtraType},
+        {"double-energy", ModKind::DoubleEnergy},   {"previous-attacks", ModKind::PreviousAttacks},
     };
     static const std::unordered_map<std::string, ModScope> scopes = {
         {"self", ModScope::Self},           {"my-active", ModScope::MyActive}, {"my-all", ModScope::MyAll},
@@ -106,11 +111,22 @@ Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
             m.energy = int8_t(typeArg(arg(e, ++i)));
         } else if (a.atom == ":if" && i + 1 < argCount(e)) {
             m.when = cond(arg(e, ++i));
-        } else if (a.atom == ":name" || a.atom == ":needs") {
+        } else if (a.atom == ":name" || a.atom == ":needs" || a.atom == ":evolves-from" || a.atom == ":as") {
             auto list = std::make_shared<NameList>();
             values([&](const SExpr& n) { list->names.push_back(n.atom); });
             arena_.push_back(list);
-            (a.atom == ":name" ? m.names : m.needs) = list.get();
+            (a.atom == ":name" ? m.names : a.atom == ":needs" ? m.needs : a.atom == ":as" ? m.as : m.evolvesFrom) = list.get();
+        } else if (a.atom == ":with-energy") {
+            m.withEnergy = true;
+            values([&](const SExpr& t) { m.withEnergyTypes |= typeBit(typeArg(t)); });
+        } else if (a.atom == ":status") {  // NoConditions: only these Special Conditions (Hoothoot)
+            values([&](const SExpr& t) {
+                static const std::unordered_map<std::string, int> bits = {
+                    {"asleep", Asleep}, {"paralyzed", Paralyzed}, {"confused", Confused}, {"poisoned", Poisoned}, {"burned", Burned}};
+                auto bit = bits.find(t.atom);
+                if (bit == bits.end()) scriptFail("unknown Special Condition", e);
+                m.amount = int16_t(m.amount | bit->second);
+            });
         } else if (a.atom == ":scope" && i + 1 < argCount(e)) {
             auto s = scopes.find(arg(e, ++i).atom);
             if (s == scopes.end()) scriptFail("unknown scope", e);

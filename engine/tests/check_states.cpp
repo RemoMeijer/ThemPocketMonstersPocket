@@ -59,10 +59,13 @@ std::vector<const PokemonSlot*> inPlay(const PlayerState& p) {
     return out;
 }
 
-// One Pokémon Tool each, two with an Ability that says so (Revavroom).
-bool allowsTwoTools(const CardDef& c) {
-    return std::any_of(c.passive.begin(), c.passive.end(), [](const Modifier& m) { return m.kind == ModKind::ExtraTools; });
+const Modifier* passiveOf(const CardDef& c, ModKind kind) {
+    auto m = std::find_if(c.passive.begin(), c.passive.end(), [&](const Modifier& x) { return x.kind == kind; });
+    return m == c.passive.end() ? nullptr : &*m;
 }
+
+// One Pokémon Tool each, two with an Ability that says so (Revavroom).
+bool allowsTwoTools(const CardDef& c) { return passiveOf(c, ModKind::ExtraTools); }
 
 // No abilities, Tools, Stadium or timed effects in play: only the base rules apply.
 bool plainBoard(const GameState& s) {
@@ -70,7 +73,7 @@ bool plainBoard(const GameState& s) {
     for (const PlayerState& p : s.players)
         for (const PokemonSlot* slot : inPlay(p)) {
             const CardDef& c = *slot->card;
-            if (!slot->tools.empty() || !c.passive.empty() || c.onKnockedOut || c.onKnocksOut) return false;
+            if (!slot->tools.empty() || !c.passive.empty() || !c.abilities.empty() || c.extraTypes) return false;
         }
     return true;
 }
@@ -112,7 +115,8 @@ void checkState(const Game& game, const Deck* decks[2]) {
             EXPECT(int(slot->below.size()) == stageOf(slot->card) || rareCandy);
             for (std::size_t b = 0; b < slot->below.size() && !rareCandy; ++b) {
                 const CardDef* above = b + 1 < slot->below.size() ? slot->below[b + 1] : slot->card;
-                EXPECT(above->evolvesFrom == slot->below[b]->name);
+                const Modifier* as = passiveOf(*slot->below[b], ModKind::EvolvesAs);  // Eevee ex
+                EXPECT(above->evolvesFrom == slot->below[b]->name || (as && as->as->has(above->evolvesFrom)));
                 EXPECT(stageOf(slot->below[b]) == int(b));
             }
         }
@@ -161,12 +165,19 @@ void checkActions(const GameState& s, const std::vector<Action>& actions) {
     using Move = std::tuple<int, int, int>;
     std::multiset<Move> expected, offered;
     int bench = int(p.bench.size());
+    // Abilities that change evolving (Eevee, Eevee ex, Aerodactyl ex) or turn Abilities off (Alolan Muk): then every
+    // Evolve on offer must only fit the looser rule, not match the base rules exactly.
+    bool evolveRules = false;
+    for (const PlayerState& ps : s.players)
+        for (const PokemonSlot* slot : inPlay(ps))
+            for (ModKind k : {ModKind::EvolveEarly, ModKind::EvolvesAs, ModKind::CantEvolveActive, ModKind::NoAbilities})
+                evolveRules |= passiveOf(*slot->card, k) != nullptr;
     for (int h = 0; h < int(p.hand.size()); ++h) {
         const CardDef* c = p.hand[h];
         if (c->isBasic() && bench < rules::BenchSize) expected.insert({int(ActionKind::PlaceBench), h, 0});
         // Evolve from turn 3 on (each player's own first turn is out), onto the Pokémon the card names,
         // if that Pokémon has been in play since before this turn.
-        if (!c->evolvesFrom.empty() && s.turn >= 3)
+        if (!c->evolvesFrom.empty() && s.turn >= 3 && !evolveRules)
             for (int t = -1; t < bench; ++t) {
                 const PokemonSlot& target = slotOf(p, t);
                 if (target.card->name == c->evolvesFrom && target.enteredTurn < s.turn)
@@ -177,8 +188,18 @@ void checkActions(const GameState& s, const std::vector<Action>& actions) {
     bool cantAct = p.active.status & (Asleep | Paralyzed);
     for (const Action& a : actions) {
         switch (a.kind) {
-            case ActionKind::PlaceBench:
             case ActionKind::Evolve:
+                if (evolveRules) {
+                    const PokemonSlot& target = slotOf(p, a.target);
+                    const CardDef* c = p.hand[a.index];
+                    const Modifier* as = passiveOf(*target.card, ModKind::EvolvesAs);
+                    bool early = passiveOf(*target.card, ModKind::EvolveEarly) && a.target < 0;
+                    EXPECT(target.card->name == c->evolvesFrom || (as && as->as->has(c->evolvesFrom)));
+                    EXPECT(early || (s.turn >= 3 && target.enteredTurn < s.turn));
+                    break;
+                }
+                [[fallthrough]];
+            case ActionKind::PlaceBench:
                 offered.insert({int(a.kind), a.index, a.target});
                 break;
             case ActionKind::EndTurn:
@@ -209,7 +230,8 @@ void checkActions(const GameState& s, const std::vector<Action>& actions) {
                 EXPECT(s.stadium && s.stadium->stadiumAction && !(p.stadiumUseTurn == s.turn && p.stadiumUsed == s.stadium));
                 break;
             case ActionKind::UseAbility:
-                EXPECT(slotOf(p, a.target).card->activated && slotOf(p, a.target).abilityTurn != s.turn);
+                EXPECT(slotOf(p, a.target).card->activated &&
+                       (slotOf(p, a.target).abilityTurn != s.turn || slotOf(p, a.target).card->activatedRepeat));  // Vaporeon
                 break;
             default:
                 EXPECT(!"unexpected move");
@@ -227,14 +249,17 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
     switch (a.kind) {
         case ActionKind::Evolve: {
             const PokemonSlot& from = slotOf(pb, a.target);
-            EXPECT(before.turn >= 3 && from.enteredTurn < before.turn);
+            bool early = passiveOf(*from.card, ModKind::EvolveEarly);  // Eevee, while Active
+            EXPECT(early || (before.turn >= 3 && from.enteredTurn < before.turn));
+            const Modifier* as = passiveOf(*from.card, ModKind::EvolvesAs);  // Eevee ex
+            EXPECT(pb.hand[a.index]->evolvesFrom == from.card->name || (as && as->as->has(pb.hand[a.index]->evolvesFrom)));
             auto still = inPlay(pa);
             if (std::none_of(still.begin(), still.end(), [&](const PokemonSlot* x) { return x->uid == from.uid; })) {
                 EXPECT(from.damage >= pb.hand[a.index]->hp);  // knocked out at once: its damage is more than its new HP
                 break;
             }
             const PokemonSlot& to = slotOf(pa, a.target);
-            EXPECT(to.card == pb.hand[a.index] && to.card->evolvesFrom == from.card->name);
+            EXPECT(to.card == pb.hand[a.index]);
             EXPECT(to.below.size() == from.below.size() + 1 && to.below.back() == from.card);
             if (!to.card->onEvolve) EXPECT(to.damage == from.damage && to.energy == from.energy);  // damage and energy stay
             EXPECT(to.enteredTurn == before.turn && to.status == 0);
@@ -244,9 +269,13 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
         }
         case ActionKind::Retreat: {
             const PokemonSlot& in = pb.bench[a.index];
-            const PokemonSlot& out = pa.bench[a.index];
             EXPECT(!pb.retreated && pa.retreated);
             EXPECT(pa.active.card == in.card && pa.active.damage == in.damage && pa.active.energy == in.energy);
+            if (std::size_t(a.index) >= pa.bench.size() || pa.bench[a.index].uid != pb.active.uid) {
+                EXPECT(pb.active.damage >= pb.active.card->hp);  // knocked out: its HP went with the Energy (Reuniclus)
+                break;
+            }
+            const PokemonSlot& out = pa.bench[a.index];
             EXPECT(out.card == pb.active.card && out.damage == pb.active.damage && out.status == 0);
             EXPECT(out.energyCount() <= pb.active.energyCount());
             if (plain) EXPECT(out.energyCount() == pb.active.energyCount() - pb.active.card->retreat);
@@ -278,10 +307,11 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
             st.tools++;
             break;
         case ActionKind::UseAbility:
-            EXPECT(slotOf(pb, a.target).abilityTurn != before.turn);
+            EXPECT(slotOf(pb, a.target).abilityTurn != before.turn || slotOf(pb, a.target).card->activatedRepeat);
             st.abilities++;
             break;
         case ActionKind::Attack: {
+            if (std::size_t(a.index) >= pb.active.card->attacks.size()) break;  // an earlier evolution's attack (Celebi)
             const AttackDef& atk = pb.active.card->attacks[a.index];
             if (atk.script) st.scriptedAttacks++;
             if (!plain || atk.script || pb.active.status) break;  // effects: see test_effects
@@ -333,7 +363,11 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
         EXPECT(na.nextEnergy && std::find(na.energyTypes.begin(), na.energyTypes.end(), *na.nextEnergy) != na.energyTypes.end());
         // They draw if they can. (After an attack, its effects may have changed that player's hand.)
         bool canDraw = !nb.deck.empty() && nb.hand.size() < std::size_t(rules::HandLimit);
-        if (a.kind == ActionKind::EndTurn) EXPECT(na.hand.size() == nb.hand.size() + (canDraw ? 1 : 0));
+        // …unless one of their Pokémon evolved from the deck at the end of the turn (Caterpie), maybe with the last card.
+        bool evolvedFromDeck = false;
+        for (const PokemonSlot* x : inPlay(na))
+            for (const PokemonSlot* y : inPlay(nb)) evolvedFromDeck |= x->uid == y->uid && x->below.size() > y->below.size();
+        if (a.kind == ActionKind::EndTurn && !evolvedFromDeck) EXPECT(na.hand.size() == nb.hand.size() + (canDraw ? 1 : 0));
     }
 }
 

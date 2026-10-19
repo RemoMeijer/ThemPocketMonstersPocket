@@ -98,14 +98,18 @@ public:
         for (uint16_t uid : targets) {
             int owner = 0;
             PokemonSlot* p = ctx.game.find(uid, &owner);
-            if (!p || !p->damage || n <= 0) continue;
+            if (!p || !p->damage || n <= 0 || ctx.game.hasMod(ModKind::NoHealing, *p, owner)) continue;  // Claydol
             p->damage = std::max(0, p->damage - n);
             ctx.healed = true;
             if (ctx.game.logging()) ctx.game.say("  healed -> ", ctx.game.show(*p, owner));
         }
     }
     bool possible(EffectCtx& ctx) const override {
-        return anyCandidate(ctx, t_, [](const PokemonSlot& p) { return p.damage > 0; });
+        return anyCandidate(ctx, t_, [&](const PokemonSlot& p) {
+            int owner = 0;
+            ctx.game.find(p.uid, &owner);
+            return p.damage > 0 && !ctx.game.hasMod(ModKind::NoHealing, p, owner);
+        });
     }
 
 private:
@@ -125,9 +129,10 @@ public:
             int owner = 0;
             PokemonSlot* p = ctx.game.find(uid, &owner);
             if (!p || p != &ctx.game.state().players[owner].active || !affects(ctx, uid)) continue;
-            if (ctx.game.hasMod(ModKind::NoConditions, *p, owner)) continue;  // "can't be affected by any Special Conditions"
-            if (mask_ & ReplacingStatuses) p->status &= ~ReplacingStatuses;
-            p->status |= mask_;
+            uint8_t add = mask_ & uint8_t(~ctx.game.blockedStatuses(*p, owner));  // "can't be affected by…" (Hoothoot: Asleep)
+            if (!add) continue;
+            if (add & ReplacingStatuses) p->status &= ~ReplacingStatuses;
+            p->status |= add;
             if (ctx.game.logging()) ctx.game.say("  -> ", ctx.game.show(*p, owner));
         }
     }

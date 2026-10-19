@@ -25,12 +25,23 @@ enum class ModKind : uint8_t {
     CantPlayItem,        // player-wide
     CantAttachToActive,  // player-wide: no energy from the Energy Zone to their Active Pokémon
     WeaknessTimesTwo,    // the attacker's Weakness damage is ×2 instead of +20 (Bounded Field)
-    NoConditions,        // can't be affected by Special Conditions (Steel Apron, Arceus ex)
+    NoConditions,        // can't be affected by Special Conditions (Steel Apron, Arceus ex); amount: only these (Status bits)
     PreventEffects,      // prevent the effects (not the damage) of the opponent's attacks (Clear Veil, Regice)
     PreventAbilityDamage,  // prevent damage from the opponent's Abilities (Protective Poncho)
     ExtraTools,          // amount more Pokémon Tools may be attached to it (Revavroom)
     SurviveAt,           // would be Knocked Out by damage from an attack: isn't, and amount HP remains (Hala, Conkeldurr)
     ExtraPoint,          // its attack Knocks Out the opponent's Active Pokémon: amount more points (Iris)
+    CantPlayStadium,     // player-wide (Snorlax)
+    CantEvolveActive,    // player-wide: can't play a Pokémon from the hand to evolve their Active Pokémon (Aerodactyl ex)
+    NoHealing,           // can't be healed (Claydol)
+    PoisonDamage,        // amount more damage from being Poisoned (Nihilego)
+    PreventFirstHit,     // the first damage from an attack after coming into play is prevented (Mimikyu ex)
+    EvolveEarly,         // can evolve during its owner's first turn or the turn it came into play (Eevee)
+    EvolvesAs,           // evolves into what evolves from one of `as` (Eevee ex)
+    NoAbilities,         // the Pokémon it applies to have no Abilities (Alolan Muk)
+    ExtraType,           // while in play it is also of these `types` (Urshifu); read once when the cards load
+    DoubleEnergy,        // each attached Energy of type `energy` counts as 2 (Serperior); doesn't stack
+    PreviousAttacks,     // can use the attacks of the cards it evolved from (Celebi, Memory Light)
 };
 
 // Who a modifier applies to, seen from the player who owns its source.
@@ -52,10 +63,16 @@ struct Modifier {
     bool vsEx = false;         // DamageDealt: only against a Pokémon ex
     const NameList* needs = nullptr;  // only while its owner has one of these Pokémon in play ("If you have Arceus…")
     const Cond* when = nullptr;       // only while this holds, asked about its source ("If this Pokémon has a Tool…")
-    int8_t energy = -1;               // AttackCost: the Energy type it changes (-1 = Colorless)
+    int8_t energy = -1;               // AttackCost: the Energy type it changes (-1 = Colorless); Hp: amount per Energy of
+                                      // this type attached; DoubleEnergy: the type that counts twice
+    const NameList* evolvesFrom = nullptr;  // affected Pokémon must evolve from one of these (Politoed)
+    const NameList* as = nullptr;     // EvolvesAs: the names it evolves as (not a filter)
+    bool withEnergy = false;          // affected Pokémon must have Energy attached…
+    uint16_t withEnergyTypes = 0;     // …of one of these types (0 = any) (Comfey)
     bool flip = false;                // only when a coin flip comes up heads (Conkeldurr)
 };
 
 inline bool playerWide(ModKind k) {
-    return k == ModKind::CantPlaySupporter || k == ModKind::CantPlayItem || k == ModKind::CantAttachToActive;
+    return k == ModKind::CantPlaySupporter || k == ModKind::CantPlayItem || k == ModKind::CantAttachToActive ||
+           k == ModKind::CantPlayStadium || k == ModKind::CantEvolveActive;
 }

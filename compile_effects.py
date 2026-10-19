@@ -136,18 +136,27 @@ CONDITIONS = [
     (r"this Pokemon evolved during this turn", lambda m, c: "(evolved-this-turn self)"),
     (r"you played a Supporter card from your hand during this turn", lambda m, c: "(played-supporter)"),
     (r"you healed any damage in this way", lambda m, c: "(healed)"),
+    # the specific forms first: the plain one would read "Arceus or Arceus ex" or "another Beldum" as one name
+    (r"you have another (\w[\w' ]*?) in play", lambda m, c: f'(exists my all (name "{m.group(1)}") not-self)'),
+    (r"you have (\w[\w' ]*?) or (\w[\w' ]*?) in play",
+     lambda m, c: f'(exists my all (name "{m.group(1)}" "{m.group(2)}"))'),
     (r"you have (\w[\w' ]*?) in play", lambda m, c: f'(exists my all (name "{m.group(1)}"))'),
     (r"your Pokemon in play have (\d+) or more different types of Energy attached",
      lambda m, c: f"(>= (energy-types my all) {m.group(1)})"),
     (r"your Pokemon in the Active Spot has the (.+) attack", lambda m, c: f'(has-attack my-active "{m.group(1)}")'),
     (r"a Stadium is in play", lambda m, c: "(stadium-in-play)"),
     (r"([A-Z][\w' .:-]*?) is in your discard pile", lambda m, c: f'(>= (discard-count my (name "{m.group(1)}")) 1)'),
-    (r"you have (\w[\w' ]*?) or (\w[\w' ]*?) in play",
-     lambda m, c: f'(exists my all (name "{m.group(1)}" "{m.group(2)}"))'),
     (r"your opponent has (\d+) or more cards in their hand", lambda m, c: f"(>= (hand-size opp) {m.group(1)})"),
     (r"any of your (?:" + E + r" )?Pokemon were Knocked Out by damage from an attack during your opponent's last turn",
      lambda m, c: f"(ko-last-turn{' ' + t(m.group(1)) if m.group(1) else ''})"),
     (r"1 of your Pokemon used (.+) during your last turn", lambda m, c: f'(used-last-turn "{m.group(1)}")'),
+    (REF + r" has any Energy attached", lambda m, c: f"(energy-at-least {target(m)} 1)"),
+    (r"the amount of Energy attached to both Active Pokemon is (\d+) or more", lambda m, c: f"(>= (energy (each both active)) {m.group(1)})"),
+    (REF + r" has full HP", lambda m, c: f"(not (has-damage {target(m)}))"),
+    (r"this Pokemon's remaining HP is (\d+) or less", lambda m, c: f"(<= (hp-left self) {m.group(1)})"),
+    (r"you don't have (\w+), (\w+), and (\w+) on your Bench",
+     lambda m, c: f'(not (and (exists my bench (name "{m.group(1)}")) (and (exists my bench (name "{m.group(2)}")) '
+                  f'(exists my bench (name "{m.group(3)}")))))'),
     (r"this Pokemon was damaged by an attack during your opponent's last turn while it was in the Active Spot",
      lambda m, c: "(damaged-last-turn self)"),
 ]
@@ -333,6 +342,20 @@ CLAUSES = [
      lambda m, c: ("post", f"(switch-in (choose opp bench{' basic' if m.group(1) else ''}{' damaged' if m.group(2) else ''}))")),
     (r"your turn ends", lambda m, c: ("post", "(end-turn)")),
     (r"discard this card", lambda m, c: ("post", "(discard-this)")),  # a Tool, from the Pokémon it's on
+    (r"discard this Pokemon", lambda m, c: ("post", "(discard-pokemon self)")),
+    (r"have your opponent reveal their hand", lambda m, c: ("post", "(nothing)")),  # only information: nothing for the engine
+    (r"switch it with your Active Pokemon", lambda m, c: ("post", "(switch-in self)")),
+    (r"move all of your Energy in play to this Pokemon", lambda m, c: ("post", "(move-energy (each my all) self any all)")),
+    (r"move (\d+) damage that your Active Pokemon has on it to this Pokemon", lambda m, c: ("post", f"(move-damage my-active self {m.group(1)})")),
+    (r"choose 1 of your Pokemon that has damage on it, and move all of its damage to this Pokemon",
+     lambda m, c: ("post", "(move-damage (choose my all damaged not-self) self all)")),
+    (r"put a random card from your deck that evolves from this Pokemon onto this Pokemon to evolve it",
+     lambda m, c: ("post", "(evolve-from-deck self)")),
+    (r"attach an Energy from your discard pile to your Active " + E + r" Pokemon",
+     lambda m, c: ("post", f"(if (is-type my-active {t(m.group(1))}) (attach-from-discard my-active any 1))")),
+    (r"Discard a card from your hand or else nothing", lambda m, c: ("pre", "(if (>= (hand-size my) 1) (discard-from-hand 1) (cancel))")),
+    (r"Discard an? " + E + r" Energy from this Pokemon, and this attack also does (\d+) damage to 1 of your opponent's Benched Pokemon",
+     lambda m, c: ("post", f"(seq (discard-energy self {t(m.group(1))} 1) (damage (choose opp bench) {m.group(2)}))")),
     (REF + r" is Knocked Out", lambda m, c: ("post", f"(knock-out {target(m)})")),
     (r"your opponent can't get any points for it", lambda m, c: ("post", "(no-points)")),
     (r"put it into your hand instead of the discard pile", lambda m, c: ("post", "(to-hand-instead)")),
@@ -508,6 +531,8 @@ def with_pick(stmts):
             chooser = balanced(x, j)
             rest = [x[:j] + "picked" + x[j + len(chooser):]] + stmts[i + 1:]
             return stmts[:i] + [f"(pick {chooser} {seq(rest)})"]
+    if any(re.search(r"\bself\b", x) for x in stmts) and not any(re.search(r"opp-active|defending", x) for x in stmts):
+        return [re.sub(r"\bpicked\b", "self", x) for x in stmts]  # only this Pokémon was named: "it" is this Pokémon
     raise Unsupported("'that Pokemon' without a choice")
 
 
@@ -521,6 +546,8 @@ def seq(stmts):
 def statements(text, ctx):
     """All sentences of a text → list of (phase, statement), with random-hit pairs joined up."""
     out = []
+    # One rule in two sentences: "Discard a card from your hand. If you can't, this attack does nothing."
+    text = text.replace("Discard a card from your hand. If you can't, this attack does nothing.", "Discard a card from your hand or else nothing.")
     for s in sentences(text):
         if out and out[-1][0] == "random-hits":  # "… is chosen at random 4 times. For each time …, do 40 damage to it."
             times, side = out.pop()[1]
@@ -566,10 +593,20 @@ ABILITY_FORMS = [
     (r"Once during your turn, you may (.+)", lambda m, c: ("activated", "", m.group(1))),
     (r"If this Pokemon is in the Active Spot, once during your turn, you may (.+)", lambda m, c: ("activated", ":active", m.group(1))),
     (r"Once during your turn, if this Pokemon is in the Active Spot, you may (.+)", lambda m, c: ("activated", ":active", m.group(1))),
-    (r"At the end of your turn, if this Pokemon is in the Active Spot, (.+)", lambda m, c: ("at-end-of-turn", ":active", m.group(1))),
+    (r"At the end of your turn, if this Pokemon is in the Active Spot, (.+)",
+     lambda m, c: ("at-end-of-turn", ":active", m.group(1).replace("damage from it", "damage from this Pokemon"))),
     (r"At the end of your turn, (.+)", lambda m, c: ("at-end-of-turn", "", m.group(1))),
     (r"Whenever you attach an? " + E + r" Energy from your Energy Zone to this Pokemon, (.+)",
      lambda m, c: ("on-attach", f":type {t(m.group(1))}", m.group(2))),
+    (r"During Pokemon Checkup, if this Pokemon is in the Active Spot, (.+)", lambda m, c: ("during-checkup", ":active", m.group(1))),
+    (r"During Pokemon Checkup, (.+)", lambda m, c: ("during-checkup", "", m.group(1))),
+    (r"At the beginning of your turn, if this Pokemon is in the Active Spot, (.+)", lambda m, c: ("at-start-of-turn", ":active", m.group(1))),
+    (r"At the end of each turn, (.+)", lambda m, c: ("at-end-of-each-turn", "", m.group(1).replace("to that Pokemon", "to your opponent's Active Pokemon"))),
+    (r"Once during your turn, when you put this Pokemon from your hand onto your Bench, you may (.+)",
+     lambda m, c: ("on-bench", "", m.group(1))),
+    (r"Once during your turn, if this Pokemon is on your Bench, you may (.+)", lambda m, c: ("activated", ":bench", m.group(1))),
+    (r"As often as you like during your turn, you may (.+)", lambda m, c: ("activated", ":repeat", m.group(1))),
+    (r"Whenever you attach an Energy from your Energy Zone to this Pokemon, (.+)", lambda m, c: ("on-attach", "", m.group(1))),
     (r"If this Pokemon is in the Active Spot and is Knocked Out by damage from an attack from your opponent's Pokemon, (.+)",
      lambda m, c: ("on-knocked-out", ":active :by-attack", m.group(1))),
     (r"When this Pokemon is Knocked Out, (.+)", lambda m, c: ("on-knocked-out", "", m.group(1))),
@@ -605,6 +642,43 @@ PASSIVES = [
     (r"If this Pokemon would be Knocked Out by damage from an attack, flip a coin\. If heads, this Pokemon is not Knocked Out, "
      r"and its remaining HP becomes (\d+)", lambda m: f"(survive-at {m.group(1)} :flip)"),
     (r"This Pokemon may have up to 2 Pokemon Tool cards attached to it", lambda m: "(extra-tools 1)"),
+    (r"As long as this Pokemon is on your Bench, your Active (Basic |)(?:" + E + r" )?Pokemon's Retreat Cost is (\d+) less",
+     lambda m: f"(retreat-cost -{m.group(3)} :scope my-active{stage_opt(m.group(1))}{type_opt(m.group(2))} :bench)"),
+    (r"Your Active (" + NAMES + r") has no Retreat Cost", lambda m: f"(no-retreat-cost :scope my-active{names_opt(m.group(1))})"),
+    (r"Your opponent's Active Pokemon's Retreat Cost is (\d+) more", lambda m: f"(retreat-cost {m.group(1)} :scope opp-active)"),
+    (r"Each of your (?:" + E + r" )?Pokemon gets \+(\d+) HP", lambda m: f"(hp {m.group(2)} :scope my-all{type_opt(m.group(1))})"),
+    (r"As long as this Pokemon is in the Active Spot, your opponent can't play any Stadium cards from their hand",
+     lambda m: "(cant-stadium :scope opp-all :active)"),
+    (r"As long as this Pokemon is on your Bench, attacks used by your Pokemon that evolve from (\w+) do \+(\d+) damage to your "
+     r"opponent's Active Pokemon", lambda m: f'(damage-dealt {m.group(2)} :scope my-all :bench :evolves-from "{m.group(1)}")'),
+    (r"Prevent all damage done to this Pokemon by attacks from your opponent's Pokemon ex", lambda m: "(prevent-damage :from-ex)"),
+    (r"If any damage is done to this Pokemon by attacks, flip a coin\. If heads, this Pokemon takes -(\d+) damage from that attack",
+     lambda m: f"(damage-taken -{m.group(1)} :flip)"),
+    (r"This Pokemon can't be (Asleep|Paralyzed|Confused|Poisoned|Burned)", lambda m: f"(no-conditions :status {m.group(1).lower()})"),
+    (r"Your opponent's Active Pokemon takes \+(\d+) damage from being Poisoned", lambda m: f"(poison-damage {m.group(1)} :scope opp-active)"),
+    (r"Your opponent can't play any Pokemon from their hand to evolve their Active Pokemon", lambda m: "(cant-evolve-active :scope opp-all)"),
+    (r"Pokemon \(both yours and your opponent's\) can't be healed", lambda m: "(no-healing :scope all)"),
+    (r"This Pokemon gets \+(\d+) HP for each " + E + r" Energy attached to it", lambda m: f"(hp {m.group(1)} :energy {t(m.group(2))})"),
+    (r"When this Pokemon is first damaged by an attack after coming into play, prevent that damage", lambda m: "(prevent-first-hit)"),
+    (r"Basic Pokemon in play \(both yours and your opponent's\) have no Abilities", lambda m: "(no-abilities :scope all :stage basic)"),
+    (r"As long as this Pokemon is in play, it is " + E + r" and " + E + r" type",
+     lambda m: f"(extra-type :type {t(m.group(1))} {t(m.group(2))})"),
+    (r"As long as this Pokemon is in the Active Spot, it can evolve during your first turn or the turn you play it",
+     lambda m: "(evolve-early :active)"),
+    (r"This Pokemon can evolve into any Pokemon that evolves from (\w+) if you play it from your hand onto this Pokemon\. "
+     r"\(This Pokemon can't evolve during your first turn or the turn you play it\.\)", lambda m: f'(evolves-as :as "{m.group(1)}")'),
+    (r"Each " + E + r" Energy attached to your " + E + r" Pokemon provides 2 " + E + r" Energy\. This effect doesn't stack",
+     lambda m: f"(double-energy :energy {t(m.group(1))} :scope my-all :type {t(m.group(2))})"),
+    (r"Each of your evolved Pokemon can use any attack from its previous Evolutions\. \(You still need the necessary Energy to use each attack\.\)",
+     lambda m: "(previous-attacks :scope my-all :stage stage1 stage2)"),
+    (r"Each of your Pokemon that has any (?:" + E + r" )?Energy attached recovers from all Special Conditions and can't be affected by any "
+     r"Special Conditions", lambda m: f"(no-conditions :scope my-all :with-energy{' ' + t(m.group(1)) if m.group(1) else ''})"),
+    (r"All of your Pokemon take -(\d+) damage from attacks from your opponent's Pokemon", lambda m: f"(damage-taken -{m.group(1)} :scope my-all)"),
+    (r"Attacks used by your Pokemon do \+(\d+) damage to your opponent's Active Pokemon", lambda m: f"(damage-dealt {m.group(1)} :scope my-all)"),
+    (r"This Pokemon's Retreat Cost is (\d+) less", lambda m: f"(retreat-cost -{m.group(1)})"),
+    (r"This Pokemon's attacks do \+(\d+) damage to your opponent's Active Pokemon", lambda m: f"(damage-dealt {m.group(1)})"),
+    (r"This Pokemon takes -(\d+) damage from attacks from your opponent's Pokemon", lambda m: f"(damage-taken -{m.group(1)})"),
+    (r"This Pokemon can't attack", lambda m: "(cant-attack)"),
 ]
 
 
@@ -624,17 +698,56 @@ def compile_ability(text, ctx):
             if not fn:
                 raise Unsupported(f"ability: {text}")
             return f"(passive {fn(m)})"
-    m = re.fullmatch(r"If (this Pokemon [^,]+), (.+)", text)
-    if m:  # "If this Pokémon has a Pokémon Tool attached, …": a passive that only counts while that holds
+    m = re.fullmatch(r"(?:If|During) (.+)", text)
+    cond, rest = None, ""
+    for k in [i for i in range(len(text)) if text.startswith(", ", i)] if m else []:
+        head = text[text.index(" ") + 1:k]
+        try:
+            cond = "(first-turn)" if text.startswith("During your first turn,") else condition(head, ctx) if text.startswith("If") else None
+        except Unsupported:
+            continue
+        rest = text[k + 2:]
+        break
+    if cond:  # "If this Pokémon has a Pokémon Tool attached, …": passives that only count while that holds
+        parts = re.sub(r"^it ", "this Pokemon ", rest.rstrip(".")).split(", and this Pokemon ")
+        mods = []
+        for i, part in enumerate(parts if cond else []):
+            part = ("This Pokemon " + part) if i else part[:1].upper() + part[1:]
+            fn = next((fn(pm) for rx, fn in PASSIVES + CONDITIONAL_PASSIVES if fn and (pm := re.fullmatch(rx, part))), None)
+            mods.append(fn and f"{fn[:-1]} :if {cond})")
+        if mods and all(mods):
+            return f"(passive {' '.join(mods)})"
+    m = re.fullmatch(r"This Ability works if you have any (\w+) in play with an Ability other than (\w+)\. (.+)", text)
+    if m:  # the Unown: each needs another of them with a different Ability
+        cond = f'(exists my all (name "{m.group(1)}") (other-ability "{m.group(2)}"))'
+        for rx, fn in PASSIVES:
+            pm = re.fullmatch(rx, m.group(3).rstrip("."))
+            if pm and fn:
+                return f"(passive {fn(pm)[:-1]} :if {cond}))"
+    m = re.fullmatch(r"As long as this Pokemon is in the Active Spot, whenever your opponent attaches an Energy from their Energy Zone to "
+                     r"1 of their Pokemon, do (\d+) damage to that Pokemon\.", text)
+    if m:  # Jolteon ex: picked = the Pokémon the Energy went to
+        return f"(on-opp-attach :active (damage picked {m.group(1)}))"
+    m = (re.fullmatch(r"At the end of your (first) turn, (.+)", text) or
+         re.fullmatch(r"At the end of your (opponent's) turn, if this Pokemon is in the Active Spot, (.+)", text))
+    if m:  # Zeraora; Caterpie (end of each turn, before Checkup: Remco)
+        body = seq([s for _, s in statements(m.group(2)[:1].upper() + m.group(2)[1:], ctx)])
+        if m.group(1) == "first":
+            return f"(at-end-of-turn (if (first-turn) {body}))"
+        return f"(at-end-of-each-turn (if (and (not (my-turn)) (is-active self)) {body}))"
+    m = re.fullmatch(r"You must discard a card from your hand in order to use this Ability\. Once during your turn, you may (.+)", text)
+    if m:  # Garchomp
+        body = seq([s for _, s in statements(m.group(1)[:1].upper() + m.group(1)[1:], ctx)])
+        return f"(activated (then (discard-from-hand 1) {body}))"
+    m = re.fullmatch(r"Once during your turn, if (.+?), you may (.+)", text)
+    if m and not m.group(1).startswith("this Pokemon is"):  # Sylveon, Crobat: the condition goes in the effect
         try:
             cond = condition(m.group(1), ctx)
         except Unsupported:
             cond = None
-        rest = m.group(2)[:1].upper() + m.group(2)[1:]
-        for rx, fn in PASSIVES + CONDITIONAL_PASSIVES if cond else []:
-            pm = re.fullmatch(rx, rest.rstrip("."))
-            if pm and fn:
-                return f"(passive {fn(pm)[:-1]} :if {cond}))"
+        body = seq(with_pick([s for _, s in statements(m.group(2)[:1].upper() + m.group(2)[1:], ctx)])) if cond else ""
+        if body:
+            return f"(activated (if {cond} {body}))"
     for rx, fn in ABILITY_FORMS:
         m = re.fullmatch(rx, text)
         if m:
@@ -643,6 +756,8 @@ def compile_ability(text, ctx):
             body = seq(with_pick(stmts))
             if not body:
                 raise Unsupported(f"ability without effect: {text}")
+            if form == "on-bench":  # "you may": the player picks, as with any choice
+                body = f"(one-of {body} (nothing))"
             return f"({form}{' ' + opts if opts else ''} {body})"
     raise Unsupported(f"ability: {text}")
 
@@ -654,6 +769,8 @@ CONDITIONAL_PASSIVES = [
 ]
 
 TOOLS = [
+    (r"The Pokemon this card is attached to can use any attack from its previous Evolutions\. \(You still need the necessary Energy to "
+     r"use each attack\.\)", lambda m: "(previous-attacks)"),
     (r"The (Basic |Stage 1 |Stage 2 )?(?:" + E + r" )?Pokemon this card is attached to gets \+(\d+) HP",
      lambda m: f"(hp {m.group(3)}{stage_opt(m.group(1))}{type_opt(m.group(2))})"),
     (r"If the Pokemon this card is attached to is in the Active Spot and is damaged by an attack from your opponent's Pokemon, "
@@ -956,6 +1073,29 @@ EXAMPLES = [
      '(play (effect opp-next-turn me (survive-at 10 :name "Hariyama" "Crabominable")))'),
     ("Supporter", "", "During this turn, if your opponent's Active Pokémon is Knocked Out by damage from an attack used by your "
      "Haxorus, you get 1 more point.", '(play (effect this-turn me (extra-point 1 :name "Haxorus")))'),
+    ("ability", "", "During Pokémon Checkup, if this Pokémon is in the Active Spot, do 10 damage to your opponent's Active Pokémon.",
+     "(during-checkup :active (damage opp-active 10))"),
+    ("ability", "", "If you don't have Regirock, Regice, and Registeel on your Bench, this Pokémon can't attack.",
+     '(passive (cant-attack :if (not (and (exists my bench (name "Regirock")) (and (exists my bench (name "Regice")) '
+     '(exists my bench (name "Registeel")))))))'),
+    ("ability", "", "If you have another Falinks in play, this Pokémon's attacks do +20 damage to your opponent's Active Pokémon, and "
+     "this Pokémon takes −20 damage from attacks from your opponent's Pokémon.",
+     '(passive (damage-dealt 20 :if (exists my all (name "Falinks") not-self)) (damage-taken -20 :if (exists my all (name "Falinks") not-self)))'),
+    ("ability", "", "Once during your turn, if you have Arceus or Arceus ex in play, you may do 30 damage to your opponent's Active Pokémon.",
+     '(activated (if (exists my all (name "Arceus" "Arceus ex")) (damage opp-active 30)))'),
+    ("ability", "", "Once during your turn, when you put this Pokémon from your hand onto your Bench, you may switch it with your Active "
+     "Pokémon. If you do, move all of your Energy in play to this Pokémon.",
+     "(on-bench (one-of (then (switch-in self) (move-energy (each my all) self any all)) (nothing)))"),
+    ("ability", "", "Each {G} Energy attached to your {G} Pokémon provides 2 {G} Energy. This effect doesn't stack.",
+     "(passive (double-energy :energy grass :scope my-all :type grass))"),
+    ("ability", "", "As long as this Pokémon is in the Active Spot, whenever your opponent attaches an Energy from their Energy Zone to "
+     "1 of their Pokémon, do 20 damage to that Pokémon.", "(on-opp-attach :active (damage picked 20))"),
+    ("ability", "", "At the end of your opponent's turn, if this Pokémon is in the Active Spot, put a random card from your deck that "
+     "evolves from this Pokémon onto this Pokémon to evolve it.",
+     "(at-end-of-each-turn (if (and (not (my-turn)) (is-active self)) (evolve-from-deck self)))"),
+    ("attack", "70", "Discard a card from your hand. If you can't, this attack does nothing.",
+     "(seq (if (>= (hand-size my) 1) (discard-from-hand 1) (cancel)) (hit))"),
+    ("attack", "", "This Pokémon is now Asleep. Heal 30 damage from it.", "(seq (hit) (status self asleep) (heal self 30))"),
 ]
 
 

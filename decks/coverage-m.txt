@@ -1,0 +1,24 @@
+# Coverage batch 9, Psychic/Metal: activated Abilities. Dusknoir moves damage as often as you like, Klefki,
+# Brambleghast, Solgaleo ex from the Bench, Mimikyu ex blocks the first hit, Claydol stops healing, Hoothoot can't
+# sleep, two Beldum; "Discard a card from your hand" attacks.
+energy: Psychic, Metal
+
+1 A2-070   # Duskull
+1 A2-071   # Dusclops (from Duskull)
+1 A2-072   # Dusknoir (from Dusclops)
+1 B1-101   # Sableye: discard a card or nothing
+1 B2a-052  # Greavard: discard a card or nothing
+1 B4-078   # Oricorio: discard a card or nothing
+1 B1-120   # Klefki
+1 B2a-010  # Bramblin
+1 B3-073   # Brambleghast (from Bramblin)
+1 A3-085   # Cosmog
+1 A3-086   # Cosmoem (from Cosmog)
+1 A3-122   # Solgaleo ex (from Cosmoem)
+2 B4-106   # Beldum
+1 B2-073   # Mimikyu ex
+1 A4a-032  # Misdreavus
+1 A3a-030  # Baltoy
+1 A3a-031  # Claydol (from Baltoy): no healing
+1 A4-140   # Hoothoot
+1 P-A-001  # Potion

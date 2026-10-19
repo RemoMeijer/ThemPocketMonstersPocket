@@ -1165,6 +1165,144 @@ static void knockOutTriggers() {
     }
 }
 
+// Batch 9: Abilities.
+static void abilityBatch() {
+    {   // Alolan Muk: Basic Pokémon have no Abilities while it's in play (Fossils have none to lose)
+        Table t;
+        t.cards[0].abilities.push_back({"Boost", "+20 HP"});
+        t.cards[0].passive.push_back(mod("(hp 20)"));
+        t.cards[10].passive.push_back(mod("(no-abilities :scope all :stage basic)"));  // Evo1, a Stage 1
+        GameState& s = t.position();
+        CHECK(t.game.maxHp(s.players[0].active, 0) == 80);
+        t.bench(1, t.cards[10]);
+        CHECK(t.game.maxHp(s.players[0].active, 0) == 60);
+    }
+    {   // Serperior: each {W} counts twice, for costs and counts; Reuniclus: +30 HP per {W}; Giratina's :if
+        Table t;
+        t.cards[0].passive.push_back(mod("(double-energy :energy water :scope my-all :type water)"));
+        t.cards[0].passive.push_back(mod("(hp 30 :energy water)"));
+        t.cards[0].passive.push_back(mod("(no-retreat-cost :if (energy-at-least self 3))"));
+        t.cards[0].retreat = 2;
+        GameState& s = t.position();
+        PokemonSlot& a = s.players[0].active;  // one Water attached
+        CHECK(t.game.energyOf(a, 0)[int(Type::Water)] == 2 && t.game.maxHp(a, 0) == 60 + 60);
+        CHECK(t.game.retreatCost(a, 0) == 2);
+        a.energy[int(Type::Water)] = 2;  // counts as 4: no Retreat Cost
+        CHECK(t.game.retreatCost(a, 0) == 0);
+        EffectCtx ctx{t.game, 0};
+        ctx.self = a.uid;
+        CHECK(stmt("(seq (set-damage (* (energy self) 10)) (hit))") && t.game.energyOf(a, 0)[int(Type::Water)] == 4);
+    }
+    {   // during Checkup, before Poison (Remco): at 0 damage the heal does nothing, then Poison does 10; Nihilego +10
+        Table t;
+        t.cards[0].duringCheckup = stmt("(heal (each my all damaged) 10)");
+        t.cards[0].passive.push_back(mod("(poison-damage 10 :scope opp-active)"));
+        GameState& s = t.position();
+        s.players[0].active.status = Poisoned;
+        s.players[1].active.status = Poisoned;
+        t.play(ActionKind::EndTurn);
+        CHECK(s.players[0].active.damage == 10 && s.players[1].active.damage == 20);
+    }
+    {   // on the Bench from the hand; the opponent's attach from the Energy Zone (Jolteon ex), only while Active
+        Table t;
+        t.cards[3].onBench = stmt("(draw 1)");
+        t.cards[1].onOppAttach = stmt("(damage picked 20)");
+        t.cards[1].onOppAttachWhileActive = true;
+        GameState& s = t.position();
+        PlayerState& p = s.players[0];
+        p.hand.clear();
+        p.hand.push_back(&t.cards[3]);
+        p.energy = Type::Water;
+        t.play(ActionKind::PlaceBench, 0);
+        CHECK(p.hand.size() == 1 && p.bench.size() == 1);
+        t.play(ActionKind::AttachEnergy, 0, -1);
+        CHECK(p.active.damage == 20);
+    }
+    {   // :bench and :repeat for activated Abilities
+        Table t;
+        t.cards[3].activated = stmt("(draw 1)");
+        t.cards[3].activatedWhileBenched = t.cards[3].activatedRepeat = true;
+        GameState& s = t.position();
+        t.bench(0, t.cards[3]);
+        t.play(ActionKind::UseAbility, 0, 0);
+        CHECK(t.can(ActionKind::UseAbility));
+        std::swap(s.players[0].active, s.players[0].bench[0]);
+        CHECK(!t.can(ActionKind::UseAbility));
+    }
+    {   // Eevee: evolves early while Active; Eevee ex: anything that evolves from Mon0 fits Mon5
+        Table t;
+        t.cards[0].passive.push_back(mod("(evolve-early :active)"));
+        t.cards[5].passive.push_back(mod("(evolves-as :as \"Mon0\")"));
+        GameState& s = t.position();
+        s.turn = 1;
+        s.players[0].active.enteredTurn = 1;
+        s.players[0].hand.clear();
+        s.players[0].hand.push_back(&t.cards[10]);
+        CHECK(t.can(ActionKind::Evolve));
+        s.turn = 5;
+        t.game.putIntoPlay(s.players[0].active, &t.cards[5]);
+        s.players[0].active.enteredTurn = 0;
+        CHECK(t.can(ActionKind::Evolve));
+        t.cards[5].passive.clear();
+        CHECK(!t.can(ActionKind::Evolve));
+    }
+    {   // Memory Light / Celebi: the attacks of the cards below too
+        Table t;
+        t.cards[10].attacks[0].name = "Big Splash";
+        CardDef light = trainer(TrainerKind::Tool, "Light");
+        light.passive.push_back(mod("(previous-attacks)"));
+        GameState& s = t.position();
+        t.game.evolve(s.players[0].active, &t.cards[10]);
+        CHECK(t.game.attacksOf(s.players[0].active, 0).size() == 1);
+        s.players[0].active.tools.push_back(&light);
+        auto attacks = t.game.attacksOf(s.players[0].active, 0);
+        CHECK(attacks.size() == 2 && attacks[1] == &t.cards[0].attacks[0]);
+    }
+    {   // Mimikyu ex: the first damage from an attack is prevented, the next isn't
+        Table t;
+        t.cards[1].passive.push_back(mod("(prevent-first-hit)"));
+        GameState& s = t.position();
+        s.players[1].active.energy[int(Type::Water)] = 1;
+        t.play(ActionKind::Attack);
+        CHECK(s.players[1].active.damage == 0 && s.players[1].active.hitOnce);
+        s.players[0].active.damage = 0;
+        t.play(ActionKind::Attack);  // P2 attacks back
+        t.play(ActionKind::Attack);
+        CHECK(s.players[1].active.damage == 30);
+    }
+    {   // Comfey: recovers as soon as it holds; Hoothoot: only Asleep is blocked
+        Table t;
+        t.cards[0].passive.push_back(mod("(no-conditions :scope my-all :with-energy water)"));
+        t.cards[1].passive.push_back(mod("(no-conditions :status asleep)"));
+        GameState& s = t.position();
+        s.players[0].active.status = Confused;
+        t.play(ActionKind::EndTurn);
+        CHECK(s.players[0].active.status == 0);
+        EffectCtx ctx{t.game, 0};
+        stmt("(status opp-active asleep)")->run(ctx);
+        CHECK(s.players[1].active.status == 0);
+        stmt("(status opp-active confused)")->run(ctx);
+        CHECK(s.players[1].active.status == Confused);
+    }
+    {   // "Discard a card from your hand. If you can't, this attack does nothing."; Claydol stops healing
+        Table t;
+        attackScript(t, "(seq (if (>= (hand-size my) 1) (discard-from-hand 1) (cancel)) (hit))");
+        GameState& s = t.position();
+        s.players[0].hand.clear();
+        t.play(ActionKind::Attack);
+        CHECK(s.players[1].active.damage == 0);
+        Table u;
+        u.cards[2].passive.push_back(mod("(no-healing :scope all)"));
+        GameState& s2 = u.position();
+        s2.players[0].active.damage = 30;
+        EffectCtx ctx{u.game, 0};
+        const Stmt* potion = stmt("(heal (choose my all damaged) 20)");
+        CHECK(!potion->possible(ctx));
+        potion->run(ctx);
+        CHECK(s2.players[0].active.damage == 30);
+    }
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -1208,5 +1346,6 @@ int main() {
     backToTheHand();
     lastTurnMemory();
     knockOutTriggers();
+    abilityBatch();
     return report("effects");
 }

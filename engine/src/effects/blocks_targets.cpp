@@ -16,15 +16,21 @@ struct Filter {
     int energy = 0;  // at least this much energy of energyTypes (0 = no test)
     bool damaged = false, ex = false, notEx = false, mega = false, evolution = false, notSelf = false, notPicked = false, ability = false, tool = false;
     std::vector<std::string> names;
+    std::string otherAbility;  // (other-ability "A"): it has an Ability not named A (Unown)
 
     bool matches(const PokemonSlot& p, const EffectCtx& ctx) const {
-        int n = 0;
-        for (int t = 0; t < TypeCount; ++t)
-            if (!energyTypes || (energyTypes & typeBit(Type(t)))) n += p.energy[t];
-        return p.card->hasType(types) && (!stages || (stages & stageBit(p.card->stage))) && (!damaged || p.damage > 0) &&
+        int n = 0, owner = 0;
+        if (energy) {
+            ctx.game.find(p.uid, &owner);
+            EnergyCounts counted = ctx.game.energyOf(p, owner);
+            for (int t = 0; t < TypeCount; ++t)
+                if (!energyTypes || (energyTypes & typeBit(Type(t)))) n += counted[t];
+        }
+        return p.hasType(types) && (!stages || (stages & stageBit(p.card->stage))) && (!damaged || p.damage > 0) &&
                (!ex || p.card->ex) && (!notEx || !p.card->ex) && (!mega || p.card->mega) && (!evolution || p.card->isEvolution()) &&
                (!notSelf || p.uid != ctx.self) && (!notPicked || p.uid != ctx.picked) && n >= energy && (!ability || !p.card->abilities.empty()) &&
                (!tool || !p.tools.empty()) &&
+               (otherAbility.empty() || (!p.card->abilities.empty() && p.card->abilities[0].name != otherAbility)) &&
                (names.empty() || std::find(names.begin(), names.end(), p.card->name) != names.end());
     }
 };
@@ -48,6 +54,7 @@ Filter parseFilter(const SExpr& e, std::size_t from) {
         else if (w == "stage2") f.stages |= stageBit(Stage::Stage2);
         else if (w == "type" && a.list) f.types |= typeMask(a, 0);
         else if (w == "has-energy" && a.list) f.energy = intArg(arg(a, 0)), f.energyTypes = typeMask(a, 1);
+        else if (w == "other-ability" && a.list) f.otherAbility = arg(a, 0).atom;
         else if (w == "name" && a.list)
             for (std::size_t n = 0; n < argCount(a); ++n) f.names.push_back(arg(a, n).atom);
         else scriptFail("unknown filter '" + a.text() + "'", e);
@@ -125,7 +132,7 @@ const PokemonSlot* first(EffectCtx& ctx, const Target* t) {
 // (energy …) adds up every Pokémon T picks: "for each Energy attached to all of your Pokémon".
 class PokemonNum : public Num {
 public:
-    enum What { Energy, DamageOn, RetreatCost, Count, EnergyTypes, StatusCount };
+    enum What { Energy, DamageOn, RetreatCost, Count, EnergyTypes, StatusCount, HpLeft };
     PokemonNum(What what, const Target* t, uint16_t types) : what_(what), t_(t), types_(types) {}
     int eval(EffectCtx& ctx) const override {
         Uids u;
@@ -140,17 +147,20 @@ public:
             return std::popcount(seen);
         }
         if (what_ == Energy) {
-            int n = 0;
+            int n = 0, owner = 0;
             for (uint16_t uid : u)
-                if (const PokemonSlot* p = ctx.game.find(uid))
+                if (const PokemonSlot* p = ctx.game.find(uid, &owner)) {
+                    EnergyCounts counted = ctx.game.energyOf(*p, owner);
                     for (int t = 0; t < TypeCount; ++t)
-                        if (!types_ || (types_ & typeBit(Type(t)))) n += p->energy[t];
+                        if (!types_ || (types_ & typeBit(Type(t)))) n += counted[t];
+                }
             return n;
         }
         int owner = 0;
         const PokemonSlot* p = u.empty() ? nullptr : ctx.game.find(u[0], &owner);
         if (!p) return 0;
         if (what_ == StatusCount) return std::popcount(unsigned(p->status));
+        if (what_ == HpLeft) return ctx.game.maxHp(*p, owner) - p->damage;
         return what_ == DamageOn ? p->damage : ctx.game.retreatCost(*p, owner);
     }
 
@@ -164,7 +174,7 @@ private:
 class PokemonTest : public Cond {
 public:
     enum What { HasDamage, HasStatus, HasTool, IsType, IsEx, IsBasic, IsEvolution, EnergyAtLeast, ExtraEnergy,
-                MovedToActive, EvolvedThisTurn, DamagedLastTurn, Exists, HalfHp };
+                MovedToActive, EvolvedThisTurn, DamagedLastTurn, IsActive, Exists, HalfHp };
     PokemonTest(What what, const Target* t, int amount, uint16_t types) : what_(what), t_(t), amount_(amount), types_(types) {}
 
     bool test(EffectCtx& ctx) const override {
@@ -180,22 +190,29 @@ public:
             case HasDamage: return p->damage > 0;
             case HasStatus: return p->status & amount_;
             case HasTool: return !p->tools.empty();
-            case IsType: return p->card->hasType(types_);
+            case IsType: return p->hasType(types_);
             case IsEx: return p->card->ex;
             case IsBasic: return p->card->stage == Stage::Basic;
             case IsEvolution: return p->card->isEvolution();
             case MovedToActive: return p->becameActiveTurn == turn;
             case EvolvedThisTurn: return !p->below.empty() && p->enteredTurn == turn;
-            case DamagedLastTurn: return p->damagedTurn == turn - 1;  // as the Active, during the opponent's last turn
+            case DamagedLastTurn: return p->damagedTurn == turn - 1;
+            case IsActive: {
+                int owner = 0;
+                ctx.game.find(p->uid, &owner);
+                return p == &ctx.game.state().players[owner].active;
+            }  // as the Active, during the opponent's last turn
             case HalfHp: {  // "has half of its maximum HP or less remaining"
                 int owner = 0;
                 ctx.game.find(p->uid, &owner);
                 return 2 * p->damage >= ctx.game.maxHp(*p, owner);
             }
             case EnergyAtLeast: {
-                int n = 0;
+                int n = 0, owner = 0;
+                ctx.game.find(p->uid, &owner);
+                EnergyCounts counted = ctx.game.energyOf(*p, owner);
                 for (int t = 0; t < TypeCount; ++t)
-                    if (!types_ || (types_ & typeBit(Type(t)))) n += p->energy[t];
+                    if (!types_ || (types_ & typeBit(Type(t)))) n += counted[t];
                 return n >= amount_;
             }
             case ExtraEnergy: return extraEnergy(ctx, *p) >= amount_;
@@ -208,14 +225,17 @@ private:
     int extraEnergy(EffectCtx& ctx, const PokemonSlot& p) const {
         if (!ctx.attackDef) return 0;
         const EnergyCounts& cost = ctx.attackDef->cost;
+        int owner = 0;
+        ctx.game.find(p.uid, &owner);
+        EnergyCounts energy = ctx.game.energyOf(p, owner);
         int typed = 0, spareOther = 0, typedCost = 0;
         for (int t = 0; t < TypeCount; ++t) {
             if (t == int(Type::Colorless)) continue;
             if (types_ & typeBit(Type(t))) {
-                typed += p.energy[t];
+                typed += energy[t];
                 typedCost += cost[t];
             } else {
-                spareOther += std::max(0, p.energy[t] - cost[t]);
+                spareOther += std::max(0, energy[t] - cost[t]);
             }
         }
         int colorlessFromTyped = std::max(0, cost[int(Type::Colorless)] - spareOther);
@@ -290,6 +310,9 @@ void addTargetWords(Words& w) {
     w.num["energy"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<PokemonNum>(PokemonNum::Energy, b.target(arg(e, 0)), typeMask(e, 1));
     }};
+    w.num["hp-left"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<PokemonNum>(PokemonNum::HpLeft, b.target(arg(e, 0)), 0);
+    }};
     w.num["damage-on"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<PokemonNum>(PokemonNum::DamageOn, b.target(arg(e, 0)), 0);
     }};
@@ -327,6 +350,7 @@ void addTargetWords(Words& w) {
     test("moved-to-active", PokemonTest::MovedToActive);
     test("evolved-this-turn", PokemonTest::EvolvedThisTurn);
     test("damaged-last-turn", PokemonTest::DamagedLastTurn);
+    test("is-active", PokemonTest::IsActive);
     test("half-hp", PokemonTest::HalfHp);
     w.cond["has-status"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<PokemonTest>(PokemonTest::HasStatus, b.target(arg(e, 0)), statusMask(e, 1), 0);

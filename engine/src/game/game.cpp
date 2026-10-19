@@ -55,7 +55,12 @@ const std::vector<Action>& Game::legalActions() {
     return actions_;
 }
 
-void Game::apply(Action action) { moveRule(action.kind).apply(*this, action); }
+void Game::apply(Action action) {
+    moveRule(action.kind).apply(*this, action);
+    // "recovers from all Special Conditions and can't be affected…" (Comfey, Steel Apron): as soon as it holds.
+    for (int p = 0; p < 2; ++p)
+        if (PokemonSlot& a = s_.players[p].active; a.card && a.status) a.status &= uint8_t(~blockedStatuses(a, p));
+}
 
 // --- Turn flow ---
 
@@ -106,6 +111,8 @@ void Game::startTurn() {
             typeName(*p.nextEnergy), ")");
     }
     showBoard();
+    runTriggers(s_.current, &CardDef::startOfTurn, &CardDef::startOfTurnWhileActive);  // after the draw (Remco)
+    knockOutCheck();
 }
 
 void Game::endTurn() {
@@ -146,13 +153,16 @@ void Game::endTurn() {
                 source->endOfEachTurn->run(ctx);
             });
     }
-    // Pokémon Checkup, for both Active Pokémon (Special Conditions are only ever on an Active Pokémon).
+    // "During Pokémon Checkup…" Abilities come first, before Poison and Burn (Remco); then Pokémon Checkup for both
+    // Active Pokémon (Special Conditions are only ever on an Active Pokémon).
+    for (int p : {me, 1 - me}) runTriggers(p, &CardDef::duringCheckup, &CardDef::duringCheckupWhileActive);
     for (int p : {me, 1 - me}) {
         PokemonSlot& a = s_.players[p].active;
         if (!a.card || !a.status) continue;
         if (a.status & Poisoned) {
-            a.damage += rules::PoisonDamage;
-            say(a.card->name, " takes ", rules::PoisonDamage, " Poison damage");
+            int poison = rules::PoisonDamage + sumMods(ModKind::PoisonDamage, a, p);  // Nihilego: +10
+            a.damage += poison;
+            say(a.card->name, " takes ", poison, " Poison damage");
         }
         if (a.status & Burned) {
             a.damage += rules::BurnDamage;
@@ -333,6 +343,23 @@ void Game::clearConditions(PokemonSlot& slot) {
         if (timed[i].uid == slot.uid) timed.take(i);
 }
 
+void Game::discardFromPlay(uint16_t uid) {
+    int owner = 0;
+    PokemonSlot* slot = find(uid, &owner);
+    if (!slot) return;
+    PlayerState& p = s_.players[owner];
+    say(slot->card->name, " is discarded");
+    p.discard.push_back(slot->card);
+    for (const CardDef* c : slot->below) p.discard.push_back(c);
+    for (const CardDef* t : slot->tools) p.discard.push_back(t);
+    for (int t = 0; t < TypeCount; ++t) p.discardEnergy[t] += slot->energy[t];
+    clearConditions(*slot);
+    if (slot == &p.active)
+        p.active = PokemonSlot{};
+    else
+        p.bench.take(std::size_t(slot - p.bench.begin()));
+}
+
 void Game::takeBack(uint16_t uid, bool toDeck) {
     int owner = 0;
     PokemonSlot* slot = find(uid, &owner);
@@ -392,7 +419,41 @@ bool Game::playerHas(ModKind kind, int player) const {
     return found;
 }
 
-int Game::maxHp(const PokemonSlot& p, int owner) const { return p.card->hp + sumMods(ModKind::Hp, p, owner); }
+int Game::maxHp(const PokemonSlot& p, int owner) const {
+    int hp = p.card->hp;
+    forEachMod(ModKind::Hp, &p, owner, [&](const Modifier& m) { hp += m.energy < 0 ? m.amount : m.amount * energyOf(p, owner)[m.energy]; });
+    return hp;
+}
+
+EnergyCounts Game::energyOf(const PokemonSlot& p, int owner) const {
+    EnergyCounts e = p.energy;
+    int doubled = -1;  // "This effect doesn't stack"
+    forEachMod(ModKind::DoubleEnergy, &p, owner, [&](const Modifier& m) { doubled = m.energy; });
+    if (doubled >= 0) e[doubled] = uint8_t(2 * e[doubled]);
+    return e;
+}
+
+uint8_t Game::blockedStatuses(const PokemonSlot& p, int owner) const {
+    uint8_t blocked = 0;
+    forEachMod(ModKind::NoConditions, &p, owner, [&](const Modifier& m) { blocked |= m.amount ? uint8_t(m.amount) : 0xFF; });
+    return blocked;
+}
+
+// Runs one trigger form (during-checkup, at-start-of-turn) for each of a player's Pokémon and their Tools.
+void Game::runTriggers(int player, const Stmt* CardDef::*form, bool CardDef::*whileActive) {
+    Uids each;
+    if (s_.players[player].active.card) each.push_back(s_.players[player].active.uid);
+    for (const PokemonSlot& b : s_.players[player].bench) each.push_back(b.uid);
+    for (uint16_t uid : each)
+        forEachSource(uid, [&](const CardDef* c) {
+            if (!(c->*form) || (whileActive && c->*whileActive && find(uid) != &s_.players[player].active)) return;
+            say("P", player + 1, "'s ", c->name, c->abilities.empty() ? "" : ": " + c->abilities[0].name);
+            EffectCtx ctx{*this, player};
+            ctx.self = uid;
+            ctx.card = c;
+            (c->*form)->run(ctx);
+        });
+}
 
 int Game::retreatCost(const PokemonSlot& p, int owner) const {
     if (hasMod(ModKind::NoRetreatCost, p, owner)) return 0;
@@ -411,7 +472,7 @@ bool Game::canUseAttack(const PokemonSlot& p, int owner, int attack) const {
 }
 
 EnergyCounts Game::attackCost(const PokemonSlot& p, int owner, int attack) const {
-    EnergyCounts cost = p.card->attacks[attack].cost;
+    EnergyCounts cost = attacksOf(p, owner)[std::size_t(attack)]->cost;
     int counts[TypeCount];
     for (int t = 0; t < TypeCount; ++t) counts[t] = cost[t];
     forEachMod(ModKind::AttackCost, &p, owner, [&](const Modifier& m) { counts[m.energy < 0 ? int(Type::Colorless) : m.energy] += m.amount; });

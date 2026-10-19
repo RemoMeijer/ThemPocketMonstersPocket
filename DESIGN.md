@@ -323,6 +323,21 @@ Updated 2026-10-19. One row per rule: what the engine does and how we know.
 | Lucky Mittens: one card per Pokémon knocked out | Remco | ✓ |
 | "Is Knocked Out" by an effect (Bewear, Galarian Cursola) isn't "Knocked Out by damage from an attack" (no Rescue Scarf, Hala, revenge bonus) | Assumed | ✓ |
 | Electrical Cord with one Benched Pokémon moves only 1 Energy ("1 Energy each to 2") | Assumed | ✓ |
+| **Abilities** | | |
+| "During Pokémon Checkup" Abilities (Garganacl, Glaceon ex, Flygon ex) act first in Checkup, before Poison and Burn | Remco | ✓ |
+| "At the end of each turn" and "At the end of your opponent's turn" Abilities (Darkrai, Caterpie) act before Checkup | Remco | ✓ |
+| "At the beginning of your turn" (Meloetta) comes after the turn's draw and new Energy | Remco | ✓ |
+| Serperior's "each {G} Energy provides 2 {G} Energy": every count sees 2 per {G}: attack and retreat costs, "for each Energy attached", HP per Energy | Remco | ✓ |
+| An effect that discards Energy still discards real Energy: a doubled {G} goes as one | Assumed | ✓ |
+| Urshifu's second type counts for "{X} Pokémon" effects only; Weakness always uses the printed type | Remco | ✓ |
+| Jolteon ex reacts to every Energy attached from the Energy Zone, by an effect too | Remco | ✓ |
+| Dusknoir may move damage that knocks itself out; the opponent scores | Remco | ✓ |
+| "You may" on a "when you put this Pokémon onto your Bench" Ability: the player chooses | Card | ✓ |
+| Alolan Muk turns off Basic Pokémon's Abilities, not their Tools, and not a Fossil's rule (a Fossil has no Ability) | Assumed | ✓ |
+| Under Claydol, a Potion can't be played: it has nothing to do | Assumed (as "Trainers need something to do") | ✓ |
+| Misdreavus's "your opponent reveals their hand" does nothing in the engine: it's information only | Assumed | ✓ |
+| Evolving from the deck by an effect (Caterpie, Porygon2, Magikarp) ignores the usual timing limits | Assumed | ✓ |
+| A Pokémon whose HP drops below its damage because it lost Energy (Reuniclus retreating) is knocked out at once | Assumed (like a Stadium's +HP going away) | ✓ |
 | **Card names** | | |
 | A named Pokémon means exactly that name: "Crabominable" doesn't cover Crabominable ex. A card that includes an ex names it | Remco | ✓ |
 | **Memory of the last turn** | | |

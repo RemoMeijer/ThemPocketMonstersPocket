@@ -14,8 +14,8 @@ The current focus is a correct engine: the right cards and the right rules. Stat
 - **Done:**
   - the rules core: milestones 1–2, the cleanup, rule fixes R1–R4, Trainers and abilities that need something to do before they can be used, and the 4 bug fixes from the 2026-10-16 review;
   - the effect system;
-  - card data from Limitless, every set up to B4b: 2,016 of 2,319 cards (86%) are playable;
-  - coverage batches 0–8 (argument-count check, 65 Trainers: 128 of 152 now; R5 Stadium actions: all 13 Stadiums; memory of the last turn; knock-out triggers).
+  - card data from Limitless, every set up to B4b: 2,088 of 2,319 cards (90%) are playable;
+  - coverage batches 0–9 (argument-count check, 66 Trainers: 129 of 152 now; R5 Stadium actions: all 13 Stadiums; memory of the last turn; knock-out triggers; about 70 Abilities).
 - **Next** (PROGRESS.md, "Next"):
   - card coverage: the most common missing attack texts, then the Trainers left out of batches 0–6;
   - effect-script checks (golden tests);

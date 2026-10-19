@@ -14,7 +14,7 @@ public:
         bool items = !game.playerHas(ModKind::CantPlayItem, me);
         bool supporters = p.supporterTurn != s.turn && !game.playerHas(ModKind::CantPlaySupporter, me) &&
                           (rules::SupporterOnFirstTurn || !game.firstTurnOfGame());
-        bool stadiums = p.stadiumTurn != s.turn;
+        bool stadiums = p.stadiumTurn != s.turn && !game.playerHas(ModKind::CantPlayStadium, me);  // Snorlax
         // A Trainer needs something to do before it can be played: no Potion without damage (App).
         auto doable = [&](const CardDef* c) {
             EffectCtx ctx{game, me};
@@ -70,7 +70,6 @@ public:
         PokemonSlot& target = game.slot(me, a.target);
         target.tools.push_back(p.hand.take(a.index));
         game.say("P", me + 1, " attaches ", target.tools.back()->name, " to ", target.card->name);
-        if (game.hasMod(ModKind::NoConditions, target, me)) target.status = 0;  // Steel Apron: "recovers from all…"
     }
 };
 }  // namespace

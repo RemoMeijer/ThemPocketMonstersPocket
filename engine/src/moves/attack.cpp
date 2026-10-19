@@ -9,8 +9,9 @@ public:
     void addMoves(Game& game, std::vector<Action>& out) const override {
         int me = game.state().current;
         const PokemonSlot& active = game.state().players[me].active;
-        for (std::size_t i = 0; i < active.card->attacks.size(); ++i)
-            if (game.canUseAttack(active, me, int(i)) && canPay(active.energy, game.attackCost(active, me, int(i))))
+        std::size_t n = game.attacksOf(active, me).size();
+        for (std::size_t i = 0; i < n; ++i)
+            if (game.canUseAttack(active, me, int(i)) && canPay(game.energyOf(active, me), game.attackCost(active, me, int(i))))
                 out.push_back({ActionKind::Attack, int8_t(i)});
     }
 
@@ -19,7 +20,7 @@ public:
         int me = s.current;
         const PokemonSlot& attacker = s.players[me].active;
         uint16_t attackerUid = attacker.uid;
-        const AttackDef& attack = attacker.card->attacks[a.index];
+        const AttackDef& attack = *game.attacksOf(attacker, me)[std::size_t(a.index)];
         game.say("P", me + 1, "'s ", attacker.card->name, " uses ", attack.name);
         // Confused, or an effect like "if the Defending Pokémon tries to use an attack, your opponent flips
         // a coin": tails, the attack doesn't happen (assumed for Confused, see DESIGN.md §10).

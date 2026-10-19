@@ -560,6 +560,106 @@ private:
     bool opp_;
 };
 
+// (discard-from-hand N): the player discards N cards of their choice from the hand (Garchomp).
+class DiscardFromHand : public Stmt {
+public:
+    explicit DiscardFromHand(int n) : n_(n) {}
+    void run(EffectCtx& ctx) const override {
+        PlayerState& p = ctx.game.state().players[ctx.player];
+        for (int i = 0; i < n_ && !p.hand.empty(); ++i) {
+            const CardDef* c = p.hand.take(std::size_t(ctx.game.choose(ctx.player, int(p.hand.size()))));
+            p.discard.push_back(c);
+            ctx.game.say("  ", c->name, " is discarded from the hand");
+        }
+    }
+    bool possible(EffectCtx& ctx) const override { return ctx.game.state().players[ctx.player].hand.size() >= std::size_t(n_); }
+
+private:
+    int n_;
+};
+
+// (move-damage FROM TO N|all): damage moves from one Pokémon onto another (Dusknoir, Brambleghast).
+class MoveDamage : public Stmt {
+public:
+    MoveDamage(const Target* from, const Target* to, int n) : from_(from), to_(to), n_(n) {}
+    void run(EffectCtx& ctx) const override {
+        Uids f, t;
+        from_->select(ctx, f);
+        to_->select(ctx, t);
+        PokemonSlot* a = f.empty() ? nullptr : ctx.game.find(f[0]);
+        int owner = 0;
+        PokemonSlot* b = t.empty() ? nullptr : ctx.game.find(t[0], &owner);
+        if (!a || !b || a == b) return;
+        int k = n_ < 0 ? a->damage : std::min(n_, a->damage);
+        a->damage -= k;
+        b->damage += k;
+        if (ctx.game.logging()) ctx.game.say("  ", k, " damage moved -> ", ctx.game.show(*b, owner));
+    }
+    bool possible(EffectCtx& ctx) const override {
+        Uids t;
+        to_->candidates(ctx, t);
+        return !t.empty() && anyCandidate(ctx, from_, [&](const PokemonSlot& p) { return p.damage > 0 && p.uid != t[0]; });
+    }
+
+private:
+    const Target* from_;
+    const Target* to_;
+    int n_;
+};
+
+class DiscardPokemon : public Stmt {  // (discard-pokemon TARGET): "discard this Pokémon" from play (Klefki)
+public:
+    explicit DiscardPokemon(const Target* t) : t_(t) {}
+    void run(EffectCtx& ctx) const override {
+        Uids targets;
+        t_->select(ctx, targets);
+        for (uint16_t uid : targets) ctx.game.discardFromPlay(uid);
+    }
+
+private:
+    const Target* t_;
+};
+
+// (evolve-from-deck TARGET): "put a random card from your deck that evolves from this Pokémon onto this Pokémon to
+// evolve it" (Caterpie, Porygon2). An effect, so the usual timing limits don't apply; no "when you play it" Ability.
+class EvolveFromDeck : public Stmt {
+public:
+    explicit EvolveFromDeck(const Target* t) : t_(t) {}
+    void run(EffectCtx& ctx) const override {
+        Uids targets;
+        t_->select(ctx, targets);
+        for (uint16_t uid : targets) {
+            int owner = 0;
+            PokemonSlot* p = ctx.game.find(uid, &owner);
+            if (!p) continue;
+            PlayerState& ps = ctx.game.state().players[owner];
+            std::vector<std::size_t> hits;
+            for (std::size_t k = 0; k < ps.deck.size(); ++k)
+                if (ps.deck[k]->isEvolution() && ps.deck[k]->evolvesFrom == p->card->name) hits.push_back(k);
+            if (hits.empty()) continue;
+            const CardDef* card = ps.deck.take(hits[std::uniform_int_distribution<std::size_t>(0, hits.size() - 1)(ctx.game.rng())]);
+            ctx.game.say("  ", p->card->name, " evolves into ", card->name, " from the deck");
+            ctx.game.evolve(*p, card);
+        }
+    }
+    bool possible(EffectCtx& ctx) const override {
+        return anyCandidate(ctx, t_, [&](const PokemonSlot& p) {
+            int owner = 0;
+            ctx.game.find(p.uid, &owner);
+            const auto& deck = ctx.game.state().players[owner].deck;
+            return std::any_of(deck.begin(), deck.end(), [&](const CardDef* c) { return c->isEvolution() && c->evolvesFrom == p.card->name; });
+        });
+    }
+
+private:
+    const Target* t_;
+};
+
+class FirstTurn : public Cond {  // (first-turn): it's the player's own first turn (Wimpod, Zeraora)
+public:
+    bool test(EffectCtx& ctx) const override { return ctx.game.ownFirstTurn(ctx.player); }
+};
+
 // Knock-out triggers (Game::knockOut reads the flags once the triggers have run).
 class NoPoints : public Stmt {  // (no-points): "your opponent can't get any points for it"
 public:
@@ -719,6 +819,13 @@ void addCardWords(Words& w) {
     w.cond["my-turn"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<MyTurn>(); }};
     w.cond["played-supporter"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<PlayedSupporter>(); }};
     w.num["hand-size"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<HandSize>(oppArg(arg(e, 0))); }};
+    w.stmt["discard-from-hand"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<DiscardFromHand>(intArg(arg(e, 0))); }};
+    w.stmt["move-damage"] = {3, 3, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<MoveDamage>(b.target(arg(e, 0)), b.target(arg(e, 1)), arg(e, 2).atom == "all" ? -1 : intArg(arg(e, 2)));
+    }};
+    w.stmt["discard-pokemon"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<DiscardPokemon>(b.target(arg(e, 0))); }};
+    w.stmt["evolve-from-deck"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<EvolveFromDeck>(b.target(arg(e, 0))); }};
+    w.cond["first-turn"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<FirstTurn>(); }};
     w.stmt["no-points"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<NoPoints>(); }};
     w.stmt["to-hand-instead"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<ToHandInstead>(); }};
     w.stmt["knock-out"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<KnockOut>(b.target(arg(e, 0))); }};
