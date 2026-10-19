@@ -10,7 +10,7 @@ The current focus is a correct engine: the right cards and the right rules. Stat
 
 ## Where we are
 
-- **Read first:** [PROGRESS.md](PROGRESS.md) for the current state, shortcuts and next options, and [DESIGN.md](DESIGN.md) for how card effects are structured.
+- **Read first:** [PROGRESS.md](PROGRESS.md), the handoff file: status, coverage, what was done per batch, rules and open questions, shortcuts, weak spots and the next steps. Then [DESIGN.md](DESIGN.md) for how card effects are structured (§4) and every rule with its source (§10).
 - **Done:**
   - the rules core: milestones 1–2, the cleanup, rule fixes R1–R4, Trainers and abilities that need something to do before they can be used, and the 4 bug fixes from the 2026-10-16 review;
   - the effect system;
@@ -94,6 +94,7 @@ For memory and undefined-behaviour checks, `engine/build-debug` is configured wi
 ## Working rules
 
 - **Step by step:** plan each milestone, explain it, and wait for a go before writing code.
+  - Exception: card-coverage batches run back to back, each with its own commit, and a progress report every two batches or so (Remco, 2026-10-19). Rule questions still go to Remco first.
 - **No card is special-cased in C++:**
   - card behaviour comes from data and effect scripts;
   - a new mechanic is a new block or modifier, used by every card with that text;
