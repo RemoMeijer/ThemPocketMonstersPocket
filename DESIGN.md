@@ -310,6 +310,7 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 | Both reach 3 points at once, both with Pokémon in play: a tie | Tips | ✓ |
 | An empty deck doesn't lose; there's just no draw | Tips | ✓ |
 | Only knock-outs score; a Pokémon discarded by an effect gives no points | FAQ | ✓ |
+| A card taken from the opponent (Team Rocket's Thieving Machine) becomes the taker's: once played it goes to the taker's discard pile | Assumed | ✓ open question in PROGRESS.md |
 | A Pokémon put back into the hand (Koga, Ilima) takes its evolution cards and Tool with it; its energy goes to the discard pile | Remco | ○ batch 6 |
 | Putting your Active Pokémon back into the hand is allowed with an empty Bench: with no Pokémon left in play, that player loses (a way to concede) | Remco | ○ batch 6 |
 | Both Active Pokémon knocked out by one attack: the defending player picks a new Active first, then the attacking player, then Pokémon Checkup | App | ✓ |

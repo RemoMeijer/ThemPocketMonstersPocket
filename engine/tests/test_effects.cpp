@@ -668,6 +668,52 @@ static void coverageBatchTwoBlocks() {
     }
 }
 
+// The pieces coverage batch 3 added: the discard pile, and (then A B) for "If you do".
+static void coverageBatchThreeBlocks() {
+    Table t;
+    t.cards[5].category = Category::Trainer;  // Mon5 stands in for an Item card
+    t.cards[5].trainer = TrainerKind::Item;
+    t.cards[5].name = "Machine";
+    t.cards[6].category = Category::Trainer;
+    t.cards[6].trainer = TrainerKind::Item;
+    GameState& s = t.position();
+    PlayerState& p = s.players[0];
+    PlayerState& o = s.players[1];
+    p.hand.clear();
+    p.discard.clear();
+    o.discard.clear();
+    EffectCtx ctx{t.game, 0};
+    // Celestic Town Elder: a random Basic from your own discard pile
+    p.discard.push_back(&t.cards[3]);
+    stmt("(from-discard random 1 my hand basic)")->run(ctx);
+    CHECK(p.hand.size() == 1 && p.hand[0] == &t.cards[3] && p.discard.empty());
+    // Team Rocket's Thieving Machine: an Item from the opponent's pile, but not another Machine
+    o.discard.push_back(&t.cards[5]);
+    CHECK(!stmt("(from-discard random 1 opp hand item (except \"Machine\"))")->possible(ctx));
+    o.discard.push_back(&t.cards[6]);
+    stmt("(from-discard random 1 opp hand item (except \"Machine\"))")->run(ctx);
+    CHECK(p.hand.size() == 2 && p.hand[1] == &t.cards[6] && o.discard.size() == 1);
+    // Pokémon Flute: a Basic from the opponent's pile onto their Bench
+    o.discard.push_back(&t.cards[7]);
+    std::size_t bench = o.bench.size();
+    stmt("(from-discard choose 1 opp bench basic)")->run(ctx);
+    CHECK(o.bench.size() == bench + 1 && o.bench.back().card == &t.cards[7]);
+    // Rotom ex, Sunflora: counting the discard pile
+    p.discard.push_back(&t.cards[6]);
+    p.discard.push_back(&t.cards[8]);
+    CHECK(stmt("(if (>= (discard-count my item) 1) (nothing))")->possible(ctx));
+    CHECK(!stmt("(if (>= (discard-count my (name \"Mon9\")) 1) (nothing))")->possible(ctx));
+    // Flame Patch, Flareon ex: energy from your discard pile; "If you do" only after something was attached
+    const Stmt* flareon = stmt("(then (attach-from-discard my-active fire 1) (damage my-active 20))");
+    CHECK(!flareon->possible(ctx));
+    flareon->run(ctx);
+    CHECK(p.active.damage == 0);
+    p.discardEnergy[int(Type::Fire)] = 1;
+    CHECK(flareon->possible(ctx));
+    flareon->run(ctx);
+    CHECK(p.active.energy[int(Type::Fire)] == 1 && p.discardEnergy[int(Type::Fire)] == 0 && p.active.damage == 20);
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -703,5 +749,6 @@ int main() {
     wrongArgumentCountsDontLoad();
     coverageBatchOneBlocks();
     coverageBatchTwoBlocks();
+    coverageBatchThreeBlocks();
     return report("effects");
 }

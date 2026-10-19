@@ -11,14 +11,14 @@ namespace {
 int sidePlayer(const EffectCtx& ctx, bool opp) { return opp ? 1 - ctx.player : ctx.player; }
 
 // Which cards in a deck qualify: pokemon, basic, stage1, stage2, mega, trainer, supporter, item, tool, stadium,
-// (type T…), (name "A" …), (name-has "A"), (evolves-from "A"), (max-hp N).
+// (type T…), (name "A" …), (name-has "A"), (except "A"), (evolves-from "A"), (max-hp N).
 struct CardFilter {
     bool pokemon = false, basic = false, trainer = false, mega = false;
     uint8_t stages = 0;
     TrainerKind kind = TrainerKind::None;
     uint16_t types = 0;
     std::vector<std::string> names;
-    std::string nameHas, evolvesFrom;
+    std::string nameHas, except, evolvesFrom;
     int maxHp = 0;
 
     bool matches(const CardDef* c) const {
@@ -27,7 +27,7 @@ struct CardFilter {
                (!trainer || c->category == Category::Trainer) && (kind == TrainerKind::None || c->isTrainer(kind)) &&
                (!types || (c->isPokemon() && c->hasType(types))) &&
                (names.empty() || std::find(names.begin(), names.end(), c->name) != names.end()) &&
-               (nameHas.empty() || c->name.find(nameHas) != std::string::npos) &&
+               (nameHas.empty() || c->name.find(nameHas) != std::string::npos) && (except.empty() || c->name != except) &&
                (evolvesFrom.empty() || c->evolvesFrom == evolvesFrom) && (!maxHp || (c->isPokemon() && c->hp <= maxHp));
     }
 };
@@ -49,6 +49,7 @@ CardFilter parseCardFilter(const SExpr& e, std::size_t from) {
         else if (w == "mega") f.mega = true, f.pokemon = true;
         else if (w == "max-hp" && a.list) f.maxHp = intArg(arg(a, 0)), f.pokemon = true;
         else if (w == "name-has" && a.list) f.nameHas = arg(a, 0).atom;
+        else if (w == "except" && a.list) f.except = arg(a, 0).atom;
         else if (w == "type" && a.list) f.types = typeMask(a, 0), f.pokemon = true;
         else if (w == "name" && a.list)
             for (std::size_t n = 0; n < argCount(a); ++n) f.names.push_back(arg(a, n).atom);
@@ -274,6 +275,65 @@ private:
     Modifier mod_;
 };
 
+// (from-discard random|choose N SIDE hand|bench FILTER…): N matching cards from SIDE's discard pile, picked at
+// random or by the player, into your hand, or (Basic Pokémon only) onto SIDE's Bench (Pokémon Flute).
+// A card taken from the opponent becomes yours (assumed, DESIGN.md §10).
+class FromDiscard : public Stmt {
+public:
+    FromDiscard(bool random, const Num* n, bool opp, bool bench, CardFilter f)
+        : random_(random), n_(n), opp_(opp), bench_(bench), f_(std::move(f)) {}
+    void run(EffectCtx& ctx) const override {
+        PlayerState& from = ctx.game.state().players[sidePlayer(ctx, opp_)];
+        PlayerState& mine = ctx.game.state().players[ctx.player];
+        for (int i = n_->eval(ctx); i > 0; --i) {
+            if (bench_ ? from.bench.full() : mine.hand.size() >= std::size_t(rules::HandLimit)) return;
+            std::vector<std::size_t> hits = matches(from);
+            if (hits.empty()) return;
+            std::size_t pick = random_ ? std::uniform_int_distribution<std::size_t>(0, hits.size() - 1)(ctx.game.rng())
+                                       : std::size_t(ctx.game.choose(ctx.player, int(hits.size())));
+            const CardDef* card = from.discard.take(hits[pick]);
+            if (bench_) {
+                from.bench.push_back({});
+                ctx.game.putIntoPlay(from.bench.back(), card);
+                ctx.game.say("  ", card->name, " from the discard pile onto the Bench");
+            } else {
+                mine.hand.push_back(card);
+                ctx.game.say("  ", card->name, " from the discard pile into the hand");
+            }
+        }
+    }
+    bool possible(EffectCtx& ctx) const override {
+        const PlayerState& from = ctx.game.state().players[sidePlayer(ctx, opp_)];
+        return !(bench_ && from.bench.full()) && !matches(from).empty();
+    }
+
+private:
+    std::vector<std::size_t> matches(const PlayerState& p) const {
+        std::vector<std::size_t> hits;
+        for (std::size_t k = 0; k < p.discard.size(); ++k)
+            if (f_.matches(p.discard[k]) && (!bench_ || p.discard[k]->isBasic())) hits.push_back(k);
+        return hits;
+    }
+    bool random_;
+    const Num* n_;
+    bool opp_, bench_;
+    CardFilter f_;
+};
+
+class DiscardCount : public Num {  // (discard-count SIDE FILTER…): matching cards in that discard pile
+public:
+    DiscardCount(bool opp, CardFilter f) : opp_(opp), f_(std::move(f)) {}
+    int eval(EffectCtx& ctx) const override {
+        int n = 0;
+        for (const CardDef* c : ctx.game.state().players[sidePlayer(ctx, opp_)].discard) n += f_.matches(c);
+        return n;
+    }
+
+private:
+    bool opp_;
+    CardFilter f_;
+};
+
 // (dig N FILTER…): look at the top N cards of your deck, put every matching one into your hand, and
 // shuffle the rest back.
 class Dig : public Stmt {
@@ -431,6 +491,16 @@ void addCardWords(Words& w) {
     w.stmt["discard-tools"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<DiscardTools>(b.target(arg(e, 0))); }};
     w.stmt["rare-candy"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<RareCandy>(); }};
     w.stmt["swap-pokemon"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<SwapPokemon>(); }};
+    w.stmt["from-discard"] = {4, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
+        const std::string& mode = arg(e, 0).atom;
+        const std::string& dest = arg(e, 3).atom;
+        if (mode != "random" && mode != "choose") scriptFail("expected random or choose", e);
+        if (dest != "hand" && dest != "bench") scriptFail("expected hand or bench", e);
+        return b.make<FromDiscard>(mode == "random", b.num(arg(e, 1)), oppArg(arg(e, 2)), dest == "bench", parseCardFilter(e, 4));
+    }};
+    w.num["discard-count"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<DiscardCount>(oppArg(arg(e, 0)), parseCardFilter(e, 1));
+    }};
     w.stmt["dig"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) { return b.make<Dig>(intArg(arg(e, 0)), parseCardFilter(e, 1)); }};
     w.stmt["effect"] = {3, 3, [](const SExpr& e, ScriptBuilder& b) {
         const std::string& d = arg(e, 0).atom;

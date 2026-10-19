@@ -39,6 +39,36 @@ private:
     const Num* n_;
 };
 
+// (attach-from-discard TARGET TYPE N): up to N energy of TYPE from your discard pile onto each target. Not from
+// the Energy Zone, so "whenever you attach … from your Energy Zone" abilities don't trigger.
+class AttachFromDiscard : public Stmt {
+public:
+    AttachFromDiscard(const Target* t, Type type, int n) : t_(t), type_(type), n_(n) {}
+    void run(EffectCtx& ctx) const override {
+        Uids targets;
+        t_->select(ctx, targets);
+        auto& pile = ctx.game.state().players[ctx.player].discardEnergy[int(type_)];
+        for (uint16_t uid : targets) {
+            int owner = 0;
+            PokemonSlot* p = ctx.game.find(uid, &owner);
+            int k = std::min<int>(n_, pile);
+            if (!p || !k) continue;
+            pile -= k;
+            p->energy[int(type_)] += k;
+            if (ctx.game.logging()) ctx.game.say("  ", k, " ", typeName(type_), " energy from the discard pile -> ", ctx.game.show(*p, owner));
+        }
+    }
+    bool possible(EffectCtx& ctx) const override {
+        return ctx.game.state().players[ctx.player].discardEnergy[int(type_)] > 0 &&
+               anyCandidate(ctx, t_, [](const PokemonSlot&) { return true; });
+    }
+
+private:
+    const Target* t_;
+    Type type_;
+    int n_;
+};
+
 // (discard-energy TARGET TYPE|any N|all) and (discard-random-energy TARGET N).
 class DiscardEnergy : public Stmt {
 public:
@@ -197,6 +227,9 @@ void addEnergyWords(Words& w) {
     }};
     w.stmt["discard-energy-among"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<DiscardEnergyAmong>(b.target(arg(e, 0)), intArg(arg(e, 1)));
+    }};
+    w.stmt["attach-from-discard"] = {3, 3, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<AttachFromDiscard>(b.target(arg(e, 0)), typeArg(arg(e, 1)), intArg(arg(e, 2)));
     }};
     w.stmt["attach-energy"] = {2, 3, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<AttachEnergy>(b.target(arg(e, 0)), typeArg(arg(e, 1)), argCount(e) > 2 ? b.num(arg(e, 2)) : b.num(atomExpr("1")));

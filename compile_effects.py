@@ -140,6 +140,7 @@ CONDITIONS = [
      lambda m, c: f"(>= (energy-types my all) {m.group(1)})"),
     (r"your Pokemon in the Active Spot has the (.+) attack", lambda m, c: f'(has-attack my-active "{m.group(1)}")'),
     (r"a Stadium is in play", lambda m, c: "(stadium-in-play)"),
+    (r"([A-Z][\w' .:-]*?) is in your discard pile", lambda m, c: f'(>= (discard-count my (name "{m.group(1)}")) 1)'),
     (r"you have (\w[\w' ]*?) or (\w[\w' ]*?) in play",
      lambda m, c: f'(exists my all (name "{m.group(1)}" "{m.group(2)}"))'),
     (r"your opponent has (\d+) or more cards in their hand", lambda m, c: f"(>= (hand-size opp) {m.group(1)})"),
@@ -191,6 +192,8 @@ def timed(duration):
             "During your next turn": "my-next-turn", "during your next turn": "my-next-turn",
             "During this turn": "this-turn"}[duration]
 
+
+TRAINER_KINDS = {"Supporter": "supporter", "Item": "item", "Pokemon Tool": "tool", "Stadium": "stadium"}
 
 OPP_NEXT = r"(?P<d>[Dd]uring your opponent's next turn|[Dd]uring your next turn|During this turn)"
 
@@ -343,7 +346,27 @@ CLAUSES = [
     (r"put a random card that evolves from ([\w' -]+?) from your deck into your hand",
      lambda m, c: ("post", f'(search 1 hand (evolves-from "{m.group(1)}"))')),
     (r"put a random (Supporter|Item|Pokemon Tool|Stadium) card from your deck into your hand",
-     lambda m, c: ("post", "(search 1 hand " + {"Supporter": "supporter", "Item": "item", "Pokemon Tool": "tool", "Stadium": "stadium"}[m.group(1)] + ")")),
+     lambda m, c: ("post", f"(search 1 hand {TRAINER_KINDS[m.group(1)]})")),
+    # The discard pile
+    (r"put (a|\d+) random (Basic |Stage 1 |Stage 2 )?(?:" + E + r" )?Pokemon from your discard pile into your hand",
+     lambda m, c: ("post", f"(from-discard random {num(m.group(1))} my hand {card_kind(m.group(2))}"
+                           f"{' (type ' + t(m.group(3)) + ')' if m.group(3) else ''})")),
+    (r"an? (?:" + E + r" )?Pokemon is chosen at random from your discard pile and put into your hand",
+     lambda m, c: ("post", f"(from-discard random 1 my hand pokemon{' (type ' + t(m.group(1)) + ')' if m.group(1) else ''})")),
+    (r"put (a|\d+) random (Supporter|Item|Pokemon Tool) cards? from your discard pile into your hand",
+     lambda m, c: ("post", f"(from-discard random {num(m.group(1))} my hand {TRAINER_KINDS[m.group(2)]})")),
+    (r"put an? (Supporter|Item|Pokemon Tool) card from your discard pile into your hand",
+     lambda m, c: ("post", f"(from-discard choose 1 my hand {TRAINER_KINDS[m.group(1)]})")),
+    (r"put a random (Supporter|Item|Pokemon Tool) card, except any (.+?), from your opponent's discard pile into your hand",
+     lambda m, c: ("post", f'(from-discard random 1 opp hand {TRAINER_KINDS[m.group(1)]} (except "{m.group(2)}"))')),
+    (r"put a Basic Pokemon from your opponent's discard pile onto their Bench",
+     lambda m, c: ("post", "(from-discard choose 1 opp bench basic)")),
+    (r"attach (an?|\d+) " + E + r" Energy from your discard pile to " + REF,
+     lambda m, c: ("post", f"(attach-from-discard {target(m)} {t(m.group(2))} {num(m.group(1))})")),
+    (r"this attack does (\d+) more damage for each (Supporter|Item|Pokemon Tool) card in your discard pile",
+     lambda m, c: ("pre", f"(bonus (* (discard-count my {TRAINER_KINDS[m.group(2)]}) {m.group(1)}))")),
+    (r"this attack does (\d+) more damage for each (?:" + E + r" )?Pokemon in your discard pile",
+     lambda m, c: ("pre", f"(bonus (* (discard-count my pokemon{' (type ' + t(m.group(2)) + ')' if m.group(2) else ''}) {m.group(1)}))")),
     (r"discard the top (card|\d+ cards) of (your opponent's|your|each player's) deck",
      lambda m, c: ("post", f"(mill {dict(zip(['your opponent' + chr(39) + 's', 'your', 'each player' + chr(39) + 's'], ['opp', 'my', 'both']))[m.group(2)]} "
                            f"{1 if m.group(1) == 'card' else m.group(1).split()[0]})")),
@@ -386,9 +409,10 @@ def clause(text, ctx):
 def sentence(s, ctx):
     """A sentence → (phase, statement); a statement may be empty for text the previous sentence covered."""
     s = s.rstrip(".") if not s.startswith("(") else s
-    m = re.fullmatch(r"If you do, (.+)", s)  # after an optional "you may …": the effect ran, so you did
+    m = re.fullmatch(r"If you do, (.+)", s)  # after an optional "you may A": B only follows when A had something to do
     if m:
-        return clause(m.group(1), ctx)
+        phase, stmt = clause(m.group(1), ctx)
+        return "then", (phase, stmt)
     m = re.fullmatch(r"If (.+?), (.+)", s)
     if m:
         try:
@@ -459,6 +483,12 @@ def statements(text, ctx):
             out.append(("post", f"(hits {times} {pool} {d.group(1) or d.group(2)})"))
             continue
         phase, stmt = sentence(s, ctx)
+        if phase == "then":
+            if not out or not out[-1][1]:
+                raise Unsupported(f"'If you do' without something before it: {s}")
+            before_phase, before = out.pop()
+            out.append((before_phase, f"(then {before} {stmt[1]})" if stmt[1] else before))
+            continue
         m = re.fullmatch(r"\(set-random-hits (\d+) (opp|both)\)", stmt or "")
         if m:
             out.append(("random-hits", (m.group(1), m.group(2))))
@@ -741,6 +771,13 @@ EXAMPLES = [
      '(play (pick (choose my all (name "Alolan Marowak" "Turtonator")) (seq (attach-energy picked fire 2) (end-turn))))'),
     ("Item", "", "Discard a Pokémon Tool card from a Pokémon (yours or your opponent's), or discard a Stadium card in play.",
      "(play (one-of (discard-tools (choose both all tool)) (discard-stadium)))"),
+    ("Supporter", "", "Choose 1 of your Electivire or Luxray. Attach 2 {L} Energy from your discard pile to that Pokémon.",
+     '(play (pick (choose my all (name "Electivire" "Luxray")) (attach-from-discard picked lightning 2)))'),
+    ("Item", "", "Put a Basic Pokémon from your opponent's discard pile onto their Bench.", "(play (from-discard choose 1 opp bench basic))"),
+    ("Item", "", "Put a random Item card, except any Team Rocket's Thieving Machine, from your opponent's discard pile into your hand.",
+     '(play (from-discard random 1 opp hand item (except "Team Rocket\'s Thieving Machine")))'),
+    ("ability", "", "Once during your turn, you may attach a {R} Energy from your discard pile to this Pokémon. If you do, do 20 damage to this Pokémon.",
+     "(activated (then (attach-from-discard self fire 1) (damage self 20)))"),
     ("ability", "", "If you have Arceus or Arceus ex in play, this Pokémon takes −30 damage from attacks.",
      '(passive (damage-taken -30 :needs "Arceus" "Arceus ex"))'),
 ]

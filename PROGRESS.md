@@ -4,14 +4,14 @@ Updated 2026-10-16.
 
 ## Where we are
 
-The **game engine** is most of the way there. It plays Pocket games by the rules Remco confirmed, for 82% of all cards, and an independent checker watches every move. The **simulator around it** hasn't started yet: playing many games at once, stats, finding decks and a better player.
+The **game engine** is most of the way there. It plays Pocket games by the rules Remco confirmed, for 83% of all cards, and an independent checker watches every move. The **simulator around it** hasn't started yet: playing many games at once, stats, finding decks and a better player.
 
 | Part | State |
 |---|---|
 | Rules core: setup, turns, Energy Zone, attacking, retreating, evolving, Trainers, Tools, Stadiums (always-on effects), abilities, Special Conditions, Checkup, damage, winning | Built and checked. Missing: Stadium actions (R5), and the player choosing which energy to pay or discard |
 | Card data | Every set up to B4b: 2,319 unique cards from Limitless, cross-checked against deckgym-core |
-| Card effects | 1,913 of 2,319 cards (82%) playable. Trainers lag behind and are being added in batches (table below, Next step 1) |
-| Checks | 21 rule tests, 34 effect tests, 38 compiler self-test examples, `check_states` (16.5M moves over all 10 decks, 0 violations), and the memory and undefined-behaviour checker build is clean after coverage batch 2 (the tests plus `check_states` on 3 decks, two coverage decks among them) |
+| Card effects | 1,930 of 2,319 cards (83%) playable. Trainers lag behind and are being added in batches (table below, Next step 1) |
+| Checks | 21 rule tests, 35 effect tests, 42 compiler self-test examples, `check_states` (20.0M moves over all 11 decks, 0 violations), and the memory and undefined-behaviour checker build is clean after coverage batch 3 (the tests plus `check_states` on 3 coverage decks) |
 | Replayable games (seeds) | Not yet: every game seeds itself from `random_device` |
 | Simulation runner (many games, threads, stats) | Not started |
 | Finding decks (generate, play, rank) | Not started |
@@ -27,13 +27,13 @@ Code size: about 4,500 lines of C++ (engine and tests) and 900 lines of Python (
 
 | Kind | Playable |
 |---|---|
-| Pokémon | 1,821 / 2,167 |
-| Supporters | 60 / 82 |
-| Items | 19 / 31 |
+| Pokémon | 1,831 / 2,167 |
+| Supporters | 63 / 82 |
+| Items | 23 / 31 |
 | Tools | 9 / 26 |
 | Stadiums | 4 / 13 |
 
-Trainers matter most for deck finding because they go into most decks. They're being added in batches (Next, step 1). `decks/coverage-a.txt` and `coverage-b.txt` hold the batch 1 Trainers, and `coverage-c.txt` the batch 2 ones, so `check_states` plays them.
+Trainers matter most for deck finding because they go into most decks. They're being added in batches (Next, step 1). `decks/coverage-a.txt` and `coverage-b.txt` hold the batch 1 Trainers, `coverage-c.txt` the batch 2 ones and `coverage-d.txt` the batch 3 ones, so `check_states` plays them.
 
 The rest are mostly one-of-a-kind mechanics we chose to skip for now:
 - memory of last turn (Sweets Relay, "knocked out last turn");
@@ -96,7 +96,8 @@ Also answered on 2026-10-16:
 
 - Random multi-hit attacks (Wugtrio ex): the hits on one Pokémon add up first and are dealt as one attack, so Weakness (+20) and bonuses count once per Pokémon (Remco). The engine used to apply them on every hit.
 
-**Open questions:** none right now.
+**Open questions:**
+- **Team Rocket's Thieving Machine:** the Item it takes from your opponent's discard pile, once you play it, goes to your discard pile, so it's yours from then on. Is that right, or does it go back to your opponent's discard pile? The engine assumes yours.
 
 ## Review (2026-10-16)
 
@@ -135,7 +136,12 @@ In order. Each step gets a plan first, then tests, `check_states` at 0 violation
      - Cards: Lana, Piers, Juggler, Psychic, Kiawe, Big Malasada, Nasty Notice, Team Star Grunt, Field Blower.
      - How: "You can use this card only if…" compiles to `(if …)`. New blocks: `end-turn`, `one-of`, `cure-random`, `discard-hand-to`, `discard-energy-among`, `discard-stadium`, `move-random-energy`. New tests: `stadium-in-play`, `has-attack`, `energy-types`.
      - Also unlocked 12 Pokémon attacks, among them Gyarados ex, Swampert, Ceruledge ex, Gallade, Tornadus and the Castforms.
-   - **Batch 3:** the discard pile: Celestic Town Elder, Fishing Net, Fisher, Flame Patch, Volkner, Pokémon Flute, Team Rocket's Thieving Machine.
+   - **Batch 3**, done 2026-10-19: 7 Trainers.
+     - Cards: Celestic Town Elder, Fishing Net, Fisher, Flame Patch, Volkner, Pokémon Flute, Team Rocket's Thieving Machine.
+     - New blocks: `from-discard`, `attach-from-discard`, `discard-count`.
+     - "If you do, B" is now `(then A B)`: B only follows when A had something to do.
+     - Also unlocked 12 Pokémon, among them Flareon ex, Delcatty, Galarian Perrserker, Chandelure, Houndstone, Hisuian Zoroark ex and Rotom ex.
+     - Cards can now change hands, so each player's piles hold up to 40 cards. `check_states` counts cards over both players together, and checks that energy in the discard pile plus energy attached never goes down.
    - **Batch 4 (R5):** the "use the Stadium" move, once per player per turn and per Stadium card. Also the end-of-each-turn Stadium trigger and Weakness ×2. Cards: Mesagoza, Fragrant Forest, Area Zero, Kid's Room, Rainbow Cave, Arcade, Hiking Trail, Soothing Shore, Bounded Field. That makes all 13 Stadiums playable and completes the rules milestone.
    - **Batch 5:** Tools that react to something: Lum Berry, Sitrus Berry, Poison Barb, Dark Pendant, Steel Apron, Clear Veil, Metal Core Barrier, Protective Poncho, Heavy Helmet.
    - **Batch 6:** back to the hand: Koga, Budding Expeditioner, Ilima, Parasol Lady, Elesa.

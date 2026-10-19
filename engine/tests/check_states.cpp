@@ -70,10 +70,12 @@ bool plainBoard(const GameState& s) {
 
 void checkState(const Game& game, const Deck* decks[2]) {
     const GameState& s = game.state();
+    // Every card of both decks is in exactly one place. Counted over both players together, because cards can
+    // change hands (Team Rocket's Thieving Machine).
+    std::multiset<const CardDef*> seen, dealt;
     for (int i = 0; i < 2; ++i) {
         const PlayerState& p = s.players[i];
-        // Every card of the deck is in exactly one place.
-        std::multiset<const CardDef*> seen(p.deck.begin(), p.deck.end());
+        seen.insert(p.deck.begin(), p.deck.end());
         seen.insert(p.hand.begin(), p.hand.end());
         seen.insert(p.discard.begin(), p.discard.end());
         for (const PokemonSlot* slot : inPlay(p)) {
@@ -81,8 +83,12 @@ void checkState(const Game& game, const Deck* decks[2]) {
             seen.insert(slot->below.begin(), slot->below.end());
             if (slot->tool) seen.insert(slot->tool);
         }
-        if (s.stadium && s.stadiumOwner == i) seen.insert(s.stadium);
-        EXPECT(seen == std::multiset<const CardDef*>(decks[i]->cards.begin(), decks[i]->cards.end()));
+        dealt.insert(decks[i]->cards.begin(), decks[i]->cards.end());
+    }
+    if (s.stadium) seen.insert(s.stadium);
+    EXPECT(seen == dealt);
+    for (int i = 0; i < 2; ++i) {
+        const PlayerState& p = s.players[i];
         EXPECT(p.hand.size() <= std::size_t(rules::HandLimit));
         EXPECT(s.phase == Phase::Over || p.points < rules::PointsToWin);
         for (const PokemonSlot* slot : inPlay(p)) {
@@ -283,10 +289,16 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
         default:
             break;
     }
-    // Energy only goes into the discard pile, for both players. (Until cards that take it back from there, such
-    // as Flame Patch, are supported.)
+    // Energy never leaves the game: per player and type, the discard pile plus what's attached to their Pokémon
+    // only grows (new energy from the Energy Zone). Flame Patch and the like move it from the pile onto a Pokémon.
+    auto held = [](const PlayerState& p, int t) {
+        int n = p.discardEnergy[t];
+        for (const PokemonSlot* slot : inPlay(p)) n += slot->energy[t];
+        return n;
+    };
     for (int p = 0; p < 2; ++p)
-        for (int t = 0; t < TypeCount; ++t) EXPECT(after.players[p].discardEnergy[t] >= before.players[p].discardEnergy[t]);
+        for (int t = 0; t < TypeCount; ++t)
+            EXPECT(held(after.players[p], t) >= held(before.players[p], t));
     // The turn passed to the other player, after End turn or an attack.
     if (before.phase == Phase::Main && after.phase == Phase::Main && after.turn == before.turn + 1) {
         // The player whose turn ended: unused energy went to the discard pile (App).

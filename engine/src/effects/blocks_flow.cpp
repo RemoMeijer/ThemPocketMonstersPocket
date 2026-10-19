@@ -106,6 +106,23 @@ private:
     const Stmt* body_;
 };
 
+// (then A B): "A. If you do, B." B only follows when A had something to do, and the whole has something
+// to do exactly when A does (Flareon ex can't hurt itself without attaching).
+class Then : public Stmt {
+public:
+    Then(const Stmt* a, const Stmt* b) : a_(a), b_(b) {}
+    void run(EffectCtx& ctx) const override {
+        bool did = a_->possible(ctx);
+        a_->run(ctx);
+        if (did && !ctx.stopped) b_->run(ctx);
+    }
+    bool possible(EffectCtx& ctx) const override { return a_->possible(ctx); }
+
+private:
+    const Stmt* a_;
+    const Stmt* b_;
+};
+
 class EndTurn : public Stmt {  // (end-turn): "Your turn ends." once the effect is done
 public:
     void run(EffectCtx& ctx) const override { ctx.endsTurn = true; }
@@ -223,6 +240,7 @@ void addFlowWords(Words& w) {
     w.stmt["repeat"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Repeat>(b.num(arg(e, 0)), b.stmt(arg(e, 1))); }};
     w.stmt["pick"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Pick>(b.target(arg(e, 0)), b.stmt(arg(e, 1))); }};
     w.stmt["nothing"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Nothing>(); }};
+    w.stmt["then"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Then>(b.stmt(arg(e, 0)), b.stmt(arg(e, 1))); }};
     w.stmt["end-turn"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<EndTurn>(); }};
     w.stmt["one-of"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         std::vector<const Stmt*> options;

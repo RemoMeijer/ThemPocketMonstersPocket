@@ -41,10 +41,13 @@ struct TimedEffect {
     int lastTurn = 0;   // it ends at the end of this turn
 };
 
+// Room for every card in the game: cards can change hands (Team Rocket's Thieving Machine).
+constexpr std::size_t PileSize = 2 * rules::DeckSize;
+
 struct PlayerState {
-    FixedVec<const CardDef*, rules::DeckSize> deck;  // the last element is the top card
-    FixedVec<const CardDef*, rules::DeckSize> hand;
-    FixedVec<const CardDef*, rules::DeckSize> discard;
+    FixedVec<const CardDef*, PileSize> deck;  // the last element is the top card
+    FixedVec<const CardDef*, PileSize> hand;
+    FixedVec<const CardDef*, PileSize> discard;
     PokemonSlot active;
     FixedVec<PokemonSlot, rules::BenchSize> bench;
     FixedVec<Type, rules::MaxEnergyTypes> energyTypes;

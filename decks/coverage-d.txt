@@ -1,0 +1,21 @@
+# Coverage batch 3, Fire/Lightning/Water: the discard pile. Electivire for Volkner, Flareon ex's Combust, Rotom ex's
+# Junk Spark, Water Basics for Fishing Net and Fisher, plain Items for the Thieving Machine to take.
+energy: Fire, Lightning, Water
+
+2 A2b-011  # Magmar
+2 A3b-055  # Eevee
+1 A3b-009  # Flareon ex (from Eevee): energy from the discard pile
+2 A1-101   # Electabuzz
+1 A2-057   # Electivire (from Electabuzz)
+1 B4-055   # Rotom ex: +10 for each Item in the discard pile
+1 A1-053   # Squirtle
+1 A1a-064  # Pokémon Flute
+1 A2-153   # Volkner
+1 A2a-073  # Celestic Town Elder
+1 A3-143   # Fishing Net
+1 A4-159   # Fisher
+1 B1-217   # Flame Patch
+1 B4a-067  # Team Rocket's Thieving Machine
+1 P-A-001  # Potion
+1 P-A-002  # X Speed
+1 P-A-005  # Poké Ball
