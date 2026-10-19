@@ -28,6 +28,7 @@ public:
         ctx.self = p.uid;
         p.card->activated->run(ctx);
         game.knockOutCheck();
+        if (ctx.endsTurn && game.state().phase == Phase::Main) game.endTurn();
     }
 };
 }  // namespace

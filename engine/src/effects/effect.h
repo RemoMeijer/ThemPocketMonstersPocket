@@ -28,6 +28,7 @@ struct EffectCtx {
     bool stopped = false;      // "this attack does nothing": the rest is skipped
     uint16_t picked = 0;       // the Pokémon chosen by (pick …)
     bool healed = false;       // (heal …) removed some damage
+    bool endsTurn = false;     // (end-turn): "Your turn ends." after the effect
 };
 
 using Uids = FixedVec<uint16_t, 2 * (1 + rules::BenchSize)>;  // at most every Pokémon in play
@@ -130,3 +131,4 @@ void hit(EffectCtx& ctx);                 // the attack's main damage to the opp
 bool affects(EffectCtx& ctx, uint16_t uid);  // false when an attack's effects are prevented on that Pokémon
 // Whether some Pokémon that t could pick passes test (for Stmt::possible).
 bool anyCandidate(EffectCtx& ctx, const Target* t, const std::function<bool(const PokemonSlot&)>& test);
+int randomEnergy(EffectCtx& ctx, const PokemonSlot& p, uint16_t types);  // a random attached energy type (weighted), or -1

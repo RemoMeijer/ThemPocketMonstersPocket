@@ -588,6 +588,86 @@ static void coverageBatchOneBlocks() {
     }
 }
 
+// The pieces coverage batch 2 added.
+static void coverageBatchTwoBlocks() {
+    auto offered = [](Table& t, const CardDef& card) {
+        const PlayerState& p = t.game.state().players[0];
+        for (const Action& a : t.game.legalActions())
+            if (a.kind == ActionKind::PlayTrainer && p.hand[a.index] == &card) return true;
+        return false;
+    };
+    {   // Lana: "You can use this card only if you have Araquanid in play"
+        Table t;
+        CardDef lana = trainer(TrainerKind::Supporter, "Lana", "(if (exists my all (name \"Mon9\")) (switch-in (choose opp bench)))");
+        GameState& s = t.position();
+        s.players[0].hand.clear();
+        s.players[0].hand.push_back(&lana);
+        CHECK(!offered(t, lana));
+        t.bench(0, t.cards[9]);
+        CHECK(offered(t, lana));
+    }
+    {   // Kiawe: "Your turn ends."
+        Table t;
+        CardDef kiawe = trainer(TrainerKind::Supporter, "Kiawe", "(pick (choose my all (name \"Mon0\")) (seq (attach-energy picked fire 2) (end-turn)))");
+        GameState& s = t.position();
+        s.players[0].hand.clear();
+        s.players[0].hand.push_back(&kiawe);
+        t.play(ActionKind::PlayTrainer, 0);
+        CHECK(s.players[0].active.energy[int(Type::Fire)] == 2);
+        CHECK(s.current == 1 && s.turn == 6);
+    }
+    {   // Field Blower: the Tool or the Stadium, whichever has something to do
+        Table t;
+        CardDef cape = trainer(TrainerKind::Tool, "Cape");
+        CardDef plaza = trainer(TrainerKind::Stadium, "Plaza");
+        CardDef blower = trainer(TrainerKind::Item, "Blower", "(one-of (discard-tools (choose both all tool)) (discard-stadium))");
+        GameState& s = t.position();
+        s.players[0].hand.clear();
+        s.players[0].hand.push_back(&blower);
+        CHECK(!offered(t, blower));
+        s.stadium = &plaza;
+        s.stadiumOwner = 1;
+        t.play(ActionKind::PlayTrainer, 0);
+        CHECK(!s.stadium && s.players[1].discard.back() == &plaza);
+        s.players[1].bench[0].tool = &cape;
+        s.players[0].hand.push_back(&blower);
+        t.play(ActionKind::PlayTrainer, 0);
+        CHECK(!s.players[1].bench[0].tool);
+    }
+    {   // Nasty Notice: the opponent picks what to discard until 4 are left
+        Table t;
+        GameState& s = t.position();
+        std::vector<int> chosen;
+        t.policy0.chosen = t.policy1.chosen = &chosen;
+        while (s.players[1].hand.size() < 7) s.players[1].hand.push_back(&t.cards[5]);
+        EffectCtx ctx{t.game, 0};
+        stmt("(discard-hand-to opp 4)")->run(ctx);
+        CHECK(s.players[1].hand.size() == 4 && !chosen.empty() && chosen[0] == 1);
+    }
+    {   // Big Malasada, Team Star Grunt, Psychic, Juggler's test
+        Table t;
+        t.cards[2].abilities.push_back({"Ability", "text"});
+        t.cards[2].attacks[0].name = "Psychic";
+        GameState& s = t.position();
+        PlayerState& p = s.players[0];
+        p.active.status = Poisoned | Confused;
+        EffectCtx ctx{t.game, 0};
+        stmt("(cure-random my-active)")->run(ctx);
+        CHECK(p.active.status == Poisoned || p.active.status == Confused);
+        s.players[1].active.energy[int(Type::Water)] = 3;  // Mon1 has no ability
+        s.players[1].bench[0].energy[int(Type::Fire)] = 1;  // Mon2 has one
+        stmt("(discard-energy-among (each opp all has-ability) 1)")->run(ctx);
+        CHECK(s.players[1].bench[0].energyCount() == 0 && s.players[1].active.energyCount() == 3);
+        s.players[1].bench[0].energy[int(Type::Fire)] = 1;
+        stmt("(move-random-energy (choose opp bench) opp-active 1)")->run(ctx);
+        CHECK(s.players[1].active.energy[int(Type::Fire)] == 1 && s.players[1].bench[0].energyCount() == 0);
+        CHECK(stmt("(if (>= (energy-types opp all) 2) (nothing))")->possible(ctx));
+        CHECK(!stmt("(if (>= (energy-types opp all) 3) (nothing))")->possible(ctx));
+        std::swap(p.active, s.players[1].bench[0]);  // Mon2, with its "Psychic" attack, as P1's Active
+        CHECK(stmt("(if (has-attack my-active \"Psychic\") (nothing))")->possible(ctx));
+    }
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -622,5 +702,6 @@ int main() {
     randomHitsAddUpBeforeWeakness();
     wrongArgumentCountsDontLoad();
     coverageBatchOneBlocks();
+    coverageBatchTwoBlocks();
     return report("effects");
 }

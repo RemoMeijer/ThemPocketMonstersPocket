@@ -6,6 +6,13 @@
 #include "game/game.h"
 
 namespace {
+int matching(const PokemonSlot& p, uint16_t types) {  // energy of these types attached (0 = any type)
+    int n = 0;
+    for (int t = 0; t < TypeCount; ++t)
+        if (!types || (types & typeBit(Type(t)))) n += p.energy[t];
+    return n;
+}
+
 bool hasEnergy(const PokemonSlot& p, uint16_t types) {  // any energy of these types (0 = any type)
     for (int t = 0; t < TypeCount; ++t)
         if (p.energy[t] && (!types || (types & typeBit(Type(t))))) return true;
@@ -68,14 +75,7 @@ private:
             total += p.energy[t];
             if (p.energy[t] && (best < 0 || p.energy[t] > p.energy[best])) best = t;
         }
-        if (!random_ || !total) return best;
-        int k = std::uniform_int_distribution<int>(0, total - 1)(ctx.game.rng());
-        for (int t = 0; t < TypeCount; ++t) {
-            if (types_ && !(types_ & typeBit(Type(t)))) continue;
-            if (k < p.energy[t]) return t;
-            k -= p.energy[t];
-        }
-        return best;
+        return random_ && total ? randomEnergy(ctx, p, types_) : best;
     }
 
     const Target* t_;
@@ -83,10 +83,13 @@ private:
     int count_;  // -1 = all
     bool random_;
 };
-// (move-energy FROM TO TYPE…|any N|all): move up to N energy (of those types) from each FROM Pokémon to TO.
+// (move-energy FROM TO TYPE…|any N|all): move up to N energy (of those types) from the FROM Pokémon to TO.
+// (move-random-energy FROM TO N): the same with random energy.
+// shortcut: move-energy takes the first matching type, not the player's pick (Remco: the player picks); see PROGRESS.md step 4.
 class MoveEnergy : public Stmt {
 public:
-    MoveEnergy(const Target* from, const Target* to, uint16_t types, int count) : from_(from), to_(to), types_(types), count_(count) {}
+    MoveEnergy(const Target* from, const Target* to, uint16_t types, int count, bool random = false)
+        : from_(from), to_(to), types_(types), count_(count), random_(random) {}
     void run(EffectCtx& ctx) const override {
         Uids sources, dest;
         from_->select(ctx, sources);
@@ -98,13 +101,14 @@ public:
         for (uint16_t uid : sources) {
             PokemonSlot* from = ctx.game.find(uid);
             if (!from || from == to) continue;
-            for (int t = 0; t < TypeCount && (count_ < 0 || moved < count_); ++t) {
-                if (types_ && !(types_ & typeBit(Type(t)))) continue;
-                while (from->energy[t] && (count_ < 0 || moved < count_)) {
-                    --from->energy[t];
-                    ++to->energy[t];
-                    ++moved;
-                }
+            while (count_ < 0 || moved < count_) {
+                int t = random_ ? randomEnergy(ctx, *from, types_) : -1;
+                for (int k = 0; !random_ && k < TypeCount && t < 0; ++k)
+                    if (from->energy[k] && (!types_ || (types_ & typeBit(Type(k))))) t = k;
+                if (t < 0) break;
+                --from->energy[t];
+                ++to->energy[t];
+                ++moved;
             }
         }
         if (moved && ctx.game.logging()) ctx.game.say("  ", moved, " energy moved -> ", ctx.game.show(*to, owner));
@@ -127,8 +131,58 @@ private:
     const Target* to_;
     uint16_t types_;
     int count_;  // -1 = all
+    bool random_;
+};
+
+// (discard-energy-among TARGET N): N times, a random energy from among all the energy on the TARGET Pokémon
+// together, to its owner's discard pile (Team Star Grunt).
+class DiscardEnergyAmong : public Stmt {
+public:
+    DiscardEnergyAmong(const Target* t, int count) : t_(t), count_(count) {}
+    void run(EffectCtx& ctx) const override {
+        Uids targets;
+        t_->select(ctx, targets);
+        for (int i = 0; i < count_; ++i) {
+            std::vector<std::pair<uint16_t, int>> pool;  // Pokémon and how much energy it has
+            int total = 0;
+            for (uint16_t uid : targets)
+                if (const PokemonSlot* p = ctx.game.find(uid); p && matching(*p, 0) && affects(ctx, uid)) {
+                    pool.push_back({uid, matching(*p, 0)});
+                    total += pool.back().second;
+                }
+            if (!total) return;
+            int k = std::uniform_int_distribution<int>(0, total - 1)(ctx.game.rng());
+            std::size_t j = 0;
+            for (; k >= pool[j].second; ++j) k -= pool[j].second;
+            int owner = 0;
+            PokemonSlot* p = ctx.game.find(pool[j].first, &owner);
+            int t = randomEnergy(ctx, *p, 0);
+            --p->energy[t];
+            ++ctx.game.state().players[owner].discardEnergy[t];
+            if (ctx.game.logging()) ctx.game.say("  1 energy discarded -> ", ctx.game.show(*p, owner));
+        }
+    }
+    bool possible(EffectCtx& ctx) const override {
+        return anyCandidate(ctx, t_, [](const PokemonSlot& p) { return hasEnergy(p, 0); });
+    }
+
+private:
+    const Target* t_;
+    int count_;
 };
 }  // namespace
+
+int randomEnergy(EffectCtx& ctx, const PokemonSlot& p, uint16_t types) {
+    int total = matching(p, types);
+    if (!total) return -1;
+    int k = std::uniform_int_distribution<int>(0, total - 1)(ctx.game.rng());
+    for (int t = 0; t < TypeCount; ++t) {
+        if (types && !(types & typeBit(Type(t)))) continue;
+        if (k < p.energy[t]) return t;
+        k -= p.energy[t];
+    }
+    return -1;
+}
 
 void addEnergyWords(Words& w) {
     w.stmt["move-energy"] = {4, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
@@ -137,6 +191,12 @@ void addEnergyWords(Words& w) {
         for (std::size_t i = 2; i + 1 < argCount(e); ++i)
             if (arg(e, i).atom != "any") types |= typeBit(typeArg(arg(e, i)));
         return b.make<MoveEnergy>(b.target(arg(e, 0)), b.target(arg(e, 1)), types, count.atom == "all" ? -1 : intArg(count));
+    }};
+    w.stmt["move-random-energy"] = {3, 3, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<MoveEnergy>(b.target(arg(e, 0)), b.target(arg(e, 1)), 0, intArg(arg(e, 2)), true);
+    }};
+    w.stmt["discard-energy-among"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<DiscardEnergyAmong>(b.target(arg(e, 0)), intArg(arg(e, 1)));
     }};
     w.stmt["attach-energy"] = {2, 3, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<AttachEnergy>(b.target(arg(e, 0)), typeArg(arg(e, 1)), argCount(e) > 2 ? b.num(arg(e, 2)) : b.num(atomExpr("1")));

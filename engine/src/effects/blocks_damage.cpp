@@ -139,14 +139,25 @@ public:
     bool test(EffectCtx& ctx) const override { return ctx.healed; }
 };
 
-class Cure : public Stmt {  // (cure TARGET [S…]): remove those Special Conditions, or all of them
+// (cure TARGET [S…]): remove those Special Conditions, or all of them. (cure-random TARGET): remove one at random.
+class Cure : public Stmt {
 public:
-    Cure(const Target* t, uint8_t mask) : t_(t), mask_(mask) {}
+    Cure(const Target* t, uint8_t mask, bool random = false) : t_(t), mask_(mask), random_(random) {}
     void run(EffectCtx& ctx) const override {
         Uids targets;
         t_->select(ctx, targets);
-        for (uint16_t uid : targets)
-            if (PokemonSlot* p = ctx.game.find(uid)) p->status &= ~mask_;
+        for (uint16_t uid : targets) {
+            PokemonSlot* p = ctx.game.find(uid);
+            if (!p) continue;
+            if (!random_) {
+                p->status &= ~mask_;
+                continue;
+            }
+            std::vector<uint8_t> has;
+            for (uint8_t bit = 1; bit && bit <= Burned; bit <<= 1)
+                if (p->status & bit) has.push_back(bit);
+            if (!has.empty()) p->status &= ~has[std::uniform_int_distribution<std::size_t>(0, has.size() - 1)(ctx.game.rng())];
+        }
     }
     bool possible(EffectCtx& ctx) const override {
         return anyCandidate(ctx, t_, [this](const PokemonSlot& p) { return (p.status & mask_) != 0; });
@@ -155,6 +166,7 @@ public:
 private:
     const Target* t_;
     uint8_t mask_;
+    bool random_;
 };
 }  // namespace
 
@@ -170,6 +182,7 @@ void addDamageWords(Words& w) {
     w.stmt["heal"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Heal>(b.target(arg(e, 0)), b.num(arg(e, 1))); }};
     w.stmt["status"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) { return b.make<SetStatus>(b.target(arg(e, 0)), parseStatuses(e, 1)); }};
     w.cond["healed"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Healed>(); }};
+    w.stmt["cure-random"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<Cure>(b.target(arg(e, 0)), uint8_t(0xFF), true); }};
     w.stmt["cure"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<Cure>(b.target(arg(e, 0)), argCount(e) > 1 ? parseStatuses(e, 1) : uint8_t(0xFF));
     }};

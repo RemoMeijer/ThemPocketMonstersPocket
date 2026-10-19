@@ -1,0 +1,21 @@
+# Coverage batch 2, Water/Fire/Psychic: Araquanid for Lana, Turtonator for Kiawe, Jynx's Psychic attack for Psychic,
+# three energy types for Juggler, a Stadium for Field Blower and the "If a Stadium is in play" attacks.
+energy: Water, Fire, Psychic
+
+2 A3-052   # Dewpider
+2 A3-053   # Araquanid (from Dewpider)
+1 A3-037   # Turtonator
+2 A1-127   # Jynx: Psychic
+1 B2-138   # Tornadus: +40 if a Stadium is in play
+1 B3-133   # Castform: +20 if a Stadium is in play
+1 B3-040   # Castform Rainy Form: heals if a Stadium is in play
+1 A3-152   # Lana
+1 B2-151   # Juggler
+1 B4-150   # Psychic
+1 A3-150   # Kiawe
+1 A3-142   # Big Malasada
+1 B2b-065  # Nasty Notice
+1 B2a-088  # Team Star Grunt
+1 B3-147   # Field Blower
+1 B2-152   # Piers (no Galarian Obstagoon here, so never playable)
+1 B2-154   # Starting Plains

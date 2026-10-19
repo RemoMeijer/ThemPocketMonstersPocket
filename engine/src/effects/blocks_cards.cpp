@@ -327,6 +327,53 @@ public:
     }
 };
 
+// (discard-hand-to SIDE N): that player discards cards of their choice until they have N in their hand (Nasty Notice).
+class DiscardHandTo : public Stmt {
+public:
+    DiscardHandTo(int side, int n) : side_(side), n_(n) {}
+    void run(EffectCtx& ctx) const override {
+        for (int player : players(ctx)) {
+            PlayerState& p = ctx.game.state().players[player];
+            while (p.hand.size() > std::size_t(n_)) {
+                const CardDef* c = p.hand.take(ctx.game.choose(player, int(p.hand.size())));
+                p.discard.push_back(c);
+                ctx.game.say("  P", player + 1, " discards ", c->name);
+            }
+        }
+    }
+    bool possible(EffectCtx& ctx) const override {
+        for (int player : players(ctx))
+            if (ctx.game.state().players[player].hand.size() > std::size_t(n_)) return true;
+        return false;
+    }
+
+private:
+    std::vector<int> players(const EffectCtx& ctx) const {
+        if (side_ == 2) return {ctx.player, 1 - ctx.player};
+        return {side_ ? 1 - ctx.player : ctx.player};
+    }
+    int side_;  // 0 my, 1 opp, 2 both
+    int n_;
+};
+
+class DiscardStadium : public Stmt {  // (discard-stadium): the Stadium in play goes to its owner's discard pile
+public:
+    void run(EffectCtx& ctx) const override {
+        GameState& s = ctx.game.state();
+        if (!s.stadium) return;
+        ctx.game.say("  ", s.stadium->name, " is discarded");
+        s.players[s.stadiumOwner].discard.push_back(s.stadium);
+        s.stadium = nullptr;
+        s.stadiumOwner = -1;
+    }
+    bool possible(EffectCtx& ctx) const override { return ctx.game.state().stadium != nullptr; }
+};
+
+class StadiumInPlay : public Cond {  // (stadium-in-play)
+public:
+    bool test(EffectCtx& ctx) const override { return ctx.game.state().stadium != nullptr; }
+};
+
 class PlayedSupporter : public Cond {  // (played-supporter): you played a Supporter this turn
 public:
     bool test(EffectCtx& ctx) const override {
@@ -395,6 +442,11 @@ void addCardWords(Words& w) {
             scriptFail("unknown target '" + who + "'", e);
         return b.make<Timed>(turns, who, b.modifier(arg(e, 2), who == "me" || who == "opp" ? ModScope::MyAll : ModScope::Self));
     }};
+    w.stmt["discard-hand-to"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<DiscardHandTo>(sideOf(arg(e, 0)), intArg(arg(e, 1)));
+    }};
+    w.stmt["discard-stadium"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<DiscardStadium>(); }};
+    w.cond["stadium-in-play"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<StadiumInPlay>(); }};
     w.cond["played-supporter"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<PlayedSupporter>(); }};
     w.num["hand-size"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<HandSize>(oppArg(arg(e, 0))); }};
     w.num["points-needed"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<PointsNeeded>(oppArg(arg(e, 0))); }};

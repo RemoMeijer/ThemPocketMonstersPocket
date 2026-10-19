@@ -106,6 +106,31 @@ private:
     const Stmt* body_;
 };
 
+class EndTurn : public Stmt {  // (end-turn): "Your turn ends." once the effect is done
+public:
+    void run(EffectCtx& ctx) const override { ctx.endsTurn = true; }
+};
+
+// (one-of STMT…): the player picks one of the statements that has something to do (Field Blower).
+class OneOf : public Stmt {
+public:
+    explicit OneOf(std::vector<const Stmt*> options) : options_(std::move(options)) {}
+    void run(EffectCtx& ctx) const override {
+        std::vector<const Stmt*> open;
+        for (const Stmt* s : options_)
+            if (s->possible(ctx)) open.push_back(s);
+        if (!open.empty()) open[ctx.game.choose(ctx.player, int(open.size()))]->run(ctx);
+    }
+    bool possible(EffectCtx& ctx) const override {
+        for (const Stmt* s : options_)
+            if (s->possible(ctx)) return true;
+        return false;
+    }
+
+private:
+    std::vector<const Stmt*> options_;
+};
+
 class Nothing : public Stmt {  // reveals and looks: no effect on the game state
 public:
     void run(EffectCtx&) const override {}
@@ -198,6 +223,12 @@ void addFlowWords(Words& w) {
     w.stmt["repeat"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Repeat>(b.num(arg(e, 0)), b.stmt(arg(e, 1))); }};
     w.stmt["pick"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Pick>(b.target(arg(e, 0)), b.stmt(arg(e, 1))); }};
     w.stmt["nothing"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Nothing>(); }};
+    w.stmt["end-turn"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<EndTurn>(); }};
+    w.stmt["one-of"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
+        std::vector<const Stmt*> options;
+        for (std::size_t i = 0; i < argCount(e); ++i) options.push_back(b.stmt(arg(e, i)));
+        return b.make<OneOf>(std::move(options));
+    }};
 
     w.num["heads"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Coins>(true); }};
     w.num["tails"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Coins>(false); }};

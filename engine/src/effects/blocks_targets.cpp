@@ -1,5 +1,6 @@
 // Targets: which Pokémon an effect touches, and the numbers and tests that look at a Pokémon.
 #include <algorithm>
+#include <bit>
 #include <string>
 #include <vector>
 
@@ -8,12 +9,12 @@
 
 namespace {
 // Which Pokémon in a pool qualify: (type T…), (name "A" …), (has-energy N T…), basic, stage1, stage2,
-// evolution, damaged, ex, mega, not-self.
+// evolution, damaged, ex, mega, has-ability, tool (has a Tool attached), not-self.
 struct Filter {
     uint16_t types = 0, energyTypes = 0;
     uint8_t stages = 0;
     int energy = 0;  // at least this much energy of energyTypes (0 = no test)
-    bool damaged = false, ex = false, mega = false, evolution = false, notSelf = false;
+    bool damaged = false, ex = false, mega = false, evolution = false, notSelf = false, ability = false, tool = false;
     std::vector<std::string> names;
 
     bool matches(const PokemonSlot& p, const EffectCtx& ctx) const {
@@ -22,7 +23,8 @@ struct Filter {
             if (!energyTypes || (energyTypes & typeBit(Type(t)))) n += p.energy[t];
         return p.card->hasType(types) && (!stages || (stages & stageBit(p.card->stage))) && (!damaged || p.damage > 0) &&
                (!ex || p.card->ex) && (!mega || p.card->mega) && (!evolution || p.card->isEvolution()) &&
-               (!notSelf || p.uid != ctx.self) && n >= energy &&
+               (!notSelf || p.uid != ctx.self) && n >= energy && (!ability || !p.card->abilities.empty()) &&
+               (!tool || p.tool) &&
                (names.empty() || std::find(names.begin(), names.end(), p.card->name) != names.end());
     }
 };
@@ -35,6 +37,8 @@ Filter parseFilter(const SExpr& e, std::size_t from) {
         if (w == "damaged") f.damaged = true;
         else if (w == "ex") f.ex = true;
         else if (w == "mega") f.mega = true;
+        else if (w == "has-ability") f.ability = true;
+        else if (w == "tool") f.tool = true;
         else if (w == "evolution") f.evolution = true;
         else if (w == "not-self") f.notSelf = true;
         else if (w == "basic") f.stages |= stageBit(Stage::Basic);
@@ -118,12 +122,20 @@ const PokemonSlot* first(EffectCtx& ctx, const Target* t) {
 // (energy …) adds up every Pokémon T picks: "for each Energy attached to all of your Pokémon".
 class PokemonNum : public Num {
 public:
-    enum What { Energy, DamageOn, RetreatCost, Count };
+    enum What { Energy, DamageOn, RetreatCost, Count, EnergyTypes };
     PokemonNum(What what, const Target* t, uint16_t types) : what_(what), t_(t), types_(types) {}
     int eval(EffectCtx& ctx) const override {
         Uids u;
         t_->select(ctx, u);
         if (what_ == Count) return int(u.size());
+        if (what_ == EnergyTypes) {  // different types of energy on them together (Juggler)
+            uint16_t seen = 0;
+            for (uint16_t uid : u)
+                if (const PokemonSlot* p = ctx.game.find(uid))
+                    for (int t = 0; t < TypeCount; ++t)
+                        if (p->energy[t]) seen |= typeBit(Type(t));
+            return std::popcount(seen);
+        }
         if (what_ == Energy) {
             int n = 0;
             for (uint16_t uid : u)
@@ -206,6 +218,22 @@ private:
     uint16_t types_;
 };
 
+class HasAttack : public Cond {  // (has-attack T "A"): the Pokémon has an attack named A (Psychic, the Supporter)
+public:
+    HasAttack(const Target* t, std::string name) : t_(t), name_(std::move(name)) {}
+    bool test(EffectCtx& ctx) const override {
+        const PokemonSlot* p = first(ctx, t_);
+        if (!p) return false;
+        for (const AttackDef& a : p->card->attacks)
+            if (a.name == name_) return true;
+        return false;
+    }
+
+private:
+    const Target* t_;
+    std::string name_;
+};
+
 uint8_t statusMask(const SExpr& e, std::size_t from) {
     uint8_t mask = 0;
     for (std::size_t i = from; i < argCount(e); ++i) {
@@ -261,6 +289,14 @@ void addTargetWords(Words& w) {
         SExpr pool = e;
         pool.items[0].atom = "each";
         return b.make<PokemonNum>(PokemonNum::Count, b.target(pool), 0);
+    }};
+    w.num["energy-types"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {  // (energy-types SIDE ZONE FILTER…)
+        SExpr pool = e;
+        pool.items[0].atom = "each";
+        return b.make<PokemonNum>(PokemonNum::EnergyTypes, b.target(pool), 0);
+    }};
+    w.cond["has-attack"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<HasAttack>(b.target(arg(e, 0)), arg(e, 1).atom);
     }};
 
     auto test = [&w](const char* name, PokemonTest::What what, std::size_t min = 1, std::size_t max = 1) {

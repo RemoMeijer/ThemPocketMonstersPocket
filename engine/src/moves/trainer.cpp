@@ -48,6 +48,7 @@ public:
         card->play->run(ctx);
         p.discard.push_back(card);
         game.knockOutCheck();
+        if (ctx.endsTurn && s.phase == Phase::Main) game.endTurn();  // "Your turn ends." (Kiawe)
     }
 };
 

@@ -135,6 +135,11 @@ CONDITIONS = [
     (r"this Pokemon evolved during this turn", lambda m, c: "(evolved-this-turn self)"),
     (r"you played a Supporter card from your hand during this turn", lambda m, c: "(played-supporter)"),
     (r"you healed any damage in this way", lambda m, c: "(healed)"),
+    (r"you have (\w[\w' ]*?) in play", lambda m, c: f'(exists my all (name "{m.group(1)}"))'),
+    (r"your Pokemon in play have (\d+) or more different types of Energy attached",
+     lambda m, c: f"(>= (energy-types my all) {m.group(1)})"),
+    (r"your Pokemon in the Active Spot has the (.+) attack", lambda m, c: f'(has-attack my-active "{m.group(1)}")'),
+    (r"a Stadium is in play", lambda m, c: "(stadium-in-play)"),
     (r"you have (\w[\w' ]*?) or (\w[\w' ]*?) in play",
      lambda m, c: f'(exists my all (name "{m.group(1)}" "{m.group(2)}"))'),
     (r"your opponent has (\d+) or more cards in their hand", lambda m, c: f"(>= (hand-size opp) {m.group(1)})"),
@@ -305,6 +310,21 @@ CLAUSES = [
      lambda m, c: ("post", f"(if (exists my active {card_kind(m.group(1) + ' ')}) (switch-in (choose my bench)))")),
     (r"switch in (?:1|one) of your opponent's Benched (Basic )?Pokemon( that has damage on it)? to the Active Spot",
      lambda m, c: ("post", f"(switch-in (choose opp bench{' basic' if m.group(1) else ''}{' damaged' if m.group(2) else ''}))")),
+    (r"your turn ends", lambda m, c: ("post", "(end-turn)")),
+    (r"choose 1 of your opponent's Benched Pokemon and move a random Energy from it to your opponent's Active Pokemon",
+     lambda m, c: ("post", "(move-random-energy (choose opp bench) opp-active 1)")),
+    (r"choose (1 of your [^,]+)", lambda m, c: ("post", f"(pick {ref_only(m.group(1))})")),  # the rest acts on "that Pokemon"
+    (r"heal (\d+) damage and remove a random Special Condition from " + REF,
+     lambda m, c: ("post", f"(pick {target(m)} (seq (heal picked {m.group(1)}) (cure-random picked)))")),
+    (r"your opponent discards cards from their hand until they have (\d+) cards in their hand",
+     lambda m, c: ("post", f"(discard-hand-to opp {m.group(1)})")),
+    (r"discard a random Energy from among the Energy attached to all of your opponent's Pokemon that have an Ability",
+     lambda m, c: ("post", "(discard-energy-among (each opp all has-ability) 1)")),
+    (r"discard a random Energy from among the Energy attached to all Pokemon \(both yours and your opponent's\)",
+     lambda m, c: ("post", "(discard-energy-among (each both all) 1)")),
+    (r"discard a Pokemon Tool card from a Pokemon \(yours or your opponent's\), or discard a Stadium card in play",
+     lambda m, c: ("post", "(one-of (discard-tools (choose both all tool)) (discard-stadium))")),
+    (r"discard a Stadium in play", lambda m, c: ("post", "(discard-stadium)")),
     # Cards
     (r"draw (a|\d+) cards?", lambda m, c: ("post", f"(draw {num(m.group(1))})")),
     (r"draw a card for each card in your opponent's hand", lambda m, c: ("post", "(draw (hand-size opp))")),
@@ -403,6 +423,11 @@ def balanced(text, start):
 def with_pick(stmts):
     """When a later statement says "that Pokemon" (picked), the first choice is made once, with (pick …)."""
     stmts = [x for x in stmts if x]
+    for i, x in enumerate(stmts):  # "Choose 1 of your …." on its own: everything after it acts on that Pokemon
+        if x.startswith("(pick ") and balanced(x, 6) == x[6:-1]:
+            if i + 1 == len(stmts):
+                raise Unsupported("a choice with nothing after it")
+            return stmts[:i] + [f"(pick {x[6:-1]} {seq(stmts[i + 1:])})"]
     if not any(re.search(r"\bpicked\b", x) for x in stmts) or any("(pick " in x for x in stmts):
         return stmts
     for i, x in enumerate(stmts):
@@ -595,6 +620,12 @@ def compile_card(kind, text, ctx):
             if m:
                 return f"(stadium {fn(m)})"
         raise Unsupported(f"stadium: {text}")
+    m = re.fullmatch(r"You can use this card only if (.+?)\. (.+)", text)
+    if m:
+        body = seq(with_pick([s for _, s in statements(m.group(2), ctx)]))
+        if not body:
+            raise Unsupported(f"trainer: {text}")
+        return f"(play (if {condition(m.group(1), ctx)} {body}))"
     if text == RARE_CANDY:
         return "(play (rare-candy))"
     if text == "Choose a Pokemon in your hand and switch it with a random Pokemon in your deck.":
@@ -704,6 +735,12 @@ EXAMPLES = [
     ("Tool", "", "The Retreat Cost of the Basic Pokémon this card is attached to is 1 less.", "(tool (retreat-cost -1 :stage basic))"),
     ("Stadium", "", "Attacks used by each {F} Pokémon in play (both yours and your opponent's) do +20 damage to the opponent's Active Pokémon ex.",
      "(stadium (damage-dealt 20 :type fighting :vs-ex))"),
+    ("Supporter", "", "You can use this card only if you have Araquanid in play. Switch in 1 of your opponent's Benched Pokémon to the Active Spot.",
+     '(play (if (exists my all (name "Araquanid")) (switch-in (choose opp bench))))'),
+    ("Supporter", "", "Choose 1 of your Alolan Marowak or Turtonator. Take 2 {R} Energy from your Energy Zone and attach it to that Pokémon. Your turn ends.",
+     '(play (pick (choose my all (name "Alolan Marowak" "Turtonator")) (seq (attach-energy picked fire 2) (end-turn))))'),
+    ("Item", "", "Discard a Pokémon Tool card from a Pokémon (yours or your opponent's), or discard a Stadium card in play.",
+     "(play (one-of (discard-tools (choose both all tool)) (discard-stadium)))"),
     ("ability", "", "If you have Arceus or Arceus ex in play, this Pokémon takes −30 damage from attacks.",
      '(passive (damage-taken -30 :needs "Arceus" "Arceus ex"))'),
 ]
