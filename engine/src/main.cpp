@@ -1,5 +1,6 @@
 // tcgp <deck.txt> [opponent-deck.txt]   plays one game and prints it (a mirror match with one deck)
 // tcgp --coverage                        how many cards the engine can play, and the commonest reasons it can't
+// tcgp --unsupported                     every card the engine can't play, with its full reason
 // Run from the project folder: it reads data/cards.tsv and, when present, data/effects.tsv.
 #include <algorithm>
 #include <cctype>
@@ -59,11 +60,16 @@ void coverage(const CardDb& db) {
 
 int main(int argc, char** argv) {
     if (argc < 2 || argc > 3) {
-        std::cerr << "usage: tcgp <deck.txt> [opponent-deck.txt]\n       tcgp --coverage\n";
+        std::cerr << "usage: tcgp <deck.txt> [opponent-deck.txt]\n       tcgp --coverage | --unsupported\n";
         return 2;
     }
     try {
         CardDb db = loadCards();
+        if (std::string(argv[1]) == "--unsupported") {
+            for (const CardDef& c : db.all())
+                if (!c.supported) std::cout << c.id << "\t" << c.name << "\t" << c.unsupported << "\n";
+            return 0;
+        }
         if (std::string(argv[1]) == "--coverage") {
             coverage(db);
             return 0;

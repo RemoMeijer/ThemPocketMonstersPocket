@@ -7,6 +7,7 @@ unsupported. The script language is described in DESIGN.md §4 and engine/src/ef
 
   python3 compile_effects.py          compile, and list the sentences that matched nothing
   python3 compile_effects.py --test   only run the self-test
+data/effects_manual.tsv holds hand-written scripts for one-off cards; a card listed there skips the patterns.
 """
 import csv
 import re
@@ -1380,9 +1381,15 @@ def main():
     if "--test" in sys.argv:
         return
     rows = list(csv.DictReader((DATA / "cards.tsv").open(), delimiter="\t", quoting=csv.QUOTE_NONE))
+    manual = {}  # hand-written scripts for one-off cards: they replace every compiled script of that card
+    for line in (DATA / "effects_manual.tsv").read_text().splitlines()[1:]:
+        if line and not line.startswith("#"):
+            card, part, script = line.split("\t")
+            manual.setdefault(card, []).append((part, script))
+    assert not set(manual) - {r["id"] for r in rows}, f"unknown ids in effects_manual.tsv: {set(manual) - {r['id'] for r in rows}}"
     lines, failures, complete = ["id\tpart\tscript"], Counter(), 0
     for row in rows:
-        scripts, failed = compile_row(row)
+        scripts, failed = (manual[row["id"]], []) if row["id"] in manual else compile_row(row)
         lines += [f"{row['id']}\t{part}\t{script}" for part, script in scripts]
         complete += not failed
         failures.update(re.sub(r"\d+", "N", f) for f in failed)

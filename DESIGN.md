@@ -363,7 +363,7 @@ Updated 2026-10-19. One row per rule: what the engine does and how we know.
 | Ultra Beast, Ancient and Future: Serebii's lists, by card name, in `data/traits.tsv`. Serebii also lists the three Necrozma promos (Dawn Wings, Dusk Mane, Ultra Necrozma ex) as Ultra Beasts | Fan (Serebii) | ✓ open question in PROGRESS.md |
 | "Its remaining HP is now N" never heals a Pokémon that has less left | Assumed | ✓ |
 | "Halve its remaining HP, rounded down" rounds down to a whole 10 | Assumed | ✓ |
-| A copied attack (Mew ex, Ditto, Clefairy) needs no Energy, acts for the Pokémon that copies it, and can't copy again | Assumed | ✓ |
+| A copied attack (Mew ex, Clefairy) needs no Energy, acts for the Pokémon that copies it, and can't copy again. The Dittos that say "if this Pokémon doesn't have the necessary Energy" need Energy that pays the copied attack's printed cost, types and amount included | Assumed; Ditto: App (2026-10-19) | ✓ |
 | "Can't play any Trainer cards" covers Items, Supporters, Tools and Stadiums | Card (they're all Trainer cards) | ✓ |
 | **Card names** | | |
 | A named Pokémon means exactly that name: "Crabominable" doesn't cover Crabominable ex. A card that includes an ex names it | Ruling | ✓ |
@@ -372,6 +372,18 @@ Updated 2026-10-19. One row per rule: what the engine does and how we know.
 | "Knocked Out by damage from an attack": Active or Benched Pokémon knocked out by the opponent's attack. Not Poison or Burn at Checkup, not Ability damage | Ruling | ✓ |
 | A point scored at Checkup at the end of a player's turn counts as "during their last turn" (Hisuian Basculegion) | Ruling | ✓ |
 | An attack that doesn't happen (Confused, or a coin-flip effect, tails) wasn't "used" (Sweets Relay) | Ruling | ✓ |
+| **One-offs (batch 11)** | | |
+| The Bench has 3 fixed spots. A Pokémon put on the Bench takes a free spot; a switch with the Active swaps the two; a knocked-out Active is replaced from the Bench, and that Bench spot stays empty | App (2026-10-19) | ✓ |
+| Poison for a set amount (Toxicroak 20, Toxapex 40): the latest Poison sets the amount, so a plain Poison afterwards does 10 again | Ruling (2026-10-19) | ✓ |
+| "At the end of your opponent's next turn, do N damage to the Defending Pokémon" (Mismagius) follows that Pokémon onto the Bench, does nothing if it left play, and still happens if the attacker left play. It's plain damage: no Weakness, no damage changes | Ruling (2026-10-19) | ✓ |
+| "Choose a spot… at the end of your opponent's next turn" (Meowscarada ex, Armaldo) hits whoever is in that spot then; an empty spot means nothing happens. The same plain damage as Mismagius | Ruling (2026-10-19) | ✓ |
+| Galarian Stunfisk's trap: only a retreat sets it off, not a switch by an effect; the 40 is attack damage, with Weakness | Ruling (2026-10-19) | ✓ |
+| Gothitelle: any attach from the Energy Zone to that Pokémon, by any card, makes it Asleep | Ruling (2026-10-19) | ✓ |
+| Devolving (Celebi): the top card goes to the owner's hand; damage stays, so it can be knocked out (points as usual); Special Conditions and effects end; Energy and Tools stay | Ruling (2026-10-19) | ✓ |
+| Mega Kangaskhan ex's two hits are both attacks. If the first knocks out the Active, the opponent picks a new Active, which takes the second hit; if the first knock-out wins the game, there is no second hit | App (2026-10-19) | ✓ |
+| Will: only coin flips for the effect of an attack, Ability or Trainer card count, not Checkup or Confusion | Ruling (2026-10-19) | ✓ |
+| Team Rocket's Boss: as many Basic Pokémon as the opponent's Bench has room for; they don't set off "when you play this Pokémon" Abilities | Ruling (2026-10-19) | ✓ |
+| Flareon B4-022 "Discard Fire{R} Energy" (Limitless and deckgym) means 1 {R} Energy | App (2026-10-19) | ✓ |
 
 ## 11. Build order
 
