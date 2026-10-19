@@ -74,7 +74,7 @@ def target(m, prefer_damaged=False):
     if ref in fixed:
         return fixed[ref]
     if ref == "the Attacking Pokemon":
-        raise Unsupported("the attacking Pokemon")
+        return "attacker"
     if m.group("atype"):
         return f"(choose my active (type {t(m.group('atype')[1])}))"
     if m.group("names"):
@@ -117,7 +117,8 @@ CONDITIONS = [
     (r"at least (\d+) of them are heads", lambda m, c: f"(>= heads {m.group(1)})"),
     (REF + r" has damage on it", lambda m, c: f"(has-damage {target(m)})"),
     (REF + r" is " + STATUS, lambda m, c: f"(has-status {target(m)} {m.group(len(m.groups())).lower()})"),
-    (REF + r" is affected by a Special Condition", lambda m, c: f"(has-status {target(m)} any)"),
+    (REF + r" is affected by (?:a Special Condition|any Special Conditions)", lambda m, c: f"(has-status {target(m)} any)"),
+    (REF + r" has half of its maximum HP or less remaining", lambda m, c: f"(half-hp {target(m)})"),
     (REF + r" has a Pokemon Tool attached", lambda m, c: f"(has-tool {target(m)})"),
     (REF + r" is an? " + E + r" Pokemon", lambda m, c: f"(is-type {target(m)} {t(m.group(len(m.groups())))})"),
     (REF + r" is a Pokemon ex", lambda m, c: f"(is-ex {target(m)})"),
@@ -240,6 +241,9 @@ CLAUSES = [
     (r"heal (\d+) damage from " + REF + r", and it recovers from being ((?:Asleep|Burned|Confused|Paralyzed|Poisoned)(?:,? (?:and )?(?:Asleep|Burned|Confused|Paralyzed|Poisoned))*)",
      lambda m, c: ("post", f"(pick {target(m)} (seq (heal picked {m.group(1)}) (cure picked {status_list(m.group(len(m.groups())).replace(', and ', ', '))})))")),
     (REF + r" recovers from all Special Conditions", lambda m, c: ("post", f"(cure {target(m)})")),
+    (r"remove a random Special Condition from " + REF, lambda m, c: ("post", f"(cure-random {target(m)})")),
+    (r"this attack does (\d+) more damage for each Special Condition affecting " + REF,
+     lambda m, c: ("pre", f"(bonus (* (status-count {target(m)}) {m.group(1)}))")),
     (r"heal (\d+) damage from each of your Pokemon that has any " + E + r" Energy attached",
      lambda m, c: ("post", f"(heal (each my all (has-energy 1 {t(m.group(2))}) damaged) {m.group(1)})")),
     (r"heal (\d+) damage from 1 of your (?:" + E + r" )?Pokemon that has (\d+) or more " + E + r" Energy attached",
@@ -314,6 +318,7 @@ CLAUSES = [
     (r"switch in (?:1|one) of your opponent's Benched (Basic )?Pokemon( that has damage on it)? to the Active Spot",
      lambda m, c: ("post", f"(switch-in (choose opp bench{' basic' if m.group(1) else ''}{' damaged' if m.group(2) else ''}))")),
     (r"your turn ends", lambda m, c: ("post", "(end-turn)")),
+    (r"discard this card", lambda m, c: ("post", "(discard-tools self)")),  # a Tool, from the Pokémon it's on
     (r"draw cards until you have (\d+) cards in your hand", lambda m, c: ("post", f"(draw-until {m.group(1)})")),
     (r"shuffle an? (Basic )?Pokemon from your hand into your deck",
      lambda m, c: ("post", f"(hand-to-deck {'basic' if m.group(1) else 'pokemon'})")),
@@ -518,6 +523,8 @@ def compile_attack(damage, text, ctx):
 
 
 ABILITY_FORMS = [
+    (r"If this Pokemon is in the Active Spot and is damaged by an attack from your opponent's Pokemon, (.+)",
+     lambda m, c: ("on-damaged", "", m.group(1))),
     (r"Once during your turn, when you play this Pokemon from your hand to evolve 1 of your Pokemon, you may (.+)",
      lambda m, c: ("on-evolve", "", m.group(1))),
     (r"Once during your turn, you may (.+)", lambda m, c: ("activated", "", m.group(1))),
@@ -551,7 +558,9 @@ PASSIVES = [
     (r"This Pokemon has no Retreat Cost", lambda m: "(no-retreat-cost)"),
     (r"Your Active Pokemon has no Retreat Cost", lambda m: "(no-retreat-cost :scope my-active)"),
     (r"Your Active " + E + r" Pokemon has no Retreat Cost", lambda m: f"(no-retreat-cost :scope my-active :type {t(m.group(1))})"),
-    (r"This Pokemon can't be affected by any Special Conditions", None),
+    (r"This Pokemon can't be affected by any Special Conditions", lambda m: "(no-conditions)"),
+    (r"Prevent all effects of attacks used by your opponent's Pokemon done to this Pokemon", lambda m: "(prevent-effects)"),
+    (r"As long as this Pokemon is on your Bench, prevent all damage done to this Pokemon by attacks", lambda m: "(prevent-damage :bench)"),
 ]
 
 
@@ -593,8 +602,8 @@ TOOLS = [
      lambda m: f"(hp {m.group(3)}{stage_opt(m.group(1))}{type_opt(m.group(2))})"),
     (r"If the Pokemon this card is attached to is in the Active Spot and is damaged by an attack from your opponent's Pokemon, "
      r"do (\d+) damage to the Attacking Pokemon", lambda m: f"(reflect {m.group(1)})"),
-    (r"The Pokemon this card is attached to takes -(\d+) damage from attacks", lambda m: f"(damage-taken -{m.group(1)})"),
-    (r"The " + E + r" Pokemon this card is attached to takes -(\d+) damage from attacks",
+    (r"The Pokemon this card is attached to takes -(\d+) damage from attacks(?: from your opponent's Pokemon)?", lambda m: f"(damage-taken -{m.group(1)})"),
+    (r"The " + E + r" Pokemon this card is attached to takes -(\d+) damage from attacks(?: from your opponent's Pokemon)?",
      lambda m: f"(damage-taken -{m.group(2)} :type {t(m.group(1))})"),
     (r"Attacks used by the Pokemon this card is attached to do \+(\d+) damage to your opponent's Active Pokemon",
      lambda m: f"(damage-dealt {m.group(1)})"),
@@ -660,6 +669,31 @@ def compile_card(kind, text, ctx):
             m = re.fullmatch(rx, text.rstrip("."))
             if m:
                 return f"(tool {fn(m)})"
+        m = re.fullmatch(r"If the (?:" + E + r" )?Pokemon this card is attached to is (?:your Active Pokemon|in the Active Spot) "
+                         r"and is damaged by an attack from your opponent's Pokemon, (.+)", text)
+        if m:  # Poison Barb, Dark Pendant
+            body = seq([s for _, s in statements(m.group(2)[:1].upper() + m.group(2)[1:], ctx)])
+            return f"(on-damaged {'(if (is-type self ' + t(m.group(1)) + ') ' + body + ')' if m.group(1) else body})"
+        m = re.fullmatch(r"At the end of each turn, (.+)", text)
+        if m:  # the berries: "the Pokémon this card is attached to … it … discard this card"
+            rest = m.group(1).replace("the Pokemon this card is attached to", "this Pokemon").replace("from it.", "from this Pokemon.")
+            rest = rest.replace("it recovers from all of them, and discard this card", "this Pokemon recovers from all Special Conditions. If you do, discard this card")
+            body = seq([s for _, s in statements(rest[:1].upper() + rest[1:], ctx)])
+            return f"(at-end-of-each-turn {body})"
+        if text == ("The {M} Pokemon this card is attached to takes -10 damage from attacks from your opponent's Pokemon, recovers from "
+                    "all Special Conditions, and can't be affected by any Special Conditions."):
+            return "(tool (damage-taken -10 :type metal) (no-conditions :type metal))"
+        if text == "Prevent all effects of attacks used by your opponent's Pokemon done to the Pokemon this card is attached to. (Existing effects are not removed.)":
+            return "(tool (prevent-effects))"
+        m = re.fullmatch(r"If the Pokemon this card is attached to has a Retreat Cost of (\d+) or more, it takes -(\d+) damage from attacks from your opponent's Pokemon\.", text)
+        if m:
+            return f"(tool (damage-taken -{m.group(2)} :min-retreat {m.group(1)}))"
+        if text == ("As long as the Pokemon this card is attached to is on your Bench, prevent all damage done to that Pokemon by your "
+                    "opponent's attacks and Abilities."):
+            return "(tool (prevent-damage :bench) (prevent-ability-damage :bench))"
+        m = re.fullmatch(r"If this card is attached to 1 of your Pokemon, discard it at the end of your opponent's turn\. (.+)", text)
+        if m:  # Metal Core Barrier: its modifier, and a second form that discards it
+            return [compile_card(kind, m.group(1), ctx), "(at-end-of-each-turn (if (not (my-turn)) (discard-tools self)))"]
         raise Unsupported(f"tool: {text}")
     if kind == "Stadium":
         m = re.fullmatch(r"(Once during each player's turn, that player may|At the end of each player's turn, that player) (.+)", text)
@@ -728,7 +762,8 @@ def compile_row(row):
             failed.append(str(e))
     if row["effect"]:
         try:
-            out.append(("card", compile_card(row["stage"], row["effect"], ctx)))
+            scripts = compile_card(row["stage"], row["effect"], ctx)
+            out += [("card", s) for s in (scripts if isinstance(scripts, list) else [scripts])]
         except Unsupported as e:
             failed.append(str(e))
     return out, failed
@@ -811,6 +846,12 @@ EXAMPLES = [
      "(stadium-action (then (hand-to-deck basic) (draw 1)))"),
     ("Stadium", "", "At the end of each player's turn, that player draws cards until they have 3 cards in their hand.",
      "(stadium-end-of-turn (draw-until 3))"),
+    ("Tool", "", "If the Pokémon this card is attached to is your Active Pokémon and is damaged by an attack from your opponent's Pokémon, "
+     "the Attacking Pokémon is now Poisoned.", "(on-damaged (status attacker poisoned))"),
+    ("Tool", "", "At the end of each turn, if the Pokémon this card is attached to has half of its maximum HP or less remaining, heal 30 damage "
+     "from it. If you do, discard this card.", "(at-end-of-each-turn (then (if (half-hp self) (heal self 30)) (discard-tools self)))"),
+    ("Tool", "", "At the end of each turn, if the Pokémon this card is attached to is affected by any Special Conditions, it recovers from all "
+     "of them, and discard this card.", "(at-end-of-each-turn (then (if (has-status self any) (cure self)) (discard-tools self)))"),
     ("ability", "", "If you have Arceus or Arceus ex in play, this Pokémon takes −30 damage from attacks.",
      '(passive (damage-taken -30 :needs "Arceus" "Arceus ex"))'),
 ]

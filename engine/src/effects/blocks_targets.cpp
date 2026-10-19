@@ -94,13 +94,14 @@ private:
 
 class Single : public Target {
 public:
-    enum Who { Self, Defending, MyActive, OppActive, Picked };
+    enum Who { Self, Defending, MyActive, OppActive, Picked, Attacker };
     explicit Single(Who who) : who_(who) {}
     void select(EffectCtx& ctx, Uids& out) const override {
         const auto& players = ctx.game.state().players;
         uint16_t uid = who_ == Self        ? ctx.self
                        : who_ == Defending ? ctx.defending
                        : who_ == Picked    ? ctx.picked
+                       : who_ == Attacker  ? ctx.attacker
                        : who_ == MyActive  ? players[ctx.player].active.uid
                                            : players[1 - ctx.player].active.uid;
         if (ctx.game.find(uid)) out.push_back(uid);
@@ -122,7 +123,7 @@ const PokemonSlot* first(EffectCtx& ctx, const Target* t) {
 // (energy …) adds up every Pokémon T picks: "for each Energy attached to all of your Pokémon".
 class PokemonNum : public Num {
 public:
-    enum What { Energy, DamageOn, RetreatCost, Count, EnergyTypes };
+    enum What { Energy, DamageOn, RetreatCost, Count, EnergyTypes, StatusCount };
     PokemonNum(What what, const Target* t, uint16_t types) : what_(what), t_(t), types_(types) {}
     int eval(EffectCtx& ctx) const override {
         Uids u;
@@ -147,6 +148,7 @@ public:
         int owner = 0;
         const PokemonSlot* p = u.empty() ? nullptr : ctx.game.find(u[0], &owner);
         if (!p) return 0;
+        if (what_ == StatusCount) return std::popcount(unsigned(p->status));
         return what_ == DamageOn ? p->damage : ctx.game.retreatCost(*p, owner);
     }
 
@@ -160,7 +162,7 @@ private:
 class PokemonTest : public Cond {
 public:
     enum What { HasDamage, HasStatus, HasTool, IsType, IsEx, IsBasic, IsEvolution, EnergyAtLeast, ExtraEnergy,
-                MovedToActive, EvolvedThisTurn, Exists };
+                MovedToActive, EvolvedThisTurn, Exists, HalfHp };
     PokemonTest(What what, const Target* t, int amount, uint16_t types) : what_(what), t_(t), amount_(amount), types_(types) {}
 
     bool test(EffectCtx& ctx) const override {
@@ -182,6 +184,11 @@ public:
             case IsEvolution: return p->card->isEvolution();
             case MovedToActive: return p->becameActiveTurn == turn;
             case EvolvedThisTurn: return !p->below.empty() && p->enteredTurn == turn;
+            case HalfHp: {  // "has half of its maximum HP or less remaining"
+                int owner = 0;
+                ctx.game.find(p->uid, &owner);
+                return 2 * p->damage >= ctx.game.maxHp(*p, owner);
+            }
             case EnergyAtLeast: {
                 int n = 0;
                 for (int t = 0; t < TypeCount; ++t)
@@ -257,7 +264,8 @@ void addTargetWords(Words& w) {
                                                            {"defending", Single::Defending},
                                                            {"my-active", Single::MyActive},
                                                            {"opp-active", Single::OppActive},
-                                                           {"picked", Single::Picked}};
+                                                           {"picked", Single::Picked},
+                                                           {"attacker", Single::Attacker}};
     for (auto [name, who] : singles) {
         auto whoCopy = who;
         w.target[name] = {0, 0, [whoCopy](const SExpr&, ScriptBuilder& b) { return b.make<Single>(whoCopy); }};
@@ -281,6 +289,9 @@ void addTargetWords(Words& w) {
     }};
     w.num["damage-on"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<PokemonNum>(PokemonNum::DamageOn, b.target(arg(e, 0)), 0);
+    }};
+    w.num["status-count"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<PokemonNum>(PokemonNum::StatusCount, b.target(arg(e, 0)), 0);
     }};
     w.num["retreat-cost"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<PokemonNum>(PokemonNum::RetreatCost, b.target(arg(e, 0)), 0);
@@ -312,6 +323,7 @@ void addTargetWords(Words& w) {
     test("is-evolution", PokemonTest::IsEvolution);
     test("moved-to-active", PokemonTest::MovedToActive);
     test("evolved-this-turn", PokemonTest::EvolvedThisTurn);
+    test("half-hp", PokemonTest::HalfHp);
     w.cond["has-status"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<PokemonTest>(PokemonTest::HasStatus, b.target(arg(e, 0)), statusMask(e, 1), 0);
     }};

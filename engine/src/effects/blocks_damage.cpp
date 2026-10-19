@@ -39,9 +39,11 @@ void damageOne(EffectCtx& ctx, uint16_t uid, int n) {
     int owner = 0;
     if (!ctx.game.find(uid, &owner) || n <= 0) return;
     if (ctx.attack && owner != ctx.player)
-        ctx.game.dealAttackDamage(ctx.player, ctx.self, uid, n);
-    else
-        ctx.game.putDamage(uid, n);
+        return void(ctx.game.dealAttackDamage(ctx.player, ctx.self, uid, n));
+    // A Pokémon's own effect on the opponent's Pokémon outside an attack: an Ability (Protective Poncho stops it).
+    if (ctx.self && owner != ctx.player && ctx.game.hasMod(ModKind::PreventAbilityDamage, *ctx.game.find(uid), owner))
+        return ctx.game.say("  the damage is prevented");
+    ctx.game.putDamage(uid, n);
 }
 
 class Damage : public Stmt {  // (damage TARGET N)
@@ -123,6 +125,7 @@ public:
             int owner = 0;
             PokemonSlot* p = ctx.game.find(uid, &owner);
             if (!p || p != &ctx.game.state().players[owner].active || !affects(ctx, uid)) continue;
+            if (ctx.game.hasMod(ModKind::NoConditions, *p, owner)) continue;  // "can't be affected by any Special Conditions"
             if (mask_ & ReplacingStatuses) p->status &= ~ReplacingStatuses;
             p->status |= mask_;
             if (ctx.game.logging()) ctx.game.say("  -> ", ctx.game.show(*p, owner));

@@ -7,9 +7,12 @@
 //              (at-end-of-turn [:active] STMT)         "At the end of your turn…"
 //              (on-attach [:type T…] [:active] STMT)   "Whenever you attach a {T} Energy from your Energy Zone to this Pokémon…"
 //              (on-evolve STMT)                        "When you play this Pokémon from your hand to evolve…"
+//              (on-damaged STMT)                       "If this Pokémon is in the Active Spot and is damaged by an attack…"
+//              (at-end-of-each-turn STMT)              "At the end of each turn…" (self = this Pokémon, player = its owner)
 //   card       (play STMT)     an Item or Supporter
 //              (tool MOD…)     a Tool: modifiers for the Pokémon it is attached to
 //              (at-end-of-turn [:active] STMT)  a Tool that does something at the end of your turn (self = its Pokémon)
+//              (on-damaged STMT), (at-end-of-each-turn STMT)  as for abilities, on a Tool's Pokémon (several forms allowed)
 //              (stadium MOD…)  a Stadium: modifiers for every Pokémon in play unless a :scope says otherwise
 //              (stadium-action STMT)       a Stadium: "Once during each player's turn, that player may…" (player = them)
 //              (stadium-end-of-turn STMT)  a Stadium: "At the end of each player's turn, that player…" (player = them)
@@ -74,6 +77,10 @@ void readAbility(CardDef& c, const SExpr& e, ScriptBuilder& b) {
         c.onAttachWhileActive = whileActive;
     } else if (form == "on-evolve") {
         c.onEvolve = stmt;
+    } else if (form == "on-damaged") {
+        c.onDamaged = stmt;
+    } else if (form == "at-end-of-each-turn") {
+        c.endOfEachTurn = stmt;
     } else {
         scriptFail("unknown ability form '" + form + "'", e);
     }
@@ -87,7 +94,7 @@ void readCardText(CardDef& c, const SExpr& e, ScriptBuilder& b) {
     }
     else if (form == "tool" && c.isTrainer(TrainerKind::Tool))
         modifiers(c, e, b, ModScope::Self);
-    else if (form == "at-end-of-turn" && c.isTrainer(TrainerKind::Tool))
+    else if ((form == "at-end-of-turn" || form == "on-damaged" || form == "at-end-of-each-turn") && c.isTrainer(TrainerKind::Tool))
         readAbility(c, e, b);
     else if (form == "stadium" && c.isTrainer(TrainerKind::Stadium))
         modifiers(c, e, b, ModScope::All);

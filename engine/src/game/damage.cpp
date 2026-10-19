@@ -51,6 +51,17 @@ int Game::dealAttackDamage(int attacker, uint16_t attackerUid, uint16_t targetUi
             source->damage += reflect;
             if (log_) say("  ", reflect, " damage back -> ", show(*source, attacker));
         }
+        // "If this Pokémon is in the Active Spot and is damaged by an attack…": its ability, then its Tool.
+        for (bool tool : {false, true}) {
+            const PokemonSlot* p = find(targetUid);
+            const CardDef* c = p ? (tool ? p->tool : p->card) : nullptr;
+            if (!c || !c->onDamaged) continue;
+            say("  ", c->name, " reacts");
+            EffectCtx ctx{*this, owner};
+            ctx.self = targetUid;
+            ctx.attacker = attackerUid;
+            c->onDamaged->run(ctx);
+        }
     }
     return damage;
 }
@@ -66,7 +77,7 @@ void Game::putDamage(uint16_t uid, int amount) {
 bool Game::protectedFromAttacks(uint16_t uid) {
     int owner = 0;
     PokemonSlot* p = find(uid, &owner);
-    return p && hasMod(ModKind::PreventAll, *p, owner);
+    return p && (hasMod(ModKind::PreventAll, *p, owner) || hasMod(ModKind::PreventEffects, *p, owner));
 }
 
 void Game::attachFromZone(int player, uint16_t uid, Type type, int count) {

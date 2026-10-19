@@ -10,8 +10,8 @@ The **game engine** is most of the way there. It plays Pocket games by the rules
 |---|---|
 | Rules core: setup, turns, Energy Zone, attacking, retreating, evolving, Trainers, Tools, Stadiums (always-on effects), abilities, Special Conditions, Checkup, damage, winning | Built and checked, Stadium actions (R5) included. Missing: the player choosing which energy to pay, discard or move |
 | Card data | Every set up to B4b: 2,319 unique cards from Limitless, cross-checked against deckgym-core |
-| Card effects | 1,939 of 2,319 cards (84%) playable. Trainers lag behind and are being added in batches (table below, Next step 1) |
-| Checks | 21 rule tests, 38 effect tests, 45 compiler self-test examples, `check_states` (24.2M moves over all 12 decks, 0 violations), and the memory and undefined-behaviour checker build is clean after coverage batch 4 (the tests plus `check_states` on the coverage decks) |
+| Card effects | 1,955 of 2,319 cards (84%) playable. Trainers lag behind and are being added in batches (table below, Next step 1) |
+| Checks | 21 rule tests, 39 effect tests, 48 compiler self-test examples, `check_states` (28.2M moves over all 13 decks, 0 violations), and the memory and undefined-behaviour checker build is clean after coverage batch 4 (the tests plus `check_states` on the coverage decks) |
 | Replayable games (seeds) | Not yet: every game seeds itself from `random_device` |
 | Simulation runner (many games, threads, stats) | Not started |
 | Finding decks (generate, play, rank) | Not started |
@@ -27,13 +27,13 @@ Code size: about 4,500 lines of C++ (engine and tests) and 900 lines of Python (
 
 | Kind | Playable |
 |---|---|
-| Pokémon | 1,831 / 2,167 |
+| Pokémon | 1,838 / 2,167 |
 | Supporters | 63 / 82 |
 | Items | 23 / 31 |
-| Tools | 9 / 26 |
+| Tools | 18 / 26 |
 | Stadiums | 13 / 13 |
 
-Trainers matter most for deck finding because they go into most decks. They're being added in batches (Next, step 1). `decks/coverage-a.txt` and `coverage-b.txt` hold the batch 1 Trainers, `coverage-c.txt` the batch 2 ones, `coverage-d.txt` the batch 3 ones and `coverage-e.txt` the Stadiums, so `check_states` plays them.
+Trainers matter most for deck finding because they go into most decks. They're being added in batches (Next, step 1). `decks/coverage-a.txt` and `coverage-b.txt` hold the batch 1 Trainers, `coverage-c.txt` the batch 2 ones, `coverage-d.txt` the batch 3 ones and `coverage-e.txt` the Stadiums and `coverage-f.txt` the Tools, so `check_states` plays them.
 
 The rest are mostly one-of-a-kind mechanics we chose to skip for now:
 - memory of last turn (Sweets Relay, "knocked out last turn");
@@ -149,7 +149,13 @@ In order. Each step gets a plan first, then tests, `check_states` at 0 violation
      - Weakness ×2 (`weakness-x2 :not-mega`).
      - New blocks: `draw-until`, `hand-to-deck`, `swap-for`, `cycle-energy`.
      - The compiler reads a Stadium's "that player … their" as "you … your".
-   - **Batch 5:** Tools that react to something: Lum Berry, Sitrus Berry, Poison Barb, Dark Pendant, Steel Apron, Clear Veil, Metal Core Barrier, Protective Poncho, Heavy Helmet.
+   - **Batch 5**, done 2026-10-19: 9 Tools that react to something.
+     - Cards: Lum Berry, Sitrus Berry, Poison Barb, Dark Pendant, Steel Apron, Clear Veil, Metal Core Barrier, Protective Poncho, Heavy Helmet.
+     - New triggers: `on-damaged` ("is damaged by an attack" while Active, with `attacker` as a target), and `at-end-of-each-turn` (both players' turns, before Checkup).
+     - New modifiers: `no-conditions`, `prevent-effects`, `prevent-ability-damage`, with the options `:bench` and `:min-retreat N`.
+     - New tests: `half-hp` and `my-turn`. New number: `status-count`.
+     - Also unlocked Regice, Arceus ex, Wartortle, Jellicent, Dragalge ex, Blissey and Team Rocket's Magmar.
+     - Heavy Helmet reads the current Retreat Cost, modifiers included.
    - **Batch 6:** back to the hand: Koga, Budding Expeditioner, Ilima, Parasol Lady, Elesa.
    - **After batch 6:** 122 of 152 Trainers. Left out:
      - knock-out triggers;

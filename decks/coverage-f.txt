@@ -1,0 +1,24 @@
+# Coverage batch 5, Metal/Darkness/Water: every Tool that reacts or protects, and the Pokémon that need them.
+# Pawniard and Heatran for Steel Apron and Metal Core Barrier, Darkness Pokémon for Dark Pendant, Heatran's
+# Retreat Cost of 3 for Heavy Helmet; Regice, Dragalge ex, Jellicent and Wartortle for the new abilities.
+energy: Metal, Darkness, Water
+
+2 A1-179   # Pawniard
+1 A2-120   # Heatran: Retreat Cost 3
+1 A1-164   # Ekans
+1 B1-159   # Skrelp
+1 B1-160   # Dragalge ex (from Skrelp): Poison Point
+1 A2-034   # Regice: Crystal Body
+1 B1-068   # Frillish
+1 B1-069   # Jellicent (from Frillish): Bouncy Body
+1 B1a-017  # Squirtle
+1 B1a-018  # Wartortle (from Squirtle): Shell Shield
+1 A2-149   # Lum Berry
+1 B1-218   # Sitrus Berry
+1 A3-146   # Poison Barb
+1 A4-154   # Dark Pendant
+1 A4-153   # Steel Apron
+1 B4-149   # Clear Veil
+1 B2-148   # Metal Core Barrier
+1 B2-147   # Protective Poncho
+1 B1-219   # Heavy Helmet

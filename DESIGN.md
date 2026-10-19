@@ -296,7 +296,7 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 | **Special Conditions** | | |
 | Only the Active Pokémon has them. Asleep, Paralyzed and Confused replace each other; Poisoned and Burned stack | Tips | ✓ |
 | Checkup after every turn, for both players, the player whose turn ended first. Order: Poison, Burn, Asleep, Paralyzed. Knock-outs happen together at the end | Tips | ✓ |
-| Lum Berry, Sitrus Berry ("at the end of each turn") act before Pokémon Checkup, so a Lum Berry cures Poison before it does damage | Assumed (Remco's best guess, to double-check) | ○ batch 5 |
+| Lum Berry, Sitrus Berry ("at the end of each turn") act before Pokémon Checkup, so a Lum Berry cures Poison before it does damage | Assumed (Remco's best guess, to double-check) | ✓ |
 | Poison 10; Burn 20, then a flip (heads recovers) | Tips | ✓ |
 | Asleep: can't attack or retreat; a flip at every Checkup, heads wakes it | Tips | ✓ |
 | Paralyzed: can't attack or retreat; recovers at the Checkup after its owner's next turn | Tips | ✓ A Pokémon paralyzing itself would recover a turn early, but no card does that |

@@ -481,6 +481,11 @@ public:
     bool test(EffectCtx& ctx) const override { return ctx.game.state().stadium != nullptr; }
 };
 
+class MyTurn : public Cond {  // (my-turn): it's the effect's player's turn (at the end of a turn: theirs ended)
+public:
+    bool test(EffectCtx& ctx) const override { return ctx.game.state().current == ctx.player; }
+};
+
 class PlayedSupporter : public Cond {  // (played-supporter): you played a Supporter this turn
 public:
     bool test(EffectCtx& ctx) const override {
@@ -575,6 +580,7 @@ void addCardWords(Words& w) {
     }};
     w.stmt["discard-stadium"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<DiscardStadium>(); }};
     w.cond["stadium-in-play"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<StadiumInPlay>(); }};
+    w.cond["my-turn"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<MyTurn>(); }};
     w.cond["played-supporter"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<PlayedSupporter>(); }};
     w.num["hand-size"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<HandSize>(oppArg(arg(e, 0))); }};
     w.num["points-needed"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<PointsNeeded>(oppArg(arg(e, 0))); }};

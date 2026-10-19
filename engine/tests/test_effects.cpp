@@ -806,6 +806,96 @@ static void coverageBatchFourBlocks() {
     CHECK(p.hand.size() == 1 && p.hand[0] == &tool);
 }
 
+// The pieces coverage batch 5 added: Tools that react, immunities, Bench protection.
+static void coverageBatchFiveBlocks() {
+    {   // Poison Barb: the Attacking Pokémon is now Poisoned; Clear Veil stops effects, not damage
+        Table t;
+        CardDef barb = trainer(TrainerKind::Tool, "Barb");
+        barb.onDamaged = stmt("(status attacker poisoned)");
+        attackScript(t, "(seq (hit) (status opp-active paralyzed))");  // lasts through this Checkup
+        GameState& s = t.position();
+        s.players[1].active.tool = &barb;
+        CardDef veil = trainer(TrainerKind::Tool, "Veil");
+        veil.passive.push_back(mod("(prevent-effects)"));
+        t.play(ActionKind::Attack);
+        CHECK(s.players[0].active.status == Poisoned && s.players[1].active.status == Paralyzed);
+        Table u;
+        attackScript(u, "(seq (hit) (status opp-active paralyzed))");
+        GameState& s2 = u.position();
+        s2.players[1].active.tool = &veil;
+        u.play(ActionKind::Attack);
+        CHECK(s2.players[1].active.damage == 30 && s2.players[1].active.status == 0);
+    }
+    {   // Lum Berry acts before Checkup, on either player's turn; Sitrus Berry at half HP; Metal Core Barrier
+        Table t;
+        CardDef lum = trainer(TrainerKind::Tool, "Lum");
+        lum.endOfEachTurn = stmt("(then (if (has-status self any) (cure self)) (discard-tools self))");
+        CardDef sitrus = trainer(TrainerKind::Tool, "Sitrus");
+        sitrus.endOfEachTurn = stmt("(then (if (half-hp self) (heal self 30)) (discard-tools self))");
+        CardDef barrier = trainer(TrainerKind::Tool, "Barrier");
+        barrier.endOfEachTurn = stmt("(if (not (my-turn)) (discard-tools self))");
+        GameState& s = t.position();
+        s.players[1].active.tool = &lum;  // P2's Pokémon, at the end of P1's turn
+        s.players[1].active.status = Poisoned;
+        s.players[1].active.damage = 10;
+        s.players[1].bench[0].tool = &sitrus;
+        s.players[1].bench[0].damage = 20;  // 60 HP: not half yet
+        s.players[0].active.tool = &barrier;  // P1's own turn ends: it stays
+        t.play(ActionKind::EndTurn);
+        CHECK(s.players[1].active.status == 0 && s.players[1].active.damage == 10 && !s.players[1].active.tool);
+        CHECK(s.players[1].bench[0].tool == &sitrus && s.players[0].active.tool == &barrier);
+        s.players[1].bench[0].damage = 30;  // half
+        t.play(ActionKind::EndTurn);  // P2's turn ends: the Barrier on P1's Pokémon goes, Sitrus heals
+        CHECK(s.players[1].bench[0].damage == 0 && !s.players[1].bench[0].tool && !s.players[0].active.tool);
+    }
+    {   // Steel Apron: no Special Conditions, and attaching it cures them; Protective Poncho, Heavy Helmet
+        Table t;
+        CardDef apron = trainer(TrainerKind::Tool, "Apron");
+        apron.passive.push_back(mod("(no-conditions :type water)"));
+        CardDef poncho = trainer(TrainerKind::Tool, "Poncho");
+        poncho.passive.push_back(mod("(prevent-damage :bench)"));
+        poncho.passive.push_back(mod("(prevent-ability-damage :bench)"));
+        CardDef helmet = trainer(TrainerKind::Tool, "Helmet");
+        helmet.passive.push_back(mod("(damage-taken -20 :min-retreat 3)"));
+        t.cards[2].retreat = 3;
+        GameState& s = t.position();
+        PlayerState& p = s.players[0];
+        p.active.status = Confused;
+        p.hand.clear();
+        p.hand.push_back(&apron);
+        t.play(ActionKind::AttachTool, 0, -1);
+        CHECK(p.active.status == 0);
+        EffectCtx ctx{t.game, 1};
+        ctx.attack = true;
+        ctx.self = s.players[1].active.uid;
+        stmt("(status opp-active poisoned)")->run(ctx);
+        CHECK(p.active.status == 0);
+        t.bench(0, t.cards[3]).tool = &poncho;
+        stmt("(damage (each opp bench) 30)")->run(ctx);  // attack damage on the Bench
+        EffectCtx ability{t.game, 1};
+        ability.self = s.players[1].active.uid;
+        stmt("(damage (each opp bench) 30)")->run(ability);  // an Ability's damage
+        CHECK(p.bench[0].damage == 0);
+        s.players[1].bench[0].tool = &helmet;  // Mon2, Retreat Cost 3
+        EffectCtx mine{t.game, 0};
+        mine.attack = true;
+        mine.self = p.active.uid;
+        stmt("(damage (each opp bench) 30)")->run(mine);
+        CHECK(s.players[1].bench[0].damage == 10);
+    }
+    {   // half-hp, status-count
+        Table t;
+        GameState& s = t.position();
+        EffectCtx ctx{t.game, 0};
+        s.players[1].active.status = Poisoned | Burned | Asleep;
+        CHECK(stmt("(if (>= (status-count opp-active) 3) (nothing))")->possible(ctx));
+        s.players[0].active.damage = 29;
+        CHECK(!stmt("(if (half-hp my-active) (nothing))")->possible(ctx));
+        s.players[0].active.damage = 30;
+        CHECK(stmt("(if (half-hp my-active) (nothing))")->possible(ctx));
+    }
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -845,5 +935,6 @@ int main() {
     stadiumActions();
     stadiumEndOfTurnComesLast();
     coverageBatchFourBlocks();
+    coverageBatchFiveBlocks();
     return report("effects");
 }

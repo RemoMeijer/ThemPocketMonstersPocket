@@ -52,7 +52,7 @@ const Num* ScriptBuilder::num(const SExpr& e) {
     return build(words().num, e, *this, "number");
 }
 
-// (KIND [amount] [:active] [:scope S] [:type T…] [:from T…] [:stage S…] [:name "A"…] [:needs "A"…] [:vs-ex] [:from-ex] [:not-mega])
+// (KIND [amount] [:active] [:bench] [:min-retreat N] [:scope S] [:type T…] [:from T…] [:stage S…] [:name "A"…] [:needs "A"…] [:vs-ex] [:from-ex] [:not-mega])
 Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
     static const std::unordered_map<std::string, ModKind> kinds = {
         {"damage-taken", ModKind::DamageTaken},     {"damage-dealt", ModKind::DamageDealt},
@@ -64,6 +64,8 @@ Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
         {"attack-cost", ModKind::AttackCost},       {"attack-flip", ModKind::AttackFlip},
         {"cant-supporter", ModKind::CantPlaySupporter}, {"cant-item", ModKind::CantPlayItem},
         {"cant-attach-to-active", ModKind::CantAttachToActive}, {"weakness-x2", ModKind::WeaknessTimesTwo},
+        {"no-conditions", ModKind::NoConditions},   {"prevent-effects", ModKind::PreventEffects},
+        {"prevent-ability-damage", ModKind::PreventAbilityDamage},
     };
     static const std::unordered_map<std::string, ModScope> scopes = {
         {"self", ModScope::Self},           {"my-active", ModScope::MyActive}, {"my-all", ModScope::MyAll},
@@ -86,6 +88,10 @@ Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
             m.amount = int16_t(std::stoi(a.atom));
         } else if (a.atom == ":active") {
             m.whileActive = true;
+        } else if (a.atom == ":bench") {
+            m.whileBenched = true;
+        } else if (a.atom == ":min-retreat" && i + 1 < argCount(e)) {
+            m.minRetreat = uint8_t(intArg(arg(e, ++i)));
         } else if (a.atom == ":vs-ex") {
             m.vsEx = true;
         } else if (a.atom == ":from-ex") {

@@ -60,7 +60,7 @@ public:
     // Active Pokémon. Then "when damaged by an attack" effects run. Returns the damage done.
     int dealAttackDamage(int attacker, uint16_t attackerUid, uint16_t targetUid, int base, bool weakness = true);
     void putDamage(uint16_t uid, int amount);  // straight onto a Pokémon: to itself, abilities, Checkup
-    bool protectedFromAttacks(uint16_t uid);   // "prevent all damage from — and effects of — attacks"
+    bool protectedFromAttacks(uint16_t uid);   // from the effects of attacks: PreventAll or PreventEffects
 
     // --- Questions the rules ask; modifiers from abilities, Tools, the Stadium and timed effects answer them ---
     int maxHp(const PokemonSlot& p, int owner) const;
@@ -121,6 +121,7 @@ void Game::forEachMod(ModKind kind, const PokemonSlot* subject, int owner, Fn fn
     auto applies = [&](const Modifier& m, int sourceOwner, const PokemonSlot* source) {
         if (m.kind != kind) return false;
         if (m.whileActive && source != &s_.players[sourceOwner].active) return false;
+        if (m.whileBenched && (!source || source == &s_.players[sourceOwner].active)) return false;
         if (m.needs && !inPlay(sourceOwner, *m.needs)) return false;
         bool mine = owner == sourceOwner;
         if (!subject) {
@@ -148,7 +149,8 @@ void Game::forEachMod(ModKind kind, const PokemonSlot* subject, int owner, Fn fn
                 break;
         }
         return subject->card->hasType(m.types) && (!m.stages || (m.stages & stageBit(subject->card->stage))) &&
-               (!m.names || m.names->has(subject->card->name)) && (!m.notMega || !subject->card->mega);
+               (!m.names || m.names->has(subject->card->name)) && (!m.notMega || !subject->card->mega) &&
+               (!m.minRetreat || retreatCost(*subject, owner) >= m.minRetreat);
     };
     for (int p = 0; p < 2; ++p) {
         auto visit = [&](const PokemonSlot& source) {

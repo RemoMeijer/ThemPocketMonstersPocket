@@ -131,6 +131,23 @@ void Game::endTurn() {
             source->endOfTurn->run(ctx);
         }
     }
+    // "At the end of each turn…" (Lum Berry, Sitrus Berry): both players' Pokémon, before Checkup (assumed, Remco's
+    // best guess: a Lum Berry cures Poison before it does damage).
+    for (int owner : {me, 1 - me}) {
+        Uids each;
+        if (s_.players[owner].active.card) each.push_back(s_.players[owner].active.uid);
+        for (const PokemonSlot& b : s_.players[owner].bench) each.push_back(b.uid);
+        for (uint16_t uid : each)
+            for (bool tool : {false, true}) {
+                PokemonSlot* p = find(uid);
+                const CardDef* source = p ? (tool ? p->tool : p->card) : nullptr;
+                if (!source || !source->endOfEachTurn) continue;
+                say("P", owner + 1, "'s ", source->name, ": end of turn");
+                EffectCtx ctx{*this, owner};
+                ctx.self = uid;
+                source->endOfEachTurn->run(ctx);
+            }
+    }
     // Pokémon Checkup, for both Active Pokémon (Special Conditions are only ever on an Active Pokémon).
     for (int p : {me, 1 - me}) {
         PokemonSlot& a = s_.players[p].active;

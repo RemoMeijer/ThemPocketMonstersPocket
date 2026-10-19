@@ -70,6 +70,7 @@ public:
         PokemonSlot& target = game.slot(me, a.target);
         target.tool = p.hand.take(a.index);
         game.say("P", me + 1, " attaches ", target.tool->name, " to ", target.card->name);
+        if (game.hasMod(ModKind::NoConditions, target, me)) target.status = 0;  // Steel Apron: "recovers from all…"
     }
 };
 }  // namespace

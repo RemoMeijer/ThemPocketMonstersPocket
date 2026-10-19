@@ -29,6 +29,7 @@ struct EffectCtx {
     uint16_t picked = 0;       // the Pokémon chosen by (pick …)
     bool healed = false;       // (heal …) removed some damage
     bool endsTurn = false;     // (end-turn): "Your turn ends." after the effect
+    uint16_t attacker = 0;     // the Attacking Pokémon, for "when damaged by an attack" effects
 };
 
 using Uids = FixedVec<uint16_t, 2 * (1 + rules::BenchSize)>;  // at most every Pokémon in play
