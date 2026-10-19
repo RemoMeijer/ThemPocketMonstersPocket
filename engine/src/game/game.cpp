@@ -9,7 +9,8 @@ namespace {
 // Main-phase moves in the order they are offered. EndTurn comes last (RandomPolicy relies on it).
 constexpr ActionKind MainMoves[] = {ActionKind::PlaceBench,   ActionKind::Evolve,     ActionKind::PlayTrainer,
                                     ActionKind::AttachTool,   ActionKind::AttachEnergy, ActionKind::UseAbility,
-                                    ActionKind::Retreat,      ActionKind::Attack,     ActionKind::EndTurn};
+                                    ActionKind::UseStadium,   ActionKind::Retreat,    ActionKind::Attack,
+                                    ActionKind::EndTurn};
 
 constexpr uint8_t CantActStatuses = Asleep | Paralyzed;  // can't attack or retreat
 }  // namespace
@@ -157,6 +158,14 @@ void Game::endTurn() {
     }
     knockOutCheck();
     if (s_.phase == Phase::Over) return;
+    // "At the end of each player's turn, that player…" Stadiums come last, after Checkup (Remco, DESIGN.md §10).
+    if (s_.stadium && s_.stadium->endOfTurn) {
+        say(s_.stadium->name, ": end of turn for P", me + 1);
+        EffectCtx ctx{*this, me};
+        s_.stadium->endOfTurn->run(ctx);
+        knockOutCheck();
+        if (s_.phase == Phase::Over) return;
+    }
     auto& timed = s_.timed;
     for (std::size_t i = timed.size(); i-- > 0;)
         if (timed[i].lastTurn <= s_.turn) timed.take(i);

@@ -120,7 +120,8 @@ void markSupported(CardDef& c) {
     }
     bool abilityDone = c.activated || c.endOfTurn || c.onAttach || c.onEvolve || !c.passive.empty();
     if (!c.abilities.empty() && !abilityDone) return no("ability text: " + c.abilities[0].effect);
-    if (c.category == Category::Trainer && !c.play && !c.endOfTurn && c.passive.empty()) return no("trainer text: " + c.effect);
+    if (c.category == Category::Trainer && !c.play && !c.endOfTurn && !c.stadiumAction && c.passive.empty())
+        return no("trainer text: " + c.effect);
     if (c.isPokemon() && !c.effect.empty() && c.passive.empty()) return no("card text: " + c.effect);  // Fossils
     if (c.isPokemon() && c.attacks.empty() && c.passive.empty()) return no("no attacks");
 }

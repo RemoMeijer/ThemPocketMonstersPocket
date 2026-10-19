@@ -714,6 +714,98 @@ static void coverageBatchThreeBlocks() {
     CHECK(p.active.energy[int(Type::Fire)] == 1 && p.discardEnergy[int(Type::Fire)] == 0 && p.active.damage == 20);
 }
 
+CardDef stadium(const char* name, const char* form, const char* script) {
+    CardDef c = trainer(TrainerKind::Stadium, name);
+    const Stmt* s = stmt(script);
+    (std::string(form) == "action" ? c.stadiumAction : c.endOfTurn) = s;
+    return c;
+}
+
+// R5: the Stadium's action, once per player per turn and per Stadium card; a new Stadium can be used again (App).
+static void stadiumActions() {
+    Table t;
+    CardDef plaza = stadium("Plaza", "action", "(draw 1)");
+    CardDef park = stadium("Park", "action", "(draw 1)");
+    GameState& s = t.position();
+    PlayerState& p = s.players[0];
+    p.hand.clear();
+    p.hand.push_back(&park);
+    s.stadium = &plaza;
+    s.stadiumOwner = 1;  // the opponent's Stadium: anyone may use it
+    t.play(ActionKind::UseStadium);
+    CHECK(p.hand.size() == 2 && !t.can(ActionKind::UseStadium));
+    t.play(ActionKind::PlayTrainer, 0);  // a new Stadium
+    CHECK(t.can(ActionKind::UseStadium));
+    t.play(ActionKind::UseStadium);
+    CHECK(!t.can(ActionKind::UseStadium));
+    t.play(ActionKind::EndTurn);
+    CHECK(s.current == 1 && t.can(ActionKind::UseStadium));  // the other player, on their turn
+}
+
+// "At the end of each player's turn" Stadiums come last, after Checkup (Remco): Soothing Shore heals the
+// Poison damage of that same Checkup.
+static void stadiumEndOfTurnComesLast() {
+    Table t;
+    CardDef shore = stadium("Shore", "end", "(heal (each my all (has-energy 1 water) damaged) 20)");
+    CardDef trail = stadium("Trail", "end", "(draw-until 3)");
+    GameState& s = t.position();
+    PlayerState& p = s.players[0];
+    s.stadium = &shore;
+    s.stadiumOwner = 1;
+    p.active.damage = 10;
+    p.active.status = Poisoned;
+    s.players[1].active.damage = 10;  // P2's turn didn't end: no heal for them
+    t.play(ActionKind::EndTurn);
+    CHECK(p.active.damage == 0 && s.players[1].active.damage == 10);
+    Table u;
+    GameState& s2 = u.position();
+    s2.stadium = &trail;
+    s2.stadiumOwner = 0;
+    s2.players[0].hand.clear();
+    u.play(ActionKind::EndTurn);
+    CHECK(s2.players[0].hand.size() == 3);
+}
+
+// The rest of batch 4: Rainbow Cave, Bounded Field, Area Zero, Kid's Room.
+static void coverageBatchFourBlocks() {
+    Table t;
+    t.cards[1].weakness = Type::Water;
+    t.cards[1].hp = 200;
+    CardDef field = trainer(TrainerKind::Stadium, "Field");
+    field.passive.push_back(mod("(weakness-x2 :not-mega)", ModScope::All));
+    CardDef tool = trainer(TrainerKind::Tool, "Cape");
+    GameState& s = t.position();
+    PlayerState& p = s.players[0];
+    EffectCtx ctx{t.game, 0};
+    // Rainbow Cave: an extra turn for the Energy Zone
+    p.energy = Type::Water;
+    p.nextEnergy = Type::Fire;
+    stmt("(cycle-energy)")->run(ctx);
+    CHECK(p.energy == Type::Fire && p.nextEnergy && p.discardEnergy[int(Type::Water)] == 1);
+    // Bounded Field: 30 × 2 instead of 30 + 20, except from a Mega ex
+    s.stadium = &field;
+    s.stadiumOwner = 0;
+    uint16_t attacker = p.active.uid, target = s.players[1].active.uid;
+    CHECK(t.game.dealAttackDamage(0, attacker, target, 30) == 60);
+    t.cards[0].ex = t.cards[0].mega = true;
+    CHECK(t.game.dealAttackDamage(0, attacker, target, 30) == 50);
+    // Area Zero: a Basic from the hand into the deck, then draw
+    p.hand.clear();
+    p.hand.push_back(&tool);
+    CHECK(!stmt("(then (hand-to-deck basic) (draw 1))")->possible(ctx));
+    p.hand.push_back(&t.cards[4]);
+    std::size_t deck = p.deck.size();
+    stmt("(then (hand-to-deck basic) (draw 1))")->run(ctx);
+    CHECK(p.deck.size() == deck && p.hand.size() == 2);
+    // Kid's Room: any hand card for a random Tool from the deck
+    p.hand.clear();
+    p.hand.push_back(&t.cards[4]);
+    CHECK(!stmt("(swap-for tool)")->possible(ctx));
+    p.deck.push_back(&tool);
+    stmt("(swap-for tool)")->run(ctx);
+    CHECK(p.hand.size() == 1 && p.hand[0] == &tool);
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -750,5 +842,8 @@ int main() {
     coverageBatchOneBlocks();
     coverageBatchTwoBlocks();
     coverageBatchThreeBlocks();
+    stadiumActions();
+    stadiumEndOfTurnComesLast();
+    coverageBatchFourBlocks();
     return report("effects");
 }

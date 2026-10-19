@@ -361,15 +361,17 @@ private:
 };
 
 // (swap-pokemon): a Pokémon from your hand (your choice) for a random Pokémon from your deck.
+// (swap-for FILTER…): any card from your hand (your choice) for a random matching card from your deck (Kid's Room).
 class SwapPokemon : public Stmt {
 public:
+    SwapPokemon(CardFilter hand, CardFilter deck) : hand_(std::move(hand)), deck_(std::move(deck)) {}
     void run(EffectCtx& ctx) const override {
         PlayerState& p = ctx.game.state().players[ctx.player];
         std::vector<std::size_t> inHand, inDeck;
         for (std::size_t i = 0; i < p.hand.size(); ++i)
-            if (p.hand[i]->isPokemon()) inHand.push_back(i);
+            if (hand_.matches(p.hand[i])) inHand.push_back(i);
         for (std::size_t i = 0; i < p.deck.size(); ++i)
-            if (p.deck[i]->isPokemon()) inDeck.push_back(i);
+            if (deck_.matches(p.deck[i])) inDeck.push_back(i);
         if (inHand.empty() || inDeck.empty()) return;
         std::size_t give = inHand[ctx.game.choose(ctx.player, int(inHand.size()))];
         std::size_t take = inDeck[std::uniform_int_distribution<std::size_t>(0, inDeck.size() - 1)(ctx.game.rng())];
@@ -380,11 +382,56 @@ public:
         std::shuffle(p.deck.begin(), p.deck.end(), ctx.game.rng());
         ctx.game.say("  ", gave->name, " into the deck, ", got->name, " into the hand");
     }
-    bool possible(EffectCtx& ctx) const override {  // a Pokémon in the hand and one in the deck
+    bool possible(EffectCtx& ctx) const override {  // a card to give and one to get
         const PlayerState& p = ctx.game.state().players[ctx.player];
-        auto pokemon = [](const CardDef* c) { return c->isPokemon(); };
-        return std::any_of(p.hand.begin(), p.hand.end(), pokemon) && std::any_of(p.deck.begin(), p.deck.end(), pokemon);
+        auto give = [&](const CardDef* c) { return hand_.matches(c); };
+        auto get = [&](const CardDef* c) { return deck_.matches(c); };
+        return std::any_of(p.hand.begin(), p.hand.end(), give) && std::any_of(p.deck.begin(), p.deck.end(), get);
     }
+
+private:
+    CardFilter hand_, deck_;
+};
+
+class DrawUntil : public Stmt {  // (draw-until N): draw until your hand holds N cards
+public:
+    explicit DrawUntil(int n) : n_(n) {}
+    void run(EffectCtx& ctx) const override {
+        PlayerState& p = ctx.game.state().players[ctx.player];
+        while (p.hand.size() < std::size_t(n_) && !p.deck.empty() && p.hand.size() < std::size_t(rules::HandLimit))
+            ctx.game.draw(ctx.player);
+    }
+    bool possible(EffectCtx& ctx) const override {
+        const PlayerState& p = ctx.game.state().players[ctx.player];
+        return p.hand.size() < std::size_t(n_) && !p.deck.empty();
+    }
+
+private:
+    int n_;
+};
+
+// (hand-to-deck FILTER…): shuffle a matching card from your hand (your choice) into your deck (Area Zero).
+class HandToDeck : public Stmt {
+public:
+    explicit HandToDeck(CardFilter f) : f_(std::move(f)) {}
+    void run(EffectCtx& ctx) const override {
+        PlayerState& p = ctx.game.state().players[ctx.player];
+        std::vector<std::size_t> hits;
+        for (std::size_t i = 0; i < p.hand.size(); ++i)
+            if (f_.matches(p.hand[i])) hits.push_back(i);
+        if (hits.empty()) return;
+        const CardDef* c = p.hand.take(hits[ctx.game.choose(ctx.player, int(hits.size()))]);
+        p.deck.push_back(c);
+        std::shuffle(p.deck.begin(), p.deck.end(), ctx.game.rng());
+        ctx.game.say("  ", c->name, " is shuffled into the deck");
+    }
+    bool possible(EffectCtx& ctx) const override {
+        const PlayerState& p = ctx.game.state().players[ctx.player];
+        return std::any_of(p.hand.begin(), p.hand.end(), [&](const CardDef* c) { return f_.matches(c); });
+    }
+
+private:
+    CardFilter f_;
 };
 
 // (discard-hand-to SIDE N): that player discards cards of their choice until they have N in their hand (Nasty Notice).
@@ -490,7 +537,18 @@ void addCardWords(Words& w) {
     w.stmt["switch-in"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<SwitchIn>(b.target(arg(e, 0))); }};
     w.stmt["discard-tools"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<DiscardTools>(b.target(arg(e, 0))); }};
     w.stmt["rare-candy"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<RareCandy>(); }};
-    w.stmt["swap-pokemon"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<SwapPokemon>(); }};
+    w.stmt["swap-pokemon"] = {0, 0, [](const SExpr&, ScriptBuilder& b) {
+        CardFilter pokemon;
+        pokemon.pokemon = true;
+        return b.make<SwapPokemon>(pokemon, pokemon);
+    }};
+    w.stmt["swap-for"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<SwapPokemon>(CardFilter{}, parseCardFilter(e, 0));
+    }};
+    w.stmt["draw-until"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<DrawUntil>(intArg(arg(e, 0))); }};
+    w.stmt["hand-to-deck"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<HandToDeck>(parseCardFilter(e, 0));
+    }};
     w.stmt["from-discard"] = {4, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         const std::string& mode = arg(e, 0).atom;
         const std::string& dest = arg(e, 3).atom;

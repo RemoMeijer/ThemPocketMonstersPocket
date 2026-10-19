@@ -57,6 +57,8 @@ struct PlayerState {
     bool retreated = false;          // already retreated this turn
     int supporterTurn = -1;      // turn a Supporter was last played
     int stadiumTurn = -1;        // turn a Stadium was last played
+    int stadiumUseTurn = -1;     // turn this player last used a Stadium's action…
+    const CardDef* stadiumUsed = nullptr;  // …and which Stadium that was
     int points = 0;
 };
 

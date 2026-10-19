@@ -75,6 +75,7 @@ public:
     // --- Decisions and chance ---
     int choose(int player, int options);  // the player's policy picks one of `options` (0 when only one)
     bool flip();                          // a coin: true = heads
+    Type rollEnergy(const PlayerState& p);  // a random energy type from p's deck, for the Energy Zone
     std::mt19937& rng() { return rng_; }
 
     // --- Log ---
@@ -91,7 +92,6 @@ public:
 private:
     void deal(int player);
     void startTurn();
-    Type rollEnergy(const PlayerState& p);  // a random energy type from p's deck, for the Energy Zone
     void showBoard();
     void knockOut(int player, PokemonSlot& slot);
     void promote(int player);
@@ -148,7 +148,7 @@ void Game::forEachMod(ModKind kind, const PokemonSlot* subject, int owner, Fn fn
                 break;
         }
         return subject->card->hasType(m.types) && (!m.stages || (m.stages & stageBit(subject->card->stage))) &&
-               (!m.names || m.names->has(subject->card->name));
+               (!m.names || m.names->has(subject->card->name)) && (!m.notMega || !subject->card->mega);
     };
     for (int p = 0; p < 2; ++p) {
         auto visit = [&](const PokemonSlot& source) {

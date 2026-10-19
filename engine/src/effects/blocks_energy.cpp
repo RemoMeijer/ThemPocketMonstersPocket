@@ -69,6 +69,21 @@ private:
     int n_;
 };
 
+// (cycle-energy): the energy waiting in your Energy Zone goes to the discard pile, the shown next one comes up
+// and a new next one is rolled, like an extra turn for the zone (Rainbow Cave, Remco).
+class CycleEnergy : public Stmt {
+public:
+    void run(EffectCtx& ctx) const override {
+        PlayerState& p = ctx.game.state().players[ctx.player];
+        if (!p.energy) return;
+        ++p.discardEnergy[int(*p.energy)];
+        p.energy = p.nextEnergy;
+        p.nextEnergy = ctx.game.rollEnergy(p);
+        ctx.game.say("  Energy Zone: ", typeName(*p.energy), " (next: ", typeName(*p.nextEnergy), ")");
+    }
+    bool possible(EffectCtx& ctx) const override { return ctx.game.state().players[ctx.player].energy.has_value(); }
+};
+
 // (discard-energy TARGET TYPE|any N|all) and (discard-random-energy TARGET N).
 class DiscardEnergy : public Stmt {
 public:
@@ -228,6 +243,7 @@ void addEnergyWords(Words& w) {
     w.stmt["discard-energy-among"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<DiscardEnergyAmong>(b.target(arg(e, 0)), intArg(arg(e, 1)));
     }};
+    w.stmt["cycle-energy"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<CycleEnergy>(); }};
     w.stmt["attach-from-discard"] = {3, 3, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<AttachFromDiscard>(b.target(arg(e, 0)), typeArg(arg(e, 1)), intArg(arg(e, 2)));
     }};

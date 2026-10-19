@@ -52,7 +52,7 @@ const Num* ScriptBuilder::num(const SExpr& e) {
     return build(words().num, e, *this, "number");
 }
 
-// (KIND [amount] [:active] [:scope S] [:type T…] [:from T…] [:stage S…] [:name "A"…] [:needs "A"…] [:vs-ex] [:from-ex])
+// (KIND [amount] [:active] [:scope S] [:type T…] [:from T…] [:stage S…] [:name "A"…] [:needs "A"…] [:vs-ex] [:from-ex] [:not-mega])
 Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
     static const std::unordered_map<std::string, ModKind> kinds = {
         {"damage-taken", ModKind::DamageTaken},     {"damage-dealt", ModKind::DamageDealt},
@@ -63,7 +63,7 @@ Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
         {"cant-attack", ModKind::CantAttack},       {"cant-use-attack", ModKind::CantUseAttack},
         {"attack-cost", ModKind::AttackCost},       {"attack-flip", ModKind::AttackFlip},
         {"cant-supporter", ModKind::CantPlaySupporter}, {"cant-item", ModKind::CantPlayItem},
-        {"cant-attach-to-active", ModKind::CantAttachToActive},
+        {"cant-attach-to-active", ModKind::CantAttachToActive}, {"weakness-x2", ModKind::WeaknessTimesTwo},
     };
     static const std::unordered_map<std::string, ModScope> scopes = {
         {"self", ModScope::Self},           {"my-active", ModScope::MyActive}, {"my-all", ModScope::MyAll},
@@ -90,6 +90,8 @@ Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
             m.vsEx = true;
         } else if (a.atom == ":from-ex") {
             m.fromEx = true;
+        } else if (a.atom == ":not-mega") {
+            m.notMega = true;
         } else if (a.atom == ":name" || a.atom == ":needs") {
             auto list = std::make_shared<NameList>();
             values([&](const SExpr& n) { list->names.push_back(n.atom); });

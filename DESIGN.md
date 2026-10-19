@@ -281,15 +281,15 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 | No evolving on your own first turn, or on a Pokémon's first turn in play | Tips | ✓ |
 | "Once during your turn" abilities: once per card, so an evolved Pokémon can use its own ability the same turn | App | ✓ evolving resets the mark (R3) |
 | "If this Pokémon moved from your Bench to the Active Spot this turn" (Golisopod, Scizor, Basculin, Crobat): it counts for the card now on top. Evolved on the Bench then moved up, or benched this turn then moved up: yes. Moved up as Wimpod, then evolved: no | Remco | ✓ evolving resets the mark, like R3 |
-| Stadium actions ("once during each player's turn"): once per player per turn, per Stadium card; a new Stadium can be used again | App | ○ no Stadium actions yet |
-| Stadium effects "at the end of each player's turn" (Hiking Trail, Soothing Shore) come last: after the end-of-turn abilities and after Pokémon Checkup | Remco | ○ batch 4 |
-| Rainbow Cave: discarding the Energy Zone's energy works like an extra turn for the zone: the shown next energy becomes the current one, and a new next one is rolled | Remco | ○ batch 4 |
+| Stadium actions ("once during each player's turn"): once per player per turn, per Stadium card; a new Stadium can be used again | App | ✓ the Use Stadium move (R5) |
+| Stadium effects "at the end of each player's turn" (Hiking Trail, Soothing Shore) come last: after the end-of-turn abilities and after Pokémon Checkup | Remco | ✓ |
+| Rainbow Cave: discarding the Energy Zone's energy works like an extra turn for the zone: the shown next energy becomes the current one, and a new next one is rolled | Remco | ✓ |
 | Attacking ends the turn; attacks with no cost can be used on the first player's turn 1 | FAQ | ✓ |
 | Turn limit 30 (both players' turns together), then a tie | App | ✓ |
 | **Damage** | | |
 | Order: base → attacker's effects → Weakness → defender's effects → floor at 0 at the end | Battle FAQ | ✓ (R2) |
 | Weakness +20, only on the Active Pokémon | Tips | ✓ |
-| Bounded Field: Weakness ×2 takes the place of +20 in the damage order (base → attacker's effects → ×2 → defender's effects) | Remco | ○ batch 4 |
+| Bounded Field: Weakness ×2 takes the place of +20 in the damage order (base → attacker's effects → ×2 → defender's effects) | Remco | ✓ |
 | Damage from an attack's text ("do 20 damage to each of your opponent's Pokémon", Lurantis) gets Weakness when it hits the Active Pokémon | Tips (only the Bench is excluded); deckgym-core's Lurantis test | ✓ |
 | Random multi-hit attacks (Wugtrio ex: "chosen at random 3 times… do 50 damage to it"): the picks on one Pokémon add up first and are dealt as one, so Weakness and "+N damage" count once. All 3 on a Weak Active: 150 + 20 | Remco | ✓ `(hits …)` |
 | The defender's "takes −N" effects also apply on the Bench | Assumed | ✓ |
@@ -319,7 +319,7 @@ Updated 2026-10-16. One row per rule: what the engine does and how we know.
 
 Each step adds tests for its blocks, adds rules to the state checker (`check_states`), and reports the new card coverage.
 
-Status 2026-10-16: steps 0–6 are built, and step 7 is ongoing (80% of cards playable). Stadium actions, "once during each player's turn", are still missing from step 6: that's R5 in PROGRESS.md.
+Status 2026-10-19: steps 0–6 are built, Stadium actions (R5) included, and step 7 is ongoing (84% of cards playable; coverage batches in PROGRESS.md).
 
 | Step | What | Unlocks |
 |---|---|---|

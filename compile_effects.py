@@ -112,7 +112,7 @@ STATUS = r"(Asleep|Burned|Confused|Paralyzed|Poisoned)"
 CONDITIONS = [
     (r"heads", lambda m, c: "heads"),
     (r"tails", lambda m, c: "tails"),
-    (r"both of them are heads", lambda m, c: "all-heads"),
+    (r"(?:both|all) of them are heads", lambda m, c: "all-heads"),
     (r"both of them are tails", lambda m, c: "all-tails"),
     (r"at least (\d+) of them are heads", lambda m, c: f"(>= heads {m.group(1)})"),
     (REF + r" has damage on it", lambda m, c: f"(has-damage {target(m)})"),
@@ -314,6 +314,13 @@ CLAUSES = [
     (r"switch in (?:1|one) of your opponent's Benched (Basic )?Pokemon( that has damage on it)? to the Active Spot",
      lambda m, c: ("post", f"(switch-in (choose opp bench{' basic' if m.group(1) else ''}{' damaged' if m.group(2) else ''}))")),
     (r"your turn ends", lambda m, c: ("post", "(end-turn)")),
+    (r"draw cards until you have (\d+) cards in your hand", lambda m, c: ("post", f"(draw-until {m.group(1)})")),
+    (r"shuffle an? (Basic )?Pokemon from your hand into your deck",
+     lambda m, c: ("post", f"(hand-to-deck {'basic' if m.group(1) else 'pokemon'})")),
+    (r"choose a card in your hand and switch it with a random (Supporter|Item|Pokemon Tool) card in your deck",
+     lambda m, c: ("post", f"(swap-for {TRAINER_KINDS[m.group(1)]})")),
+    (r"discard the Energy that has been generated in your Energy Zone", lambda m, c: ("post", "(cycle-energy)")),
+    (r"the next Energy is produced", lambda m, c: ("post", "")),  # follows (cycle-energy), which does it
     (r"choose 1 of your opponent's Benched Pokemon and move a random Energy from it to your opponent's Active Pokemon",
      lambda m, c: ("post", "(move-random-energy (choose opp bench) opp-active 1)")),
     (r"choose (1 of your [^,]+)", lambda m, c: ("post", f"(pick {ref_only(m.group(1))})")),  # the rest acts on "that Pokemon"
@@ -607,6 +614,16 @@ STADIUMS = [
 ]
 
 
+def as_you(text):
+    """A Stadium's "that player draws … their hand" as "draw … your hand", so the usual patterns read it."""
+    text = re.sub(r"^(draws|heals|puts)\b", lambda m: m.group(1)[:-1], text)
+    for old, new in (("that player puts", "put"), ("that player draws", "draw"), ("that player heals", "heal"),
+                     ("If they do, they draw", "If you do, draw"), ("If they do,", "If you do,"),
+                     ("until they have", "until you have")):
+        text = text.replace(old, new)
+    return re.sub(r"\btheir\b", "your", text)
+
+
 def stage_opt(s):
     return {"Basic ": " :stage basic", "Stage 1 ": " :stage stage1", "Stage 2 ": " :stage stage2"}.get(s or "", "")
 
@@ -645,6 +662,16 @@ def compile_card(kind, text, ctx):
                 return f"(tool {fn(m)})"
         raise Unsupported(f"tool: {text}")
     if kind == "Stadium":
+        m = re.fullmatch(r"(Once during each player's turn, that player may|At the end of each player's turn, that player) (.+)", text)
+        if m:  # the player whose turn it is runs it: "that player … their …" reads as "you … your …"
+            form = "stadium-action" if m.group(1).startswith("Once") else "stadium-end-of-turn"
+            body = seq(with_pick([s for _, s in statements(as_you(m.group(2)), ctx)]))
+            if not body:
+                raise Unsupported(f"stadium: {text}")
+            return f"({form} {body})"
+        if text == ("When applying the opponent's Active Pokemon's Weakness to damage from attacks used by Pokemon in play "
+                    "(both yours and your opponent's) that aren't Mega Evolution Pokemon ex, apply Weakness as ×2."):
+            return "(stadium (weakness-x2 :not-mega))"
         for rx, fn in STADIUMS:
             m = re.fullmatch(rx, text.rstrip("."))
             if m:
@@ -778,6 +805,12 @@ EXAMPLES = [
      '(play (from-discard random 1 opp hand item (except "Team Rocket\'s Thieving Machine")))'),
     ("ability", "", "Once during your turn, you may attach a {R} Energy from your discard pile to this Pokémon. If you do, do 20 damage to this Pokémon.",
      "(activated (then (attach-from-discard self fire 1) (damage self 20)))"),
+    ("Stadium", "", "Once during each player's turn, that player may flip a coin. If heads, that player puts a random Pokémon from their deck into their hand.",
+     "(stadium-action (seq (flip 1) (if heads (search 1 hand pokemon))))"),
+    ("Stadium", "", "Once during each player's turn, that player may shuffle a Basic Pokémon from their hand into their deck. If they do, they draw a card.",
+     "(stadium-action (then (hand-to-deck basic) (draw 1)))"),
+    ("Stadium", "", "At the end of each player's turn, that player draws cards until they have 3 cards in their hand.",
+     "(stadium-end-of-turn (draw-until 3))"),
     ("ability", "", "If you have Arceus or Arceus ex in play, this Pokémon takes −30 damage from attacks.",
      '(passive (damage-taken -30 :needs "Arceus" "Arceus ex"))'),
 ]

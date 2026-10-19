@@ -11,6 +11,8 @@
 //              (tool MOD…)     a Tool: modifiers for the Pokémon it is attached to
 //              (at-end-of-turn [:active] STMT)  a Tool that does something at the end of your turn (self = its Pokémon)
 //              (stadium MOD…)  a Stadium: modifiers for every Pokémon in play unless a :scope says otherwise
+//              (stadium-action STMT)       a Stadium: "Once during each player's turn, that player may…" (player = them)
+//              (stadium-end-of-turn STMT)  a Stadium: "At the end of each player's turn, that player…" (player = them)
 //              (passive MOD…)  a Fossil played as a Pokémon
 #include <fstream>
 #include <stdexcept>
@@ -89,6 +91,10 @@ void readCardText(CardDef& c, const SExpr& e, ScriptBuilder& b) {
         readAbility(c, e, b);
     else if (form == "stadium" && c.isTrainer(TrainerKind::Stadium))
         modifiers(c, e, b, ModScope::All);
+    else if ((form == "stadium-action" || form == "stadium-end-of-turn") && c.isTrainer(TrainerKind::Stadium)) {
+        if (argCount(e) != 1) scriptFail("expected one statement", e);
+        (form == "stadium-action" ? c.stadiumAction : c.endOfTurn) = b.stmt(arg(e, 0));
+    }
     else if (form == "passive" && c.isPokemon())
         modifiers(c, e, b, ModScope::Self);
     else

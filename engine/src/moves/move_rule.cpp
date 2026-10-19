@@ -15,8 +15,8 @@ const MoveRule& moveRule(ActionKind kind) {
     static const ChooseRule choose;
     static const MoveRule* const rules[ActionKindCount] = {
         &placeActiveRule(),  &placeBenchRule(), &evolveRule(),  &playTrainerRule(),
-        &attachToolRule(),   &attachEnergyRule(), &useAbilityRule(), &retreatRule(),
-        &attackRule(),       &endTurnRule(),    &choose,
+        &attachToolRule(),   &attachEnergyRule(), &useAbilityRule(), &useStadiumRule(),
+        &retreatRule(),      &attackRule(),     &endTurnRule(),    &choose,
     };
     return *rules[int(kind)];
 }

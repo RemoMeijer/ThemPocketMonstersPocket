@@ -69,6 +69,7 @@ struct CardDef {
     bool endOfTurnWhileActive = false;
     const Stmt* onAttach = nullptr;    // "Whenever you attach a {T} Energy from your Energy Zone to this Pokémon…"
     const Stmt* onEvolve = nullptr;    // "When you play this Pokémon from your hand to evolve 1 of your Pokémon, you may…"
+    const Stmt* stadiumAction = nullptr;  // a Stadium's "Once during each player's turn, that player may…"
     uint16_t onAttachTypes = 0;        // 0 = any type
     bool onAttachWhileActive = false;
 

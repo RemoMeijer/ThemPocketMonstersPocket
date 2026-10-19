@@ -24,6 +24,7 @@ const MoveRule& playTrainerRule();
 const MoveRule& attachToolRule();
 const MoveRule& attachEnergyRule();
 const MoveRule& useAbilityRule();
+const MoveRule& useStadiumRule();
 const MoveRule& retreatRule();
 const MoveRule& attackRule();
 const MoveRule& endTurnRule();

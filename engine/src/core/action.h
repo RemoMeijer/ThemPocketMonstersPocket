@@ -9,12 +9,13 @@ enum class ActionKind : uint8_t {
     AttachTool,    // index = hand position of the Tool, target = Pokémon
     AttachEnergy,  // target = Pokémon
     UseAbility,    // target = Pokémon whose "once during your turn" ability to use
+    UseStadium,    // the Stadium in play's "once during each player's turn" action
     Retreat,       // index = bench position to swap in
     Attack,        // index = attack number on the Active
     EndTurn,       // during Setup: done placing
     Choose,        // index = option; asked inside an effect or after a knock-out
 };
-constexpr int ActionKindCount = 11;
+constexpr int ActionKindCount = 12;
 
 struct Action {
     ActionKind kind;

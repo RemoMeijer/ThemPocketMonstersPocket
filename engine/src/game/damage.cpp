@@ -33,7 +33,7 @@ int Game::dealAttackDamage(int attacker, uint16_t attackerUid, uint16_t targetUi
     // Weakness counts whenever the attack does damage, even after step 2 took it to 0 or below: the floor
     // is only at the end (official battle FAQ, DESIGN.md §5).
     bool weak = weakness && active && base > 0 && target->card->weakness && source->card->type == target->card->weakness;
-    if (weak) damage += rules::WeaknessBonus;
+    if (weak) damage = hasMod(ModKind::WeaknessTimesTwo, *source, attacker) ? damage * 2 : damage + rules::WeaknessBonus;
     forEachMod(ModKind::DamageTaken, target, owner, [&](const Modifier& m) {
         if (source->card->hasType(m.fromTypes) && (!m.fromEx || source->card->ex)) damage += m.amount;
     });

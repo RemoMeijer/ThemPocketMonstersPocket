@@ -196,6 +196,9 @@ void checkActions(const GameState& s, const std::vector<Action>& actions) {
             case ActionKind::AttachTool:
                 EXPECT(p.hand[a.index]->isTrainer(TrainerKind::Tool) && !slotOf(p, a.target).tool);
                 break;
+            case ActionKind::UseStadium:  // once per player per turn and per Stadium card
+                EXPECT(s.stadium && s.stadium->stadiumAction && !(p.stadiumUseTurn == s.turn && p.stadiumUsed == s.stadium));
+                break;
             case ActionKind::UseAbility:
                 EXPECT(slotOf(p, a.target).card->activated && slotOf(p, a.target).abilityTurn != s.turn);
                 break;

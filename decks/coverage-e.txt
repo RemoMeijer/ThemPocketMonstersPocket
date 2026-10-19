@@ -1,0 +1,19 @@
+# Coverage batch 4, Grass/Water: every Stadium with an action or an end-of-turn effect, plus Bounded Field.
+# Grass Basics for Fragrant Forest, Water energy for Soothing Shore, a Tool for Kid's Room.
+energy: Grass, Water
+
+2 A1-001   # Bulbasaur
+2 A1-053   # Squirtle
+2 A1-062   # Tentacool
+2 B3-133   # Castform: +20 if a Stadium is in play
+2 A4-016   # Sunkern
+1 B2a-093  # Mesagoza
+1 B2b-069  # Hiking Trail
+1 B3-153   # Fragrant Forest
+1 B3-155   # Bounded Field
+1 B3a-074  # Area Zero
+1 B3b-069  # Kid's Room
+1 B4-154   # Soothing Shore
+1 B4-155   # Rainbow Cave
+1 B4a-072  # Arcade
+1 A2-147   # Giant Cape
