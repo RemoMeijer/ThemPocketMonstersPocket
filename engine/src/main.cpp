@@ -1,4 +1,5 @@
-// tcgp <deck.txt> [opponent-deck.txt]   plays one game and prints it (a mirror match with one deck)
+// tcgp <deck.txt> [opponent-deck.txt [p1 p2]]   plays one game and prints it (a mirror match with one deck); p1, p2:
+//                                       random (default) or heuristic
 // tcgp --coverage                        how many cards the engine can play, and the commonest reasons it can't
 // tcgp --unsupported                     every card the engine can't play, with its full reason
 // tcgp --match N deckA deckB [random|heuristic] [random|heuristic]
@@ -84,8 +85,8 @@ int match(const CardDb& db, int argc, char** argv) {
 
 int main(int argc, char** argv) {
     bool isMatch = argc >= 5 && argc <= 7 && std::string(argv[1]) == "--match";
-    if ((argc < 2 || argc > 3) && !isMatch) {
-        std::cerr << "usage: tcgp <deck.txt> [opponent-deck.txt]\n       tcgp --coverage | --unsupported\n"
+    if ((argc < 2 || argc > 5) && !isMatch) {
+        std::cerr << "usage: tcgp <deck.txt> [opponent-deck.txt [random|heuristic] [random|heuristic]]\n       tcgp --coverage | --unsupported\n"
                      "       tcgp --match N deckA deckB [random|heuristic] [random|heuristic]\n";
         return 2;
     }
@@ -105,9 +106,9 @@ int main(int argc, char** argv) {
         Deck deck0 = loadDeck(argv[1], db);
         Deck deck1 = loadDeck(argc > 2 ? argv[2] : argv[1], db);
         std::cout << "P1: " << deck0.name << "   P2: " << deck1.name << "\n\n";
-        RandomPolicy p1, p2;
+        std::unique_ptr<Policy> p1 = makePolicy(argc > 3 ? argv[3] : "random"), p2 = makePolicy(argc > 4 ? argv[4] : "random");
         PrintLog log;
-        Game game(deck0, deck1, p1, p2, &log);
+        Game game(deck0, deck1, *p1, *p2, &log);
         Result r = game.run();
         std::cout << "\nResult: " << (r.winner < 0 ? "draw" : "P" + std::to_string(r.winner + 1) + " wins")
                   << " after " << r.turns << " turns\n";

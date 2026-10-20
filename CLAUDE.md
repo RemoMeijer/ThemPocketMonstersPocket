@@ -33,7 +33,9 @@ check_cards.py      cards.tsv vs deckgym-core's database, a second source: print
 check_all.sh        check_states over all decks in parallel (--row K: deck K against every deck)
 compile_effects.py  card text → data/effects.tsv   (sentence patterns → effect scripts, has a self-test)
 data/effects_manual.tsv  hand-written scripts for one-off cards; a card listed there skips the patterns
-decks/*.txt         "energy: Water" + "2 A1-053" lines
+decks/*.txt         "energy: Water" + "2 A1-053" lines; decks/found/ holds decks the search found (not in check_all.sh)
+deckgen.py          random legal decks from Pokémon lines, plus mutations and crossover for the search
+search_decks.py     evolutionary deck search with tcgp-run; writes results/<run>/report.md
 engine/src/
   core/     rules.h (every rule number), state.h (plain, copyable game state), action.h, view.h
   cards/    card and deck loading, deck rules
@@ -94,13 +96,25 @@ engine/build/check_states decks/pikachu.txt decks/charizard.txt decks/abilities.
 Play and print one game:
 
 ```bash
-engine/build/tcgp decks/pikachu.txt decks/gardevoir.txt
+engine/build/tcgp decks/pikachu.txt decks/gardevoir.txt heuristic heuristic
 ```
 
 Many games on all threads: one pairing, or with more decks the full matrix (`--games N`, `--p0`/`--p1 random|heuristic`, `--csv FILE`):
 
 ```bash
 engine/build/tcgp-run --games 1000 decks/pikachu.txt decks/charizard.txt decks/gardevoir.txt
+```
+
+Search for strong decks (`--generations`, `--population`, `--out DIR`; results in `results/`, not in git):
+
+```bash
+python3 search_decks.py --generations 30
+```
+
+Generate legal random decks, or test the generator (`deckgen.py --test`):
+
+```bash
+python3 deckgen.py 10 /tmp/decks
 ```
 
 Win rate of one deck against another on one thread, with a player for each (`random` or `heuristic`; the first player alternates):

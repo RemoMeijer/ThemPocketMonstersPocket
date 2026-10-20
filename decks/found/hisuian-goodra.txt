@@ -1,0 +1,17 @@
+# g028-48
+energy: Water, Psychic, Metal
+
+2 B1-177    # Goomy
+2 B3b-049   # Hisuian Sliggoo
+2 B3b-050   # Hisuian Goodra
+1 B3-150    # Cabbie
+1 A4-151    # Elemental Switch
+1 A2b-069   # Iono
+1 B1-226    # Lisia
+1 B2a-093   # Mesagoza
+2 A3-146    # Poison Barb
+2 P-A-005   # Poké Ball
+1 P-A-001   # Potion
+2 P-A-007   # Professor's Research
+1 P-A-006   # Red Card
+1 A3a-064   # Repel

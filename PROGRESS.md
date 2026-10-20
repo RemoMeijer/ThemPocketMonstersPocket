@@ -213,9 +213,13 @@ In order. Each step gets a short plan, then tests, `check_states` at 0 violation
    - step 1, done 2026-10-20: the player picks every Energy type that is paid, discarded, moved or taken from the
      discard pile, and may discard a Fossil from play; `tcgp-run` plays one pairing or a deck matrix on all threads
      (about 28,000 heuristic games/s, CSV out);
-   - **step 2, next:** the deck generator and the evolutionary deck search with the heuristic player, which give the
-     first deck ideas;
-   - step 3: the Python bridge with batched GPU decisions, and the encoding;
+   - step 2, done 2026-10-20: `deckgen.py` (legal decks from Pokémon lines, Trainers chosen by their scripts, mutations,
+     crossover; `--test`) and `search_decks.py` (64 decks a generation, successive halving against a pool of the
+     reference decks plus a hall of fame, at most 3 elites per main line, about 2 s a generation; report.md with the
+     top 10, their matchup table and the Nash mix). First run: Mega Sableye ex walls, Mimikyu ex, Hisuian Goodra and
+     Mismagius ex lead; one of each is in `decks/found/`. The reference decks are weak test decks, so these results
+     say more about them than about the real meta;
+   - **step 3, next:** the Python bridge with batched GPU decisions, and the encoding (first: PyTorch on the GTX 1050);
    - step 4: the player network (cloning the heuristic, then self-play);
    - step 5: the deck networks;
    - step 6: the loop.

@@ -1,7 +1,10 @@
 // tcgp-run: many games between decks on all threads. Two decks are one pairing; more decks are every ordered pair
-// (deck i as deck A against deck j), the full matrix. Run from the project folder:
-//   tcgp-run [--games N] [--threads T] [--p0 random|heuristic] [--p1 random|heuristic] [--csv FILE] deck1.txt deck2.txt …
+// (deck i as deck A against deck j), the full matrix. With --against, every deck before it plays (as deck A) every
+// deck after it (the pool), and no others. Run from the project folder:
+//   tcgp-run [--games N] [--threads T] [--p0 random|heuristic] [--p1 random|heuristic] [--csv FILE] [--quiet]
+//            deck1.txt deck2.txt … [--against pool1.txt pool2.txt …]
 // --p0 plays deck A and --p1 deck B (heuristic by default). Seats swap every game, as in tcgp --match.
+// --quiet prints nothing: the results go only to the CSV.
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -40,6 +43,8 @@ int main(int argc, char** argv) {
     unsigned threads = std::max(1u, std::thread::hardware_concurrency());
     std::string p0 = "heuristic", p1 = "heuristic", csv;
     std::vector<std::string> paths;
+    std::size_t mains = 0;  // with --against: the decks before it; 0 without
+    bool quiet = false;
     try {
         for (int i = 1; i < argc; ++i) {
             std::string a = argv[i];
@@ -49,14 +54,20 @@ int main(int argc, char** argv) {
             else if (a == "--p0" && hasValue) p0 = argv[++i];
             else if (a == "--p1" && hasValue) p1 = argv[++i];
             else if (a == "--csv" && hasValue) csv = argv[++i];
+            else if (a == "--quiet") quiet = true;
+            else if (a == "--against" && !mains) {
+                if (paths.empty()) throw std::runtime_error("--against needs decks before and after it");
+                mains = paths.size(), paths.insert(paths.end(), argv + i + 1, argv + argc), i = argc;
+            }
             else if (a.starts_with("--")) throw std::runtime_error("unknown option " + a);
             else paths.push_back(a);
         }
         if (paths.size() < 2 || games < 1 || threads < 1) throw std::runtime_error("need two decks or more");
+        if (mains == paths.size()) throw std::runtime_error("--against needs decks before and after it");
         makePolicy(p0), makePolicy(p1);  // fail early on an unknown player name
     } catch (const std::exception& e) {
         std::cerr << "error: " << e.what() << "\nusage: tcgp-run [--games N] [--threads T] [--p0 random|heuristic] "
-                  << "[--p1 random|heuristic] [--csv FILE] deck1.txt deck2.txt [deck3.txt …]\n";
+                  << "[--p1 random|heuristic] [--csv FILE] [--quiet] deck1.txt deck2.txt [deck3.txt …] [--against pool.txt …]\n";
         return 2;
     }
     try {
@@ -64,11 +75,16 @@ int main(int argc, char** argv) {
         const CardDb db = CardDb::load("data/cards.tsv", std::filesystem::exists(effects) ? effects : "");
         std::vector<Deck> decks;
         for (const std::string& p : paths) decks.push_back(loadDeck(p, db));
+        std::vector<int> rows, cols;  // deck A down the side, deck B across
+        for (int i = 0; i < int(decks.size()); ++i) {
+            if (!mains || i < int(mains)) rows.push_back(i);
+            if (!mains || i >= int(mains)) cols.push_back(i);
+        }
         std::vector<std::pair<int, int>> pairings;  // (deck A, deck B)
-        if (decks.size() == 2) pairings.push_back({0, 1});
+        if (!mains && decks.size() == 2) pairings.push_back({0, 1});
         else
-            for (int i = 0; i < int(decks.size()); ++i)
-                for (int j = 0; j < int(decks.size()); ++j)
+            for (int i : rows)
+                for (int j : cols)
                     if (i != j) pairings.push_back({i, j});
 
         // Every game is one (pairing, game) number; threads take the next one until all are played. The CardDb and
@@ -115,21 +131,29 @@ int main(int argc, char** argv) {
             long wins = tallies[i].wins, draws = tallies[i].draws;
             Rate r = winRate(wins, games);
             rate[std::size_t(a)][std::size_t(b)] = r.p;
-            std::printf("%s vs %s: wins %ld, draws %ld, losses %ld; win rate %.1f%% (%.1f-%.1f%%)\n", shortName(decks[a]).c_str(),
+            if (!quiet) std::printf("%s vs %s: wins %ld, draws %ld, losses %ld; win rate %.1f%% (%.1f-%.1f%%)\n", shortName(decks[a]).c_str(),
                         shortName(decks[b]).c_str(), wins, draws, games - wins - draws, 100 * r.p, 100 * r.lo, 100 * r.hi);
             if (out.is_open()) out << decks[a].name << ',' << decks[b].name << ',' << games << ',' << wins << ',' << draws << ','
                          << games - wins - draws << ',' << r.p << ',' << r.lo << ',' << r.hi << '\n';
         }
-        if (decks.size() > 2) {  // win rates in %, deck A down the side; avg: its mean over all opponents
+        if (quiet) return 0;
+        if (pairings.size() > 1) {  // win rates in %, deck A down the side; avg: its mean over all opponents
+            if (mains) {
+                std::printf("\ndeck B:");
+                for (int j : cols) std::printf(" %d %s", j + 1, shortName(decks[std::size_t(j)]).c_str());
+                std::printf("\n");
+            }
             std::printf("\n%-16s avg ", "deck A \\ B");
-            for (std::size_t j = 0; j < decks.size(); ++j) std::printf("%4zu", j + 1);
+            for (int j : cols) std::printf("%4d", j + 1);
             std::printf("\n");
-            for (std::size_t i = 0; i < decks.size(); ++i) {
+            for (int i : rows) {
                 double sum = 0;
-                for (std::size_t j = 0; j < decks.size(); ++j) sum += i == j ? 0 : rate[i][j];
-                std::printf("%2zu %-13.13s %4.0f ", i + 1, shortName(decks[i]).c_str(), 100 * sum / double(decks.size() - 1));
-                for (std::size_t j = 0; j < decks.size(); ++j)
-                    i == j ? std::printf("   -") : std::printf("%4.0f", 100 * rate[i][j]);
+                int n = 0;
+                for (int j : cols)
+                    if (i != j) sum += rate[std::size_t(i)][std::size_t(j)], ++n;
+                std::printf("%2d %-13.13s %4.0f ", i + 1, shortName(decks[std::size_t(i)]).c_str(), 100 * sum / n);
+                for (int j : cols)
+                    i == j ? std::printf("   -") : std::printf("%4.0f", 100 * rate[std::size_t(i)][std::size_t(j)]);
                 std::printf("\n");
             }
         }

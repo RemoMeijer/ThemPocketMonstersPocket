@@ -1,0 +1,21 @@
+# g029-41
+energy: Darkness
+
+2 B3b-041   # Mega Sableye ex
+1 B3-155    # Bounded Field
+1 B3-150    # Cabbie
+1 A2-150    # Cyrus
+1 B4-148    # Deceptive Needle
+2 A4-151    # Elemental Switch
+1 B1-226    # Lisia
+1 A4-157    # Lyra
+1 A2-155    # Mars
+1 B1-223    # May
+1 B2a-093   # Mesagoza
+1 A4a-071   # Morty
+1 A3-146    # Poison Barb
+1 P-A-001   # Potion
+1 P-A-007   # Professor's Research
+1 B1-218    # Sitrus Berry
+1 B4a-071   # Team Rocket's Boss
+1 A4a-070   # Traveling Merchant

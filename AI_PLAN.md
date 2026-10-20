@@ -4,7 +4,8 @@ Rewritten 2026-10-20, in the order the work is done. Built so far:
 - every card plays, and golden tests guard the scripts;
 - the heuristic player: about 99% wins against random, about 2% draws in a mirror;
 - choice descriptors: every choice says what its options are;
-- step 1: every Energy-type choice and the Fossil discard go to the player, and the runner `tcgp-run`.
+- step 1: every Energy-type choice and the Fossil discard go to the player, and the runner `tcgp-run`;
+- step 2: `deckgen.py` and `search_decks.py` (first run: Mega Sableye ex, Mimikyu ex, Hisuian Goodra, Mismagius ex).
 
 ## The goal
 
@@ -66,7 +67,7 @@ decision itself, or it can't learn them.
 
 Seeds are dropped.
 
-## Step 2: the first deck search, with the heuristic player (CPU)
+## Step 2: the first deck search, with the heuristic player (CPU, done 2026-10-20)
 
 This gives deck ideas early, with what exists now, and the generator also supplies the training decks for step 4.
 

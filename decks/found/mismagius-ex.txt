@@ -1,0 +1,16 @@
+# g028-29
+energy: Psychic
+
+2 A2-066    # Misdreavus
+2 A2-067    # Mismagius ex
+1 B3-150    # Cabbie
+1 A2-150    # Cyrus
+1 A2b-069   # Iono
+1 B1-226    # Lisia
+2 A3-146    # Poison Barb
+2 P-A-005   # Poké Ball
+1 A2b-070   # Pokémon Center Lady
+2 P-A-001   # Potion
+2 P-A-007   # Professor's Research
+1 P-A-006   # Red Card
+2 A3a-064   # Repel

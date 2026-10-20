@@ -7,3 +7,5 @@ x/
 # raw downloads; the generated TSVs are committed so changes show up as diffs
 data/cards.json
 data/raw/
+# deck search runs (search_decks.py)
+results/
