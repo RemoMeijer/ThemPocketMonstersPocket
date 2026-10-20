@@ -14,15 +14,16 @@ The current focus is a correct engine: the right cards and the right rules. Stat
 - **Done:**
   - the rules core: milestones 1–2, the cleanup, rule fixes R1–R4, Trainers and abilities that need something to do before they can be used, and the 4 bug fixes from the 2026-10-16 review;
   - the effect system;
-  - card data from Limitless, every set up to B4b: 2,315 of 2,319 cards (99%) are playable;
-  - coverage batches 0–11 (batch 11: the one-offs, hand-written in `data/effects_manual.tsv`; Trainers: 144 of 152 now; all 13 Stadiums and all 26 Tools; memory of the last turn; knock-out triggers; about 70 Abilities; the long tail; Ultra Beast, Ancient and Future traits in `data/traits.tsv`).
+  - card data from Limitless, every set up to B4b: all 2,319 cards are playable;
+  - coverage batches 0–12 (batches 11–12: the one-offs, hand-written in `data/effects_manual.tsv`; Trainers: 144 of 152 now; all 13 Stadiums and all 26 Tools; memory of the last turn; knock-out triggers; about 70 Abilities; the long tail; Ultra Beast, Ancient and Future traits in `data/traits.tsv`).
 - **Next** (PROGRESS.md, "Next"):
-  - card coverage is done: Penny, Smeargle, Victini and Gholdengo are left out on purpose;
+  - card coverage is done: every card plays;
   - effect-script checks (golden tests);
   - seeds;
   - player choices;
   - the simulation runner (milestone 3);
-  - finding decks (milestone 4).
+  - finding decks (milestone 4);
+  - players and deck search with small learned models: [AI_PLAN.md](AI_PLAN.md).
 
 ## Layout
 
@@ -104,7 +105,7 @@ See which cards are supported and why the rest aren't (`--unsupported` lists eac
 engine/build/tcgp --coverage
 ```
 
-For memory and undefined-behaviour checks, `engine/build-debug` is configured with `-fsanitize=address,undefined`.
+For memory and undefined-behaviour checks, `engine/build-debug` is configured with `-O1 -fsanitize=address,undefined -fno-omit-frame-pointer` (`-O1`: unoptimized it runs far slower).
 
 ## Working rules
 

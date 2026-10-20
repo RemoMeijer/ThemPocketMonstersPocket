@@ -124,24 +124,24 @@ Each effect text becomes a short script in a small language with nested brackets
 An attack is a statement where `(hit)` marks where its printed damage is dealt; `pre` parts change that damage first,
 `post` parts come after. A card part's top-level form says how it plugs in (§3).
 
-**Vocabulary** (2026-10-19, about 175 words; `load_scripts.cpp` and the `blocks_*.cpp` files define them, each with its
+**Vocabulary** (2026-10-20, about 200 words; `load_scripts.cpp` and the `blocks_*.cpp` files define them, each with its
 argument count):
 
 | Kind | Words |
 |---|---|
 | Forms | `play` `tool` `stadium` `stadium-action` `stadium-end-of-turn` `passive` `activated` (`:active`, `:bench`, `:repeat`) and the triggers in §3 (`:active`, `:by-attack`, `:type`) |
-| Flow | `seq` `if` (with an else) `then` ("if you do") `one-of` (the player picks) `repeat` `pick` `nothing` `cancel` `end-turn` `flip` `flip-until-tails` |
-| Damage | `hit` (`:no-weakness`, `:ignore-effects`) `bonus` `set-damage` `damage` `hits` (random picks, added up first) `move-damage` `set-hp-left` `halve-hp` `knock-out` `copy-attack` |
+| Flow | `seq` `if` (with an else) `then` ("if you do") `one-of` (the player picks) `repeat` `pick` `nothing` `cancel` `end-turn` `flip` `flip-until-tails` `first-heads` `ko-check` (knock-outs in the middle of an attack) `use-supporter` |
+| Damage | `hit` (`:no-weakness`, `:ignore-effects`) `bonus` `set-damage` `damage` `hits` (random picks, added up first) `move-damage` `set-hp-left` `halve-hp` `knock-out` `copy-attack` `poison` (a set amount) `damage-at-end-of-opp-turn` `knock-out-at-end-of-opp-turn` (`:spot`) `devolve` `copy-attack-cards` (`copy-attack :energy`) |
 | Conditions on Pokémon | `status` `status-random` `cure` `cure-random` `heal` |
 | Energy | `attach-energy` (from the Zone) `attach-random-type` `attach-from-discard` (a type, `any`, `random`, `different`) `discard-energy` `discard-random-energy` `discard-energy-among` `move-energy` `move-random-energy` `cycle-energy` `change-energy-type` `change-next-energy` |
-| Cards | `draw` `draw-until` `search` (hand or Bench) `dig` `from-discard` `hand-to-deck` `discard-from-hand` `discard-hand-to` `discard-hand-random-of` `mill` `hand-to-deck-random` `shuffle-hand-draw` `opp-hand-to-deck` `opp-hand-discard` `top-card-if` `swap-pokemon` `swap-for` `rare-candy` `evolve-from-deck` |
+| Cards | `draw` `draw-until` `search` (hand or Bench) `dig` `from-discard` `hand-to-deck` `discard-from-hand` `discard-hand-to` `discard-hand-random-of` `mill` `hand-to-deck-random` `shuffle-hand-draw` `opp-hand-to-deck` `opp-hand-discard` `top-card-if` `swap-pokemon` `swap-for` `rare-candy` `evolve-from-deck` `shuffle-deck` `tools-to-deck` `opp-hand-to-bench` (`hand-to-deck-random any`) |
 | Board | `switch-in` `to-hand` `to-deck` `to-hand-instead` `discard-pokemon` `discard-tools` `discard-this` `tools-to-hand` `discard-stadium` `no-points` `effect` (a modifier for `this-turn`, `opp-next-turn`, `my-next-turn` or `while-active`) |
 | Targets | `self` `defending` `attacker` `picked` `my-active` `opp-active`, and pools `(choose …)` `(owner-chooses …)` `(random …)` `(each …)` over `my`/`opp`/`both` and `active`/`bench`/`all` |
 | Pokémon filters | `damaged` `ex` `not-ex` `mega` `basic` `stage1` `stage2` `evolution` `tool` `has-ability` `not-self` `not-picked` `not-new` `(type …)` `(name …)` `(name-has …)` `(evolves-from …)` `(has-energy …)` `(other-ability …)` `(max-hp …)` `(trait …)` |
-| Card filters | `pokemon` `basic` `stage1` `stage2` `trainer` `supporter` `item` `tool` `stadium` `mega` `(type …)` `(name …)` `(name-has …)` `(except …)` `(evolves-from …)` `(max-hp …)` `(has-attack …)` `(trait …)` |
-| Numbers | integers, `heads` `tails` `(* …)`, `energy` `energy-types` `types-on` `damage-on` `hp-left` `retreat-cost` `status-count` `count` `hand-size` `discard-count` `deck-count` `points` `points-needed` `points-last-turn` `tools` `ko-count` `with-attack` `dealt` |
-| Conditions | `>=` `<=` `=` `and` `or` `not`, `all-heads` `all-tails`, `has-damage` `has-tool` `has-status` `has-attack` `is-type` `is-ex` `is-basic` `is-evolution` `is-active` `half-hp` `at-zero` `energy-at-least` `extra-energy` `shared-energy` `exists` `moved-to-active` `evolved-this-turn` `evolved-from` `damaged-last-turn` `ko-last-turn` `used-last-turn` `healed` `played-supporter` `stadium-in-play` `my-turn` `first-turn` |
-| Modifiers | `damage-taken` `damage-dealt` `prevent-damage` `prevent-all` `prevent-effects` `prevent-flip` `prevent-first-hit` `prevent-ability-damage` `reflect` `hp` `retreat-cost` `no-retreat-cost` `cant-retreat` `cant-attack` `cant-use-attack` `attack-cost` `attack-flip` `cant-supporter` `cant-item` `cant-stadium` `cant-trainer` `cant-evolve` `cant-evolve-active` `cant-attach-to-active` `weakness-x2` `no-weakness` `no-conditions` `no-healing` `no-abilities` `poison-damage` `survive-at` `extra-point` `extra-tools` `extra-type` `double-energy` `evolve-early` `evolves-as` `previous-attacks` |
+| Card filters | `pokemon` `basic` `stage1` `stage2` `trainer` `supporter` `item` `tool` `stadium` `mega` `(type …)` `(name …)` `(name-has …)` `(except …)` `(evolves-from …)` `(max-hp …)` `(has-attack …)` `(trait …)` `(min-retreat …)` |
+| Numbers | integers, `heads` `tails` `(* …)`, `energy` `energy-types` `types-on` `damage-on` `hp-left` `retreat-cost` `status-count` `count` `hand-size` `discard-count` `deck-count` `points` `points-needed` `points-last-turn` `tools` `ko-count` `with-attack` `dealt` `top-count` `attack-uses` |
+| Conditions | `>=` `<=` `=` `and` `or` `not`, `all-heads` `all-tails`, `has-damage` `has-tool` `has-status` `has-attack` `is-type` `is-ex` `is-basic` `is-evolution` `is-active` `half-hp` `at-zero` `energy-at-least` `extra-energy` `shared-energy` `exists` `moved-to-active` `evolved-this-turn` `evolved-from` `damaged-last-turn` `ko-last-turn` `used-last-turn` `healed` `played-supporter` `stadium-in-play` `my-turn` `first-turn` `first-attack` (`has-tool` with a name) |
+| Modifiers | `damage-taken` `damage-dealt` `prevent-damage` `prevent-all` `prevent-effects` `prevent-flip` `prevent-first-hit` `prevent-ability-damage` `reflect` `hp` `retreat-cost` `no-retreat-cost` `cant-retreat` `cant-attack` `cant-use-attack` `attack-cost` `attack-flip` `cant-supporter` `cant-item` `cant-stadium` `cant-trainer` `cant-evolve` `cant-evolve-active` `cant-attach-to-active` `weakness-x2` `no-weakness` `no-conditions` `no-healing` `no-abilities` `poison-damage` `survive-at` `extra-point` `extra-tools` `extra-type` `double-energy` `evolve-early` `evolves-as` `previous-attacks` `extra-pick` `asleep-on-attach` `retreat-trap` `no-abilities` (timed too) `reflip-attack` `reflip-trainer` (`damage-dealt :any-target`) |
 | Modifier options | `:scope` (self, my-active, my-all, opp-active, opp-all, all) `:active` `:bench` `:type` `:stage` `:name` `:evolves-from` `:trait` `:with-energy` `:status` `:needs` `:if COND` `:from` `:from-ex` `:from-basic` `:vs-ex` `:not-mega` `:min-retreat` `:flip` `:energy` `:per-point` `:as` |
 
 **Where scripts come from:**
@@ -167,7 +167,7 @@ What guards against it today:
 
 **C++ side:** each script is parsed once when the cards load, into a tree of small block objects, one class per word. An unknown word makes the card unsupported and names the word. Nothing gets parsed during a game.
 
-This avoids writing C++ per card. There are about 175 words, and adding a card is a data change, unless its text needs a new word.
+This avoids writing C++ per card. There are about 200 words, and adding a card is a data change, unless its text needs a new word.
 
 ## 5. Damage pipeline (one place, fixed order)
 
@@ -390,6 +390,10 @@ Updated 2026-10-19. One row per rule: what the engine does and how we know.
 | "Choose a spot" (Meowscarada ex, Armaldo): only a spot with a Pokémon in it can be chosen | App (2026-10-20) | ✓ |
 | A copying attack (Mew ex, Ditto) is the attack that's used, not the copied one: a copied Sweets Relay doesn't count for Alcremie, and a copied "this Pokémon can't use X during your next turn" doesn't bind the copier | App (2026-10-20) | ✓ |
 | Fossils are Item cards outside play (deck, hand, discard pile): Pokémon searches (Poké Ball, May) don't find them, Item checks (Pachirisu) count them, Team Rocket's Boss can't bench them. In play a Fossil is a Basic Pokémon | App (2026-10-20) | ✓ |
+| **The last four (batch 12)** | | |
+| Penny and Smeargle: a random Supporter (Penny: one that isn't Penny, from the opponent's deck; Smeargle: from their hand) is used as if this player had played it; nothing happens when there is none or its effect has nothing to do | App (2026-10-20) | ✓ |
+| An effect used through Penny or Smeargle doesn't use another one (Smeargle finding a Penny does nothing) | Assumed | ✓ |
+| Victini and Gholdengo, taken literally: right after the coins they cover, the player may flip them all again, once a turn and one Ability of that name a turn; declining doesn't use the Ability up. Victini covers the coins of an attack's own text when one of the player's {R} Pokémon attacks (not Confusion, not "your opponent flips a coin" effects); Gholdengo covers the coins of the player's Trainer card effects, a Supporter used through Penny included, through Smeargle not (that's an Ability) | Ruling (2026-10-20) | ✓ |
 
 ## 11. Build order
 

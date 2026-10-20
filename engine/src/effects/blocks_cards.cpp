@@ -522,6 +522,38 @@ private:
     int cardsOf_;  // copy-attack-cards: 0 my, 1 opp; -1 = from the Pokémon TARGET picks
 };
 
+// (use-supporter SIDE ZONE FILTER…): "Look at a random Supporter card … from your opponent's deck (Penny) / hand
+// (Smeargle). Use the effect of that card as the effect of this card": a random matching Supporter there, whose effect
+// runs for this player when it has something to do. The card stays where it was; a deck is shuffled. An effect used
+// this way doesn't use another (ruling).
+class UseSupporter : public Stmt {
+public:
+    UseSupporter(bool opp, bool deck, CardFilter f) : opp_(opp), deck_(deck), f_(std::move(f)) {}
+    void run(EffectCtx& ctx) const override {
+        if (ctx.copyDepth) return;
+        PlayerState& p = ctx.game.state().players[sidePlayer(ctx, opp_)];
+        auto& pile = deck_ ? p.deck : p.hand;
+        std::vector<const CardDef*> hits;
+        for (const CardDef* c : pile)
+            if (c->isTrainer(TrainerKind::Supporter) && f_.matches(c)) hits.push_back(c);
+        if (deck_) std::shuffle(p.deck.begin(), p.deck.end(), ctx.game.rng());
+        if (hits.empty()) return ctx.game.say("  no Supporter there");
+        const CardDef* c = hits[std::uniform_int_distribution<std::size_t>(0, hits.size() - 1)(ctx.game.rng())];
+        ctx.game.say("  uses the effect of ", c->name);
+        EffectCtx use{ctx.game, ctx.player};
+        use.self = ctx.self;
+        use.card = c;
+        use.copyDepth = 1;
+        if (!c->play || !c->play->possible(use)) return ctx.game.say("  nothing to do");
+        c->play->run(use);
+        ctx.endsTurn |= use.endsTurn;
+    }
+
+private:
+    bool opp_, deck_;
+    CardFilter f_;
+};
+
 // (opp-hand-to-deck FILTER…), (opp-hand-discard FILTER…): you choose a matching card in your opponent's hand; it's
 // shuffled into their deck (Silver) or discarded (Absol). (opp-hand-to-bench FILTER…): a Basic Pokémon onto their
 // Bench, without its "when you play this Pokémon" Abilities (Team Rocket's Boss, ruling).
@@ -1181,6 +1213,11 @@ void addCardWords(Words& w) {
             else scriptFail("unknown copy-attack option", e);
         }
         return b.make<CopyAttack>(b.target(arg(e, 0)), random, notEx, energy);
+    }};
+    w.stmt["use-supporter"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
+        std::string zone = arg(e, 1).atom;
+        if (zone != "hand" && zone != "deck") scriptFail("use-supporter: hand or deck", e);
+        return b.make<UseSupporter>(oppArg(arg(e, 0)), zone == "deck", parseCardFilter(e, 2));
     }};
     w.stmt["copy-attack-cards"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) {
         return b.make<CopyAttack>(nullptr, true, false, false, oppArg(arg(e, 0)) ? 1 : 0);

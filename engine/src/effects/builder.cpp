@@ -67,7 +67,7 @@ Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
         {"cant-attach-to-active", ModKind::CantAttachToActive}, {"weakness-x2", ModKind::WeaknessTimesTwo},
         {"no-conditions", ModKind::NoConditions},   {"prevent-effects", ModKind::PreventEffects},
         {"prevent-ability-damage", ModKind::PreventAbilityDamage},
-        {"extra-tools", ModKind::ExtraTools},       {"survive-at", ModKind::SurviveAt},
+        {"extra-tools", ModKind::ExtraTools}, {"reflip-attack", ModKind::ReflipAttack}, {"reflip-trainer", ModKind::ReflipTrainer},       {"survive-at", ModKind::SurviveAt},
         {"extra-point", ModKind::ExtraPoint},       {"cant-stadium", ModKind::CantPlayStadium},
         {"cant-evolve-active", ModKind::CantEvolveActive}, {"no-healing", ModKind::NoHealing},
         {"poison-damage", ModKind::PoisonDamage},   {"prevent-first-hit", ModKind::PreventFirstHit},

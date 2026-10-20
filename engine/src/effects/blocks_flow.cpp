@@ -49,12 +49,11 @@ class Flip : public Stmt {
 public:
     Flip(const Num* n, bool untilTails) : n_(n), untilTails_(untilTails) {}
     void run(EffectCtx& ctx) const override {
-        ctx.heads = ctx.tails = 0;
-        if (untilTails_) {
-            while (ctx.heads < 100 && coin(ctx)) ++ctx.heads;  // 100: just a safety stop
-            ctx.tails = 1;
-        } else {
-            for (int i = n_->eval(ctx); i > 0; --i) ++(coin(ctx) ? ctx.heads : ctx.tails);
+        flipAll(ctx);
+        if (PokemonSlot* r = reflipper(ctx); r && ctx.game.choose(ctx.player, 2) == 1) {
+            r->abilityTurn = ctx.game.state().turn;
+            ctx.game.say("  ", r->card->name, "'s ", r->card->abilities[0].name, ": the coins are flipped again");
+            flipAll(ctx);
         }
     }
     bool possible(EffectCtx&) const override { return false; }  // a coin on its own does nothing
@@ -63,6 +62,44 @@ private:
     // "The next time you flip any number of coins for the effect of an attack, Ability, or Trainer card…, the first
     // coin flip will definitely be heads" (Will): only these flips, not Checkup or Confusion (ruling).
     static bool coin(EffectCtx& ctx) { return ctx.game.effectFlip(ctx.player); }
+    void flipAll(EffectCtx& ctx) const {
+        ctx.heads = ctx.tails = 0;
+        if (untilTails_) {
+            while (ctx.heads < 100 && coin(ctx)) ++ctx.heads;  // 100: just a safety stop
+            ctx.tails = 1;
+        } else {
+            for (int i = n_->eval(ctx); i > 0; --i) ++(coin(ctx) ? ctx.heads : ctx.tails);
+        }
+    }
+    // "Once during your turn, after you flip any coins for an attack of 1 of your {R} Pokémon (Victini) / for an
+    // effect of your Trainer cards (Gholdengo), you may ignore all results of those coin flips and begin flipping
+    // those coins again. You can't use more than 1 … Ability each turn": a Pokémon of the flipping player that may.
+    static PokemonSlot* reflipper(EffectCtx& ctx) {
+        GameState& s = ctx.game.state();
+        PlayerState& me = s.players[ctx.player];
+        bool trainer = !ctx.attack && !ctx.self;
+        const PokemonSlot* user = ctx.attack ? ctx.game.find(ctx.self) : nullptr;
+        if (!trainer && !user) return nullptr;
+        auto usedToday = [&](const std::string& ability) {
+            if (me.active.abilityTurn == s.turn && !me.active.card->abilities.empty() && me.active.card->abilities[0].name == ability)
+                return true;
+            for (const PokemonSlot& b : me.bench)
+                if (b.abilityTurn == s.turn && !b.card->abilities.empty() && b.card->abilities[0].name == ability) return true;
+            return false;
+        };
+        PokemonSlot* found = nullptr;
+        auto check = [&](PokemonSlot& slot) {
+            if (found || !slot.card || slot.card->abilities.empty() || ctx.game.abilitiesOff(slot)) return;
+            for (const Modifier& m : slot.card->passive)
+                if (((m.kind == ModKind::ReflipTrainer && trainer) ||
+                     (m.kind == ModKind::ReflipAttack && user && (!m.types || user->hasType(m.types)))) &&
+                    !usedToday(slot.card->abilities[0].name))
+                    found = &slot;
+        };
+        check(me.active);
+        for (PokemonSlot& b : me.bench) check(b);
+        return found;
+    }
 
     const Num* n_;
     bool untilTails_;

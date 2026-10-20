@@ -29,6 +29,8 @@ enum class ModKind : uint8_t {
     PreventEffects,      // prevent the effects (not the damage) of the opponent's attacks (Clear Veil, Regice)
     PreventAbilityDamage,  // prevent damage from the opponent's Abilities (Protective Poncho)
     ExtraTools,          // amount more Pokémon Tools may be attached to it (Revavroom)
+    ReflipAttack,        // once a turn, flip again the coins of an attack by one of its owner's Pokémon of :type (Victini)
+    ReflipTrainer,       // once a turn, flip again the coins of its owner's Trainer card effect (Gholdengo)
     SurviveAt,           // would be Knocked Out by damage from an attack: isn't, and amount HP remains (Hala, Conkeldurr)
     ExtraPoint,          // its attack Knocks Out the opponent's Active Pokémon: amount more points (Iris)
     CantPlayStadium,     // player-wide (Snorlax)

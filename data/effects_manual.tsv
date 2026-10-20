@@ -92,3 +92,11 @@ B4-151	card	(play (effect this-turn me (extra-pick 1 :attack "Draco Meteor")))
 B4a-071	card	(play (repeat 3 (one-of (nothing) (opp-hand-to-bench basic))))
 # Team Rocket's Wobbuffet: the top 6 cards are looked at in place, then the deck is shuffled
 P-B-091	attack:0	(seq (set-damage (* (top-count 6 pokemon (name-has "Team Rocket")) 30)) (shuffle-deck my) (hit))
+# Penny: a random Supporter (not Penny) from the opponent's deck, its effect used as this card's
+A3b-069	card	(play (use-supporter opp deck (except "Penny")))
+# Smeargle: a random Supporter from the opponent's hand, its effect used as this Ability's
+B2-130	ability:0	(activated :active (use-supporter opp hand))
+# Victini: once a turn, flip again the coins of an attack by one of your {R} Pokémon
+B3-025	ability:0	(passive (reflip-attack :type fire))
+# Gholdengo: once a turn, flip again the coins of your Trainer card's effect
+B4a-051	ability:0	(passive (reflip-trainer))

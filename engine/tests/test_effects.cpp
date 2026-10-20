@@ -1487,6 +1487,43 @@ static void oneOffBatch() {
         d->run(ctx);
         CHECK(hand.size() == 1 && hand[0] == &t.cards[3] && s.players[0].discard.back() == &gear && !d->possible(ctx));
     }
+    {   // use-supporter: a random Supporter of the opponent's (not the excluded one); its effect runs for this player
+        Table t;
+        CardDef draw2 = trainer(TrainerKind::Supporter, "Draw Two", "(draw 2)");
+        CardDef penny = trainer(TrainerKind::Supporter, "Penny", "(draw 5)");
+        GameState& s = t.position();
+        s.players[1].deck.clear();
+        s.players[1].deck.push_back(&draw2);
+        s.players[1].deck.push_back(&penny);
+        std::size_t hand = s.players[0].hand.size();
+        EffectCtx ctx{t.game, 0};
+        stmt("(use-supporter opp deck (except \"Penny\"))")->run(ctx);
+        CHECK(s.players[0].hand.size() == hand + 2 && s.players[1].deck.size() == 2);
+        s.players[1].hand.clear();
+        stmt("(use-supporter opp hand)")->run(ctx);  // none there: nothing
+        CHECK(s.players[0].hand.size() == hand + 2);
+    }
+    {   // reflip-attack :type / reflip-trainer: offered right after the coins, once a turn, only for the flips it covers
+        // (declining doesn't use the Ability up, so "once" is checked with one already used this turn)
+        auto offers = [](const char* passive, bool attack, bool usedThisTurn = false) {
+            Table t;
+            t.cards[2].abilities.push_back({"Star", "text"});
+            t.cards[2].passive.push_back(mod(passive));
+            GameState& s = t.position();
+            if (usedThisTurn) t.bench(0, t.cards[2]).abilityTurn = s.turn;
+            else t.bench(0, t.cards[2]);
+            std::vector<int> asked;
+            t.policy0.chosen = &asked;
+            EffectCtx ctx{t.game, 0};
+            ctx.attack = attack;
+            ctx.self = attack ? s.players[0].active.uid : 0;
+            stmt("(flip 2)")->run(ctx);
+            return asked.size();
+        };
+        CHECK(offers("(reflip-attack :type water)", true) == 1 && offers("(reflip-attack :type fire)", true) == 0);
+        CHECK(offers("(reflip-attack :type water)", false) == 0 && offers("(reflip-trainer)", false) == 1);
+        CHECK(offers("(reflip-trainer)", true) == 0 && offers("(reflip-trainer)", false, true) == 0);
+    }
     {   // outside play a Fossil is an Item card, not a Pokémon (ruling)
         auto onTop = [](const char* filter) {
             Table t;

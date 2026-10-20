@@ -1,0 +1,15 @@
+# Coverage batch 12, Fire/Metal: the last four. Penny and Smeargle use a random Supporter of the opponent's;
+# Victini and Gholdengo flip again the coins of a {R} attack or a Trainer card.
+energy: Fire, Metal
+
+2 B3-025   # Victini (reflip-attack :type fire)
+2 A1-037   # Vulpix (flip)
+1 A1-047   # Moltres ex (flip)
+1 A4-033   # Entei (flip)
+2 B4a-034  # Gimmighoul
+2 B4a-051  # Gholdengo (reflip-trainer)
+2 B2-130   # Smeargle (use-supporter opp hand)
+2 A3b-069  # Penny (use-supporter opp deck)
+2 A1-220   # Misty (flip until tails)
+2 B1-215   # Hitting Hammer (flip)
+2 A2b-072  # Team Rocket Grunt (flip until tails)
