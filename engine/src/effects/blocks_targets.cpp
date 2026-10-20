@@ -189,8 +189,9 @@ private:
 class PokemonTest : public Cond {
 public:
     enum What { HasDamage, HasStatus, HasTool, IsType, IsEx, IsBasic, IsEvolution, EnergyAtLeast, ExtraEnergy,
-                MovedToActive, EvolvedThisTurn, DamagedLastTurn, IsActive, AtZero, Exists, HalfHp };
-    PokemonTest(What what, const Target* t, int amount, uint16_t types) : what_(what), t_(t), amount_(amount), types_(types) {}
+                MovedToActive, EvolvedThisTurn, DamagedLastTurn, IsActive, AtZero, Exists, HalfHp, FirstAttack };
+    PokemonTest(What what, const Target* t, int amount, uint16_t types, std::string name = "")
+        : what_(what), t_(t), amount_(amount), types_(types), name_(std::move(name)) {}
 
     bool test(EffectCtx& ctx) const override {
         if (what_ == Exists) {
@@ -204,7 +205,9 @@ public:
         switch (what_) {
             case HasDamage: return p->damage > 0;
             case HasStatus: return p->status & amount_;
-            case HasTool: return !p->tools.empty();
+            case HasTool:  // (has-tool T ["Lucky Mittens"])
+                return std::any_of(p->tools.begin(), p->tools.end(), [&](const CardDef* t) { return name_.empty() || t->name == name_; });
+            case FirstAttack: return !p->attacked;  // "the first time this Pokémon has used an attack after coming into play"
             case IsType: return p->hasType(types_);
             case IsEx: return p->card->ex;
             case IsBasic: return p->card->stage == Stage::Basic;
@@ -266,6 +269,7 @@ private:
     const Target* t_;
     int amount_;
     uint16_t types_;
+    std::string name_;
 };
 
 // (evolved-from TARGET "X"): it evolved from X during this turn (Weavile from Sneasel).
@@ -406,7 +410,10 @@ void addTargetWords(Words& w) {
         }};
     };
     test("has-damage", PokemonTest::HasDamage);
-    test("has-tool", PokemonTest::HasTool);
+    w.cond["has-tool"] = {1, 2, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<PokemonTest>(PokemonTest::HasTool, b.target(arg(e, 0)), 0, 0, argCount(e) > 1 ? arg(e, 1).atom : "");
+    }};
+    test("first-attack", PokemonTest::FirstAttack);
     test("is-type", PokemonTest::IsType, 2, AnyCount);
     test("is-ex", PokemonTest::IsEx);
     test("is-basic", PokemonTest::IsBasic);

@@ -1,0 +1,24 @@
+# Coverage batch 11, Grass/Psychic/Fighting: one-offs. Delayed damage on a spot, healing a Pokémon ex, sleep on attach,
+# copying an attack, two hits with a knock-out in between, Lucky Mittens, Energy moved freely and Drayden's extra pick.
+energy: Grass, Psychic, Fighting
+
+1 A2b-005  # Sprigatito
+1 A2b-006  # Floragato
+1 B2a-003  # Meowscarada ex (damage-at-end-of-opp-turn :spot)
+1 B2a-007  # Smoliv
+1 B2a-008  # Dolliv
+1 B2a-009  # Arboliva
+1 B1-112   # Gothita
+1 B1-113   # Gothorita
+1 B1-114   # Gothitelle (asleep-on-attach)
+1 A1-205   # Ditto (copy-attack :energy)
+1 A4a-062  # Miltank
+1 B2-127   # Mega Kangaskhan ex (ko-check)
+1 A2-130   # Aipom
+1 B1-186   # Ambipom (has-tool "Lucky Mittens")
+1 B1-220   # Lucky Mittens
+1 A3-129   # Skitty
+1 B4-135   # Delcatty
+1 P-A-064  # Rayquaza ex (Draco Meteor)
+1 B4-151   # Drayden (extra-pick)
+1 B1-223   # May

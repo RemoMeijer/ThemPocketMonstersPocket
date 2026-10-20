@@ -36,6 +36,7 @@ struct EffectCtx {
                                  // Item just played does (Lucky Ice Pop)
     int dealt = 0;             // damage (hit) did, for "heal the same amount"
     int copyDepth = 0;         // inside (copy-attack): a copied attack doesn't copy again
+    bool trainerInHand = false;  // asking whether a Trainer can be played: it's still in the hand (hand-size)
 };
 
 using Uids = FixedVec<uint16_t, 2 * (1 + rules::BenchSize)>;  // at most every Pokémon in play

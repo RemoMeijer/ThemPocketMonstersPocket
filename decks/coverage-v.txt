@@ -1,0 +1,24 @@
+# Coverage batch 11, Fighting/Grass/Fire: one-offs. Fossil lines into Archeops and Armaldo (a delayed Knock Out on a
+# Bench spot), devolving, losing Abilities, a random attack locked, and discards for more damage.
+energy: Fighting, Grass, Fire
+
+1 A1-139   # Diglett
+1 A4a-041  # Dugtrio (top-count)
+1 B1-135   # Golett
+1 B1-136   # Golurk (top-count, min-retreat)
+1 B1-214   # Plume Fossil
+1 B1-133   # Archen
+1 B1-134   # Archeops (:any-target)
+1 B4-146   # Claw Fossil
+1 B4-081   # Anorith
+1 B4-082   # Armaldo (knock-out-at-end-of-opp-turn :spot)
+1 B3-038   # Wooper
+1 B3b-037  # Quagsire (cant-use-attack -1)
+1 A4a-006  # Celebi (devolve)
+1 B3-013   # Budew (timed no-abilities)
+1 A2-017   # Combee
+1 B4-011   # Vespiquen ex
+1 B3-021   # Numel
+1 B3-022   # Camerupt
+1 A1-206   # Eevee
+1 B4-022   # Flareon

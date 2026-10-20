@@ -31,12 +31,18 @@ public:
             ++p.discardEnergy[t];  // paid energy goes to the discard pile (App)
         }
         std::swap(p.active, p.bench[a.index]);
+        p.bench[a.index].spot = p.active.spot;  // it takes the Bench spot of the one coming up (App)
         p.retreated = true;
         game.clearConditions(p.bench[a.index]);  // moving to the Bench ends Special Conditions and effects
         game.movedToActive(me);
         game.say("P", me + 1, " retreats ", p.bench[a.index].card->name, " (cost ", cost, ") and moves ",
                  p.active.card->name, " to the Active spot");
-        game.knockOutCheck();  // HP from attached Energy may have gone with it (Reuniclus)
+        // "…if this Pokémon is in the Active Spot when your opponent's Active Pokémon retreats, this attack does 40
+        // damage to the new Active Pokémon" (Galarian Stunfisk): attack damage, only after a retreat (ruling)
+        const PokemonSlot& trap = game.state().players[1 - me].active;
+        if (int n = trap.card ? game.sumMods(ModKind::RetreatTrap, trap, 1 - me) : 0)
+            game.dealAttackDamage(1 - me, trap.uid, p.active.uid, n);
+        game.knockOutCheck();  // HP from attached Energy may have gone with it (Reuniclus), or the trap did it
     }
 };
 }  // namespace

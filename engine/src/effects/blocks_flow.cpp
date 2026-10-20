@@ -51,15 +51,19 @@ public:
     void run(EffectCtx& ctx) const override {
         ctx.heads = ctx.tails = 0;
         if (untilTails_) {
-            while (ctx.heads < 100 && ctx.game.flip()) ++ctx.heads;  // 100: just a safety stop
+            while (ctx.heads < 100 && coin(ctx)) ++ctx.heads;  // 100: just a safety stop
             ctx.tails = 1;
         } else {
-            for (int i = n_->eval(ctx); i > 0; --i) ++(ctx.game.flip() ? ctx.heads : ctx.tails);
+            for (int i = n_->eval(ctx); i > 0; --i) ++(coin(ctx) ? ctx.heads : ctx.tails);
         }
     }
     bool possible(EffectCtx&) const override { return false; }  // a coin on its own does nothing
 
 private:
+    // "The next time you flip any number of coins for the effect of an attack, Ability, or Trainer card…, the first
+    // coin flip will definitely be heads" (Will): only these flips, not Checkup or Confusion (ruling).
+    static bool coin(EffectCtx& ctx) { return ctx.game.effectFlip(ctx.player); }
+
     const Num* n_;
     bool untilTails_;
 };
@@ -121,6 +125,11 @@ public:
 private:
     const Stmt* a_;
     const Stmt* b_;
+};
+
+class FirstHeads : public Stmt {  // (first-heads): this turn, the player's next effect coin flip is heads (Will)
+public:
+    void run(EffectCtx& ctx) const override { ctx.game.state().players[ctx.player].firstHeadsTurn = ctx.game.state().turn; }
 };
 
 class EndTurn : public Stmt {  // (end-turn): "Your turn ends." once the effect is done
@@ -242,6 +251,7 @@ void addFlowWords(Words& w) {
     w.stmt["nothing"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Nothing>(); }};
     w.stmt["then"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Then>(b.stmt(arg(e, 0)), b.stmt(arg(e, 1))); }};
     w.stmt["end-turn"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<EndTurn>(); }};
+    w.stmt["first-heads"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<FirstHeads>(); }};
     w.stmt["one-of"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) {
         std::vector<const Stmt*> options;
         for (std::size_t i = 0; i < argCount(e); ++i) options.push_back(b.stmt(arg(e, i)));

@@ -1,1 +1,94 @@
 id	part	script
+# Ditto: copies an opponent's attack, does nothing without the Energy for it
+A1-205	attack:0	(copy-attack (each opp all) :energy)
+# Mesprit: only with Uxie and Azelf on the Bench, a rule on the card rather than an Ability
+A2-076	attack:0	(seq (hit) (discard-energy self any all))
+A2-076	ability:0	(passive (cant-attack :if (not (and (exists my bench (name "Uxie")) (exists my bench (name "Azelf"))))))
+# Unown: looking at a top card changes nothing; usable while a deck has a card
+A2a-034	ability:0	(activated (if (or (>= (deck-count my) 1) (>= (deck-count opp) 1)) (nothing)))
+# Toxicroak: Poison for 20
+A2a-052	attack:0	(poison opp-active 20)
+# Tapu Lele: 20 for each Energy on the chosen Pokémon
+A3-084	attack:0	(pick (choose opp all) (damage picked (* (energy picked) 20)))
+# Alcremie: Sweets Relay uses this game
+A3b-037	attack:0	(seq (set-damage (* (attack-uses my "Sweets Relay") 40)) (hit))
+# Gyarados: discard Benched {W} Pokémon one at a time, or stop
+A4-045	attack:0	(seq (repeat (count my bench (type water)) (one-of (nothing) (seq (discard-pokemon (choose my bench (type water))) (bonus 40)))) (hit))
+# Will: the first effect coin this turn is heads
+A4-156	card	(play (first-heads))
+# Celebi: devolve the opponent's Active
+A4a-006	attack:0	(seq (hit) (devolve opp-active))
+# Slowking: up to 2 Tools from the hand, one at a time
+A4a-018	attack:0	(seq (set-damage 0) (repeat 2 (one-of (nothing) (then (discard-from-hand 1 tool) (bonus 50)))) (hit))
+# Boltund: the cheaper cost is a rule on the card rather than an Ability
+A4a-031	attack:0	(hit)
+A4a-031	ability:0	(passive (attack-cost -2 :if (has-damage self)))
+# Mismagius: delayed damage that follows the Defending Pokémon
+A4a-033	attack:0	(damage-at-end-of-opp-turn defending 90)
+# Dugtrio: the top card is looked at before it's discarded
+A4a-041	attack:0	(seq (if (>= (top-count 1 (type fighting)) 1) (bonus 60)) (mill my 1) (hit))
+# Miltank: +30 for each use while it stays Active
+A4a-062	attack:0	(seq (hit) (effect while-active self (damage-dealt 30)))
+# Gothitelle: an attach from the Energy Zone puts the Defending Pokémon to sleep
+B1-114	attack:0	(seq (hit) (effect opp-next-turn defending (asleep-on-attach)))
+# Archeops: +20 on each hit of its next turn
+B1-134	attack:0	(seq (damage (each opp all) 20) (effect my-next-turn self (damage-dealt 20 :any-target)))
+# Golurk: the top 3 cards are looked at in place, then the deck is shuffled
+B1-136	attack:0	(seq (set-damage (* (top-count 3 pokemon (min-retreat 3)) 60)) (shuffle-deck my) (hit))
+# Ambipom: 4 coins with Lucky Mittens
+B1-186	attack:0	(seq (if (has-tool self "Lucky Mittens") (flip 4) (flip 2)) (set-damage (* heads 30)) (hit))
+# Prank Spinner: one card from both hands together
+B1-213	card	(play (hand-to-deck-random any 1))
+# May: as many Pokémon back as were found
+B1-223	card	(play (if (>= (deck-count my pokemon) 2) (seq (search 2 hand pokemon) (repeat 2 (hand-to-deck pokemon))) (then (search 1 hand pokemon) (hand-to-deck pokemon))))
+# Ditto: copies a Benched non-ex attack, does nothing without the Energy for it
+B1a-055	attack:0	(copy-attack (each my bench) :not-ex :energy)
+# Clemont's Backpack: +20 on every hit, Bench included
+B1a-066	card	(play (effect this-turn me (damage-dealt 20 :scope my-all :name "Magneton" "Heliolisk" :any-target)))
+# Mega Mawile ex: +30 for each use while it stays Active
+B2-113	attack:0	(seq (hit) (effect while-active self (damage-dealt 30)))
+# Galarian Stunfisk: 40 to the new Active after a retreat
+B2-117	attack:0	(seq (hit) (effect opp-next-turn self (retreat-trap 40)))
+# Mega Kangaskhan ex: two hits, knock-outs in between
+B2-127	attack:0	(seq (hit) (ko-check) (set-damage 40) (hit))
+# Meowscarada ex: delayed damage to a spot
+B2a-003	attack:0	(damage-at-end-of-opp-turn (choose opp all) 70 :spot)
+# Arboliva: heal a damaged Pokémon ex with Energy, then a random Energy goes
+B2a-009	ability:0	(activated (pick (choose my all ex damaged (has-energy 1)) (then (heal picked 60) (discard-random-energy picked 1))))
+# Veluza: the cheaper cost is a rule on the card rather than an Ability
+B2a-031	attack:0	(hit)
+B2a-031	ability:0	(passive (attack-cost -3 :if (= (deck-count my) 0)))
+# Mew: a random attack from the opponent's hand and deck
+B2b-030	attack:0	(copy-attack-cards opp)
+# Maintenance: needs 2 other cards in the hand
+B2b-066	card	(play (if (>= (hand-size my) 2) (seq (hand-to-deck) (hand-to-deck) (draw 1))))
+# Budew: no Abilities while the Defending Pokémon stays Active
+B3-013	attack:0	(seq (hit) (effect while-active defending (no-abilities)))
+# Camerupt: one {R} Energy for each heads, while there is one
+B3-022	attack:0	(seq (flip 3) (repeat heads (then (discard-energy self fire 1) (bonus 30))) (hit))
+# Toxtricity: both parts need a knock-out last turn
+B3-061	attack:0	(seq (if (ko-last-turn) (bonus 60)) (hit) (if (ko-last-turn) (status opp-active paralyzed)))
+# Iron Bundle ex: its first attack since coming into play
+B3a-013	attack:0	(seq (if (first-attack self) (bonus 20)) (hit) (if (first-attack self) (status opp-active paralyzed)))
+# Flutter Mane ex: its first attack since coming into play
+B3a-026	attack:0	(seq (hit) (if (first-attack self) (effect opp-next-turn opp (cant-trainer))))
+# Quagsire: -1 is a random attack of the Defending Pokémon
+B3b-037	attack:0	(seq (hit) (effect opp-next-turn defending (cant-use-attack -1)))
+# Toxapex: Poison for 40
+B3b-047	attack:0	(poison opp-active 40)
+# Vespiquen ex: may discard a Benched Basic {G} Pokémon
+B4-011	attack:0	(seq (if (exists my bench basic (type grass)) (one-of (nothing) (seq (discard-pokemon (choose my bench basic (type grass))) (bonus 70)))) (hit))
+# Pachirisu: the top card is looked at before it's discarded
+B4-054	attack:0	(seq (if (>= (top-count 1 item) 1) (bonus 20)) (mill my 1) (hit))
+# Hoopa: Tools into the deck before the damage
+B4-077	attack:0	(seq (tools-to-deck (each opp all)) (hit))
+# Armaldo: a delayed Knock Out on a spot
+B4-082	attack:0	(seq (discard-energy self any all) (knock-out-at-end-of-opp-turn (choose opp all) :spot))
+# Delcatty: one Energy at a time, as often as there is Energy
+B4-135	attack:0	(seq (hit) (repeat (energy (each my all)) (one-of (nothing) (pick (choose my all (has-energy 1)) (move-energy picked (choose my all not-picked) any 1)))))
+# Drayden: one more random pick for Draco Meteor
+B4-151	card	(play (effect this-turn me (extra-pick 1 :attack "Draco Meteor")))
+# Team Rocket's Boss: Basic Pokémon from the opponent's hand onto their Bench, one at a time, or stop
+B4a-071	card	(play (repeat 3 (one-of (nothing) (opp-hand-to-bench basic))))
+# Team Rocket's Wobbuffet: the top 6 cards are looked at in place, then the deck is shuffled
+P-B-091	attack:0	(seq (set-damage (* (top-count 6 pokemon (name-has "Team Rocket")) 30)) (shuffle-deck my) (hit))

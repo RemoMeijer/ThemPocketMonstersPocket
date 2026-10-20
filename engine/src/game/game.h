@@ -44,11 +44,14 @@ public:
     void endTurn();        // end-of-turn effects, Pokémon Checkup, then the next player's turn
     // After any damage: knock-outs, points, winner, new Active Pokémon. attacker: right after its attack.
     void knockOutCheck(uint16_t attacker = 0);
+    bool dropExtraTools();
+    bool effectFlip(int player);  // a coin for the effect of an attack, Ability or Trainer card (Will)
     void finish(int winner);
 
     // --- Board ---
     PokemonSlot& slot(int player, int target) { return target < 0 ? s_.players[player].active : s_.players[player].bench[target]; }
     void putIntoPlay(PokemonSlot& slot, const CardDef* card);  // a new Pokémon: fresh identity
+    PokemonSlot& addToBench(int player, const CardDef* card);  // a new Pokémon in the lowest free Bench spot
     void evolve(PokemonSlot& slot, const CardDef* card);       // puts card on top; damage, energy and Tool stay
     void movedToActive(int player);        // bookkeeping after a new Pokémon moved into the Active Spot
     void clearConditions(PokemonSlot& slot);  // its Special Conditions and timed effects end (moved to Bench, evolved, gone)
@@ -77,10 +80,12 @@ public:
     uint8_t blockedStatuses(const PokemonSlot& p, int owner) const;  // Special Conditions it can't have (NoConditions)
     int retreatCost(const PokemonSlot& p, int owner) const;
     bool canRetreat(const PokemonSlot& p, int owner) const;
-    // "Basic Pokémon in play … have no Abilities" (Alolan Muk). Read straight from the cards in play, not through the
-    // modifiers, which ask this. Fossils have no Ability, so their rule stays.
+    // "Basic Pokémon in play … have no Abilities" (Alolan Muk). Read straight from the cards in play and timed effects,
+    // not through the modifiers, which ask this. Fossils have no Ability, so their rule stays.
     bool abilitiesOff(const PokemonSlot& p) const {
         if (p.card->abilities.empty()) return false;
+        for (const TimedEffect& t : s_.timed)  // "the Defending Pokémon loses all Abilities" (Budew)
+            if (t.mod.kind == ModKind::NoAbilities && t.uid == p.uid) return true;
         for (const PlayerState& ps : s_.players) {
             auto silences = [&](const PokemonSlot& src) {
                 for (const Modifier& m : src.card->passive)
@@ -149,6 +154,7 @@ private:
     void startTurn();
     void showBoard();
     void knockOut(uint16_t uid, uint16_t attacker);
+    void resolveLater();  // the LaterEffects due at the end of this turn
     void runTriggers(int player, const Stmt* CardDef::*form, bool CardDef::*whileActive);  // its Pokémon's, Active first
     void survive(PokemonSlot& slot, int owner);
     void promote(int player);

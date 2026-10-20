@@ -98,6 +98,7 @@ struct CardDef {
 
     bool isPokemon() const { return category == Category::Pokemon; }
     bool isBasic() const { return isPokemon() && stage == Stage::Basic; }
+    bool isFossil() const { return isPokemon() && !effect.empty(); }  // "Play this card as if it were a … Basic Pokémon"
     bool isEvolution() const { return isPokemon() && !evolvesFrom.empty(); }
     bool isTrainer(TrainerKind k) const { return category == Category::Trainer && trainer == k; }
     bool hasType(uint16_t mask) const { return !mask || (type && (mask & typeBit(*type))); }

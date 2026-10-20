@@ -26,10 +26,10 @@ int Game::dealAttackDamage(int attacker, uint16_t attackerUid, uint16_t targetUi
     if (!target || !source) return 0;
     bool active = target == &s_.players[owner].active;
     int damage = base;
-    if (active)
-        forEachMod(ModKind::DamageDealt, source, attacker, [&](const Modifier& m) {
-            if (!m.vsEx || target->card->ex) damage += m.perPoint ? m.amount * s_.players[attacker].points : m.amount;
-        });
+    forEachMod(ModKind::DamageDealt, source, attacker, [&](const Modifier& m) {  // :any-target: Benched ones too
+        if ((active || m.anyTarget) && (!m.vsEx || target->card->ex))
+            damage += m.perPoint ? m.amount * s_.players[attacker].points : m.amount;
+    });
     // Weakness counts whenever the attack does damage, even after step 2 took it to 0 or below: the floor
     // is only at the end (official battle FAQ, DESIGN.md §5).
     bool weak = weakness && active && base > 0 && target->card->weakness && source->card->type == target->card->weakness &&
@@ -92,9 +92,16 @@ void Game::attachFromZone(int player, uint16_t uid, Type type, int count) {
     if (!target || count <= 0) return;
     target->energy[int(type)] += count;
     say("P", player + 1, " attaches ", count, " ", typeName(type), " energy to ", target->card->name);
-    // "Whenever you attach a {T} Energy from your Energy Zone to this Pokémon…"
     int owner = 0;
     find(uid, &owner);
+    // "…if they attach Energy from their Energy Zone to the Defending Pokémon, that Pokémon will be Asleep" (Gothitelle):
+    // any attach from the Zone, by any card (ruling)
+    if (target == &s_.players[owner].active && hasMod(ModKind::AsleepOnAttach, *target, owner) &&
+        !(blockedStatuses(*target, owner) & Asleep)) {
+        target->status = uint8_t((target->status & ~ReplacingStatuses) | Asleep);
+        say("  -> ", show(*target, owner));
+    }
+    // "Whenever you attach a {T} Energy from your Energy Zone to this Pokémon…"
     const CardDef* card = target->card;
     if (card->onAttach && (!card->onAttachTypes || (card->onAttachTypes & typeBit(type))) &&
         (!card->onAttachWhileActive || target == &s_.players[owner].active) && !abilitiesOff(*target)) {

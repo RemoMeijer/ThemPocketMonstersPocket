@@ -1,6 +1,6 @@
 # Progress
 
-Updated 2026-10-19, after coverage batch 10.
+Updated 2026-10-20, after coverage batch 11.
 
 This is the handoff file: what the project is, where it stands, what's open and what comes next. Read it first, then:
 - [CLAUDE.md](CLAUDE.md) for the working rules and commands;
@@ -10,51 +10,44 @@ This is the handoff file: what the project is, where it stands, what's open and 
 
 A C++ simulator for Pokémon TCG Pocket. The goal is to play many games between decks and see which decks come out on top, as ideas to try in the game. It's a personal side project, in a local git repo with no remote.
 
-- **Engine:** most of the way there. It plays games by the settled rules, for 97% of all cards, and an independent checker watches every move.
+- **Engine:** most of the way there. It plays games by the settled rules, for 99% of all cards, and an independent checker watches every move.
 - **Around the engine:** not started yet. That means running many games at once, stats, finding decks and a better player.
 
 | Part | State |
 |---|---|
 | Rules core: setup, turns, Energy Zone, attacking, retreating, evolving, Trainers, Tools, Stadiums with their actions (R5), abilities, Special Conditions, Checkup, damage, winning | Built and checked. Missing: the player picking which energy type to pay, discard or move (the engine picks; step 4 under Next) |
 | Card data | Every set up to B4b: 2,319 unique cards from Limitless, cross-checked against deckgym-core |
-| Card effects | 2,269 of 2,319 cards playable (97%). Trainers: 144 of 152 |
-| Checks | 21 rule tests, 44 effect tests, 86 compiler self-test examples. `check_states`: 0 violations over 26 decks. Sanitizer build (memory and undefined behaviour) clean |
+| Card effects | 2,315 of 2,319 cards playable (99%). Trainers: 151 of 152. Left: Penny, Smeargle, Victini, Gholdengo |
+| Checks | 21 rule tests, 45 effect tests, 86 compiler self-test examples. `check_states`: 0 violations over 30 decks. Sanitizer build (memory and undefined behaviour) clean |
 | Replayable games (seeds) | Not yet: every game seeds itself from `random_device` |
 | Simulation runner (many games, threads, stats) | Not started |
 | Finding decks (generate, play, rank) | Not started |
 | Players | Random only. About 70% of random-vs-random games end in a draw at the turn cap; that's accepted for now |
 
-- **Code size:** about 4,150 lines of C++ in the engine, 1,850 in tests, and 1,130 of Python (card data, plus the 900-line effect compiler).
+- **Code size:** about 4,550 lines of C++ in the engine, 2,125 in tests, and 1,130 of Python (card data, plus the 900-line effect compiler).
 - **Script language:** about 175 words.
-- **Effect scripts:** 1,500 scripts in `data/effects.tsv`. **Traits:** `data/traits.tsv` (Ultra Beast, Ancient, Future by card name, from Serebii).
+- **Effect scripts:** 1,549 scripts in `data/effects.tsv`, 45 cards of them hand-written in `data/effects_manual.tsv`. **Traits:** `data/traits.tsv` (Ultra Beast, Ancient, Future by card name, from Serebii).
 
 ## Card coverage
 
-`engine/build/tcgp --coverage`, 2026-10-19:
+`engine/build/tcgp --coverage`, 2026-10-20 (`tcgp --unsupported` lists the cards left, with their reasons):
 
 | Kind | Playable | At the 2026-10-16 review |
 |---|---|---|
-| Pokémon | 2,125 / 2,167 | 1,808 |
-| Supporters | 77 / 82 | 40 |
-| Items | 28 / 31 | 14 |
+| Pokémon | 2,164 / 2,167 | 1,808 |
+| Supporters | 81 / 82 | 40 |
+| Items | 31 / 31 | 14 |
 | Tools | 26 / 26 | 6 |
 | Stadiums | 13 / 13 | 3 |
-| **All** | **2,269 / 2,319 (97%)** | 1,871 (80%) |
+| **All** | **2,315 / 2,319 (99%)** | 1,871 (80%) |
 
-**Trainers still missing (8):** each needs a mechanic of its own: Penny (another Supporter's effect), Will (the next coin
-flip is heads), Drayden (one more pick for Draco Meteor), May ("for each Pokémon you put into your hand"), Prank Spinner
-(one card from both hands), Team Rocket's Boss ("any number" from the opponent's hand), Maintenance (the card itself counts
-in the hand while it's checked), Clemont's Backpack (a bonus on the Bench).
+**Left out on purpose (4):** Penny and Smeargle (they use another Supporter's effect), Victini and Gholdengo (a choice to
+re-flip coins). Each needs machinery of its own.
 
-**Pokémon still missing (42):** all one-offs.
-- **Copying:** both Ditto ("If this Pokémon doesn't have the necessary Energy to use that attack"), Mew B2b (from hand and deck), Smeargle (a Supporter's effect), Quagsire (a random attack can't be used).
-- **Timing:** "the first time this Pokémon has used an attack" (Iron Bundle ex, Flutter Mane ex); damage at the end of the opponent's next turn (Mismagius, Meowscarada ex, Armaldo); Galarian Stunfisk (when the opponent retreats); Gothitelle (when they attach).
-- **Costs and counts:** cheaper attacks under a condition (Boltund, Veluza); "This effect stacks" (Miltank, Mega Mawile ex); Sweets Relay used this game (Alcremie); discards by choice (Gyarados, Vespiquen ex, Slowking, Camerupt).
-- **Reveal or mill and check the card:** Dugtrio, Golurk, Pachirisu, Team Rocket's Wobbuffet.
-- **Others:** devolving (Celebi A4a), losing Abilities (Budew), attacking twice (Mega Kangaskhan ex), Tools into the deck (Hoopa), moving Energy freely (Delcatty), damage per Energy on the target (Tapu Lele), Poison or Burn amount (Toxicroak, Toxapex), "Uxie and Azelf on your Bench" (Mesprit), healing a Pokémon ex with Energy (Arboliva), Unown CHECK, Ambipom (with Lucky Mittens), Archeops and Toxtricity (left out of batch 7), Victini and Gholdengo (flip again).
-- **Card data:** Flareon B4-022 reads "Discard Fire{R} Energy" on Limitless, which looks like a typo for "a {R} Energy"; check Serebii, then put it in `FIXES`.
+**One-off cards** (batch 11) have hand-written scripts in `data/effects_manual.tsv`, not sentence patterns: a card listed
+there skips the patterns entirely. Each card has a `#` note line.
 
-**Test decks:** `decks/coverage-a.txt` … `coverage-s.txt` hold the cards of each batch, so `check_states` plays them in random games. The other 7 decks (`pikachu`, `charizard`, `abilities`, …) are the older test decks.
+**Test decks:** `decks/coverage-a.txt` … `coverage-w.txt` hold the cards of each batch, so `check_states` plays them in random games. The other 7 decks (`pikachu`, `charizard`, `abilities`, …) are the older test decks.
 
 ## Checks: how to run them, and the last results
 
@@ -131,6 +124,7 @@ No existing script changed in any batch unless the batch said so.
 | 8 | `3dfc7a5` | 6: Rescue Scarf, Lucky Egg, Lucky Mittens, Electrical Cord, Hala, Iris | Knock-outs as a loop: triggers first, then points, then the win rules. `on-knocked-out` (`:active`, `:by-attack`), `on-knocks-out`, `no-points`, `to-hand-instead`, `knock-out`, `discard-this`, `not-picked`. Modifiers `survive-at` (`:flip`), `extra-point`, `extra-tools`, and the options `:if COND` and `:energy T`. A Pokémon holds a list of Tools (two for Revavroom). Fixed on the way: Sweets Relay read a missing "last attack" on turn 1 (batch 7), and evolving into less HP than the damage (after Starting Plains' +20) didn't knock out | 14: Team Rocket's Electrode, Spiritomb, Galarian Cursola, Passimian ex, Zoroark, Garchomp B4a, Dusknoir B1, Glimmora, Conkeldurr, Ursaluna, Bewear, Cherubi, Revavroom, Pyukumuku |
 | 9 | `0ca479c` | 1: Memory Light | Ability forms `during-checkup`, `at-start-of-turn`, `on-bench`, `on-opp-attach`; activated `:bench` and `:repeat`. Words `move-damage`, `discard-from-hand`, `discard-pokemon`, `evolve-from-deck`, `first-turn`, `is-active`, `hp-left`, `other-ability`. Modifiers `cant-stadium`, `cant-evolve-active`, `no-healing`, `poison-damage`, `prevent-first-hit`, `evolve-early`, `evolves-as :as`, `no-abilities`, `extra-type`, `double-energy`, `previous-attacks`; options `:evolves-from`, `:with-energy`, `:status`, `:flip` on damage-taken, `:energy` per Energy on hp. `Game::energyOf` (Serperior), `attacksOf` (Celebi), `abilitiesOff` (Alolan Muk), `PokemonSlot::hasType` (Urshifu). Fixed on the way: retreat payment with a doubled Energy; "you have X in play" read "Arceus or Arceus ex" and "another Beldum" as one name; the checker's plain-board, evolve, retreat, repeat-Ability and draw checks | 71, among them Serperior ×2, Celebi, Alolan Muk, both Urshifu, Eevee and Eevee ex, Jolteon ex, Glaceon ex, Vaporeon, Sylveon, Garganacl, Flygon ex, Darkrai, Caterpie, Miraidon ex, Koraidon ex, Dusknoir, Klefki, Claydol, Mimikyu ex, Regigigas, the two Unown, Reuniclus, Comfey, Teal Mask Ogerpon ex, and five "discard a card from your hand" attackers |
 | 10 | `16445a8` | 15: Beast Wall, Beastite, Lusamine, the Booster Energy Capsules, Professor Sada, Professor Turo, Silver, Acerola, Quick-Grow Extract, Wallace, Lucky Ice Pop, Eevee Bag, Mythical Slab, Puppy-Loving Girl | Traits (`data/traits.tsv`, `(trait …)`, `:trait`, `:per-point`); `(hit :no-weakness :ignore-effects)`; duration `while-active`; `copy-attack`, `set-hp-left`, `halve-hp`, `status-random`, `attach-random-type`, `change-energy-type`, `change-next-energy`, `opp-hand-to-deck`, `opp-hand-discard`, `top-card-if`, `discard-hand-random-of`, attach-from-discard `random` and `different`; numbers `points`, `tools`, `ko-count`, `deck-count`, `types-on`, `with-attack`, `dealt`; tests `evolved-from`, `shared-energy`, `at-zero`; filters `name-has`, `evolves-from`, `not-new`, `max-hp`, `trait`, `has-attack`; modifiers `no-weakness`, `cant-trainer`, `cant-evolve`, `:from-basic`. Stage 1 cards onto the Bench (Silcoon). Compiler: "If …," may split at any comma; joined multi-sentence rules | about 166, among them Mew ex, Ditto-like copiers, Hitmonchan ex, Starmie, Silcoon, Cascoon, Kingambit, Gholdengo ex, Iron Moth, the Puppy Pile family, Manaphy, Carbink |
+| 11 | `BATCH11` | 6: Will, Drayden, May, Prank Spinner, Team Rocket's Boss, Maintenance, Clemont's Backpack | `data/effects_manual.tsv` (hand-written scripts); `tcgp --unsupported`; `check_states --games N` (`GAMES=200 ./check_all.sh …` for the sanitizer); Fossils are Items outside play; a copied "can't use X" doesn't bind the copier; 3 fixed Bench spots (`PokemonSlot.spot`); damage or KO at the end of the opponent's next turn, by Pokémon or by spot; `poison TARGET N`; `devolve`; `ko-check` (an attack used twice); `copy-attack :energy`, `copy-attack-cards`; `top-count` and the card filter `min-retreat`; `attack-uses`; `first-attack`; `first-heads`; `tools-to-deck`; `opp-hand-to-bench`; `hand-to-deck-random any`; `shuffle-deck`; modifiers `extra-pick`, `asleep-on-attach`, `retreat-trap`, `no-abilities` (timed), `damage-dealt :any-target`; extra Tools fall off when a Pokémon may no longer hold them | 39 one-offs, from Ditto to Mega Kangaskhan ex |
 
 ## Rules
 
@@ -182,12 +176,14 @@ DESIGN.md §10 lists every rule the engine follows, with its source:
 **Open questions:**
 - **Necrozma:** Serebii lists Dawn Wings Necrozma, Dusk Mane Necrozma and Ultra Necrozma ex (P-A promos) as Ultra Beasts; `data/traits.tsv` follows it. Are they Ultra Beasts in the app?
 - **Team Rocket's Thieving Machine:** once you play the Item it took, does it go to your discard pile (assumed) or back to your opponent's?
+- **Will and "your opponent flips a coin" effects** (an attack that says "if the Defending Pokémon tries to use an attack, your opponent flips a coin"): when the Will player then attacks, built as the next effect coin, so it comes up heads. Confusion doesn't count. Confirm.
 - **Back into a full hand:** when Koga or Elesa puts cards into a hand that already holds 10, the engine sends the extra cards to the discard pile (assumed).
 - **Berries:** confirm "before Checkup".
 
 ## Shortcuts
 
 These are marked `shortcut:` in the code:
+- **Capacities (batch 11):** at most 8 delayed end-of-turn effects waiting at once, and 24 different attack names counted per player per game. Timed effects hold 16 and drop the oldest, so a Miltank or Mega Mawile ex used many turns in a row could push others out.
 - **Energy type when paying for a retreat or discarding:** the engine picks the most plentiful type. The player should pick.
 - **Energy type when moving energy** (Elemental Switch, Dawn, "Move an Energy"): the engine takes the first matching type; the player should pick.
 - **Fossils:** a Fossil can't be discarded from play by choice.
@@ -215,24 +211,8 @@ These are marked `shortcut:` in the code:
 
 In order. Each step gets a short plan, then tests, `check_states` at 0 violations, a sanitizer run and a commit. For coverage batches (2026-10-19): commit freely, run batches back to back, and report every two batches or so. Rule questions are asked first. **Big batches** work best: survey many cards, ask all rule questions at once, build them all with only the quick checks (tests, self-test), then run `./check_all.sh` and the sanitizer once and fix everything together.
 
-1. **Batch 11, in progress (paused 2026-10-19): the one-offs.** The plan: as many of the 50 leftover cards as is manageable, then golden tests over all of them.
-   - Done and committed: `tcgp --unsupported` (lists every unplayable card with its full reason); `data/effects_manual.tsv` (hand-written scripts; a card listed there skips the patterns in `compile_effects.py`; still empty); the rule answers in DESIGN.md §10 "One-offs (batch 11)".
-   - Scope: 46 cards. Left out: Penny and Smeargle (they use a Supporter's effect), Victini and Gholdengo (re-flip choices).
-   - Write their scripts in `effects_manual.tsv`, not as new patterns. 16 need only existing words: Mesprit, Unown, Tapu Lele, Gyarados, Boltund, Miltank, Archeops, May, Mega Mawile ex, Arboliva, Veluza, Camerupt, Toxtricity, Vespiquen ex, Flareon (fix it in `FIXES`), Delcatty.
-   - New words to build, one small hook each:
-     - `copy-attack` gets `:energy` (Ditto ×2), and an unknown option must fail (today it silently sets `:not-ex`). `copy-attack-cards` (Mew B2b: hand and deck).
-     - `poison TARGET N` (Toxicroak, Toxapex): a per-Pokémon amount, set wherever Poisoned is added.
-     - `attack-uses` (Alcremie), `first-heads` (Will), `devolve` (Celebi), a card filter for `discard-from-hand` (Slowking).
-     - Delayed damage or KO at the end of the opponent's next turn: by Pokémon (Mismagius) or by spot (Meowscarada ex, Armaldo). This needs `PokemonSlot.spot`: 3 fixed Bench spots (DESIGN §10).
-     - `top-count N FILTER` plus a `(min-retreat N)` card filter (Dugtrio, Pachirisu, Golurk, Team Rocket's Wobbuffet).
-     - `has-tool` with a tool name (Ambipom), `hand-to-deck-random any` (Prank Spinner), `:any-target` on `damage-dealt` (Clemont's Backpack, Archeops).
-     - `retreat-trap` (Galarian Stunfisk), `ko-check` mid-attack (Mega Kangaskhan ex), `asleep-on-attach` (Gothitelle).
-     - `hand-size` leaves out the Trainer being played (Maintenance; check the existing scripts that use it).
-     - A timed `no-abilities` read by `abilitiesOff` (Budew), `first-attack` (Iron Bundle ex, Flutter Mane ex), `cant-use-attack -1` = a random attack (Quagsire).
-     - `tools-to-deck` (Hoopa), an extra pick for Draco Meteor (Drayden), `opp-hand-to-bench` (Team Rocket's Boss).
-   - Then a test per new word, `decks/coverage-t.txt`, the quick checks, `./check_all.sh` and the sanitizer, then commit.
-   - Next after that: golden tests over all cards (step 2).
-2. **Effect-script checks:** real-card golden tests, meaning card text plus its expected script, a few per sentence family; a review of the `effects.tsv` diff for each new set; and `data/effects_manual.tsv` for odd cards. Planned for after coverage.
+1. **Card coverage is done** (batch 11): 99%. The 4 cards left out need machinery of their own (see "Card coverage").
+2. **Effect-script checks:** real-card golden tests, meaning card text plus its expected script, a few per sentence family; a review of the `effects.tsv` diff for each new set; and `data/effects_manual.tsv` for odd cards. This is next: golden tests over all cards, the hand-written ones included.
 3. **Seeds:** one seed per game, from which the shuffles, coins and random player all follow. Then failures can be replayed, and two decks can be compared on the same luck.
 4. **Player choices the engine makes today:** which energy type to pay, discard or move (the player should pick), and discarding a Fossil.
 5. **The simulation runner (milestone 3):** many games over threads; win, draw and loss per pairing with a confidence interval; the first player alternates. About 2,400 games per pairing give ±2%.

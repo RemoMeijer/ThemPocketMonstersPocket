@@ -34,11 +34,9 @@ public:
     void apply(Game& game, Action a) const override {
         int me = game.state().current;
         PlayerState& p = game.state().players[me];
-        p.bench.push_back({});
-        game.putIntoPlay(p.bench.back(), p.hand.take(a.index));
-        game.say("P", me + 1, " benches ", p.bench.back().card->name);
+        const PokemonSlot& placed = game.addToBench(me, p.hand.take(a.index));
+        game.say("P", me + 1, " benches ", placed.card->name);
         // "When you put this Pokémon from your hand onto your Bench, you may…" (not during setup)
-        const PokemonSlot& placed = p.bench.back();
         if (game.state().phase == Phase::Main && placed.card->onBench && !game.abilitiesOff(placed)) {
             EffectCtx ctx{game, me};
             ctx.self = placed.uid;

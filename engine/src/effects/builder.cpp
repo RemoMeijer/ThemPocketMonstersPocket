@@ -52,7 +52,8 @@ const Num* ScriptBuilder::num(const SExpr& e) {
     return build(words().num, e, *this, "number");
 }
 
-// (KIND [amount] [:active] [:bench] [:min-retreat N] [:scope S] [:type T…] [:from T…] [:stage S…] [:name "A"…] [:needs "A"…] [:vs-ex] [:from-ex] [:not-mega])
+// (KIND [amount] [:active] [:bench] [:min-retreat N] [:scope S] [:type T…] [:from T…] [:stage S…] [:name "A"…] [:needs "A"…] [:vs-ex] [:from-ex] [:not-mega]
+//  [:any-target] [:attack "A"…])
 Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
     static const std::unordered_map<std::string, ModKind> kinds = {
         {"damage-taken", ModKind::DamageTaken},     {"damage-dealt", ModKind::DamageDealt},
@@ -74,7 +75,8 @@ Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
         {"no-abilities", ModKind::NoAbilities},     {"extra-type", ModKind::ExtraType},
         {"double-energy", ModKind::DoubleEnergy},   {"previous-attacks", ModKind::PreviousAttacks},
         {"no-weakness", ModKind::NoWeakness},       {"cant-trainer", ModKind::CantPlayTrainer},
-        {"cant-evolve", ModKind::CantEvolve},
+        {"cant-evolve", ModKind::CantEvolve},       {"extra-pick", ModKind::ExtraPick},
+        {"asleep-on-attach", ModKind::AsleepOnAttach}, {"retreat-trap", ModKind::RetreatTrap},
     };
     static const std::unordered_map<std::string, ModScope> scopes = {
         {"self", ModScope::Self},           {"my-active", ModScope::MyActive}, {"my-all", ModScope::MyAll},
@@ -116,15 +118,18 @@ Modifier ScriptBuilder::modifier(const SExpr& e, ModScope defaultScope) {
             m.notMega = true;
         } else if (a.atom == ":flip") {
             m.flip = true;
+        } else if (a.atom == ":any-target") {
+            m.anyTarget = true;
         } else if (a.atom == ":energy" && i + 1 < argCount(e)) {
             m.energy = int8_t(typeArg(arg(e, ++i)));
         } else if (a.atom == ":if" && i + 1 < argCount(e)) {
             m.when = cond(arg(e, ++i));
-        } else if (a.atom == ":name" || a.atom == ":needs" || a.atom == ":evolves-from" || a.atom == ":as") {
+        } else if (a.atom == ":name" || a.atom == ":needs" || a.atom == ":evolves-from" || a.atom == ":as" || a.atom == ":attack") {
             auto list = std::make_shared<NameList>();
             values([&](const SExpr& n) { list->names.push_back(n.atom); });
             arena_.push_back(list);
-            (a.atom == ":name" ? m.names : a.atom == ":needs" ? m.needs : a.atom == ":as" ? m.as : m.evolvesFrom) = list.get();
+            (a.atom == ":name" ? m.names : a.atom == ":needs" ? m.needs : a.atom == ":as" ? m.as
+                                 : a.atom == ":attack" ? m.attacks : m.evolvesFrom) = list.get();
         } else if (a.atom == ":with-energy") {
             m.withEnergy = true;
             values([&](const SExpr& t) { m.withEnergyTypes |= typeBit(typeArg(t)); });

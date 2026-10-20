@@ -1,0 +1,23 @@
+# Coverage batch 11, Water/Lightning: one-offs. Discarding Benched Pokémon and Tools, cheaper attacks, the top card
+# looked at before a mill, Clemont's Backpack on Magneton's Bench hit, and Trainers that count or share hands.
+energy: Water, Lightning
+
+1 A1-077   # Magikarp
+1 A4-045   # Gyarados
+1 A1-118   # Slowpoke
+1 A4a-018  # Slowking (discard-from-hand tool)
+1 A2-147   # Giant Cape (for Slowking and Hoopa)
+1 B2a-031  # Veluza
+1 B3a-013  # Iron Bundle ex (first-attack)
+1 A4a-030  # Yamper
+1 A4a-031  # Boltund
+1 B2-054   # Toxel
+1 B3-061   # Toxtricity
+1 B4-054   # Pachirisu (top-count)
+2 A1-097   # Magnemite
+1 B1a-025  # Magneton (Spark: Bench damage)
+1 B1a-066  # Clemont's Backpack (:any-target)
+1 B1a-055  # Ditto (copy-attack :energy)
+1 B2b-066  # Maintenance (hand-size)
+1 B1-213   # Prank Spinner (hand-to-deck-random any)
+1 B4a-071  # Team Rocket's Boss (opp-hand-to-bench)

@@ -74,7 +74,13 @@ public:
         Uids hit;
         std::array<int, 2 * (1 + rules::BenchSize)> total{};  // damage per entry of `hit`
         int n = n_->eval(ctx);
-        for (int i = times_->eval(ctx); i > 0; --i) {
+        int times = times_->eval(ctx);
+        // "…is chosen 1 more time for the Draco Meteor attack used by your Pokémon" (Drayden)
+        if (const PokemonSlot* self = ctx.attackDef ? ctx.game.find(ctx.self) : nullptr)
+            ctx.game.forEachModOf(ModKind::ExtraPick, *self, ctx.player, [&](const Modifier& m) {
+                if (!m.attacks || m.attacks->has(ctx.attackDef->name)) times += m.amount;
+            });
+        for (int i = times; i > 0; --i) {
             Uids picked;
             t_->select(ctx, picked);
             for (uint16_t uid : picked) {
@@ -123,9 +129,10 @@ private:
 
 // (status TARGET S…): only an Active Pokémon can have Special Conditions. Asleep, Paralyzed and
 // Confused replace each other; Poisoned and Burned add on.
+// (poison TARGET N): Poisoned, N damage at Checkup instead of the usual (Toxicroak); the latest Poison sets it (ruling).
 class SetStatus : public Stmt {
 public:
-    SetStatus(const Target* t, uint8_t mask) : t_(t), mask_(mask) {}
+    SetStatus(const Target* t, uint8_t mask, int poison = 0) : t_(t), mask_(mask), poison_(poison) {}
     void run(EffectCtx& ctx) const override {
         Uids targets;
         t_->select(ctx, targets);
@@ -137,6 +144,7 @@ public:
             if (!add) continue;
             if (add & ReplacingStatuses) p->status &= ~ReplacingStatuses;
             p->status |= add;
+            if (add & Poisoned) p->poison = uint8_t(poison_);
             if (ctx.game.logging()) ctx.game.say("  -> ", ctx.game.show(*p, owner));
         }
     }
@@ -144,6 +152,7 @@ public:
 private:
     const Target* t_;
     uint8_t mask_;
+    int poison_;  // 0: the usual amount
 };
 
 // (set-hp-left TARGET N): "its remaining HP is now N" (never heals: assumed); (halve-hp TARGET): "halve its remaining
@@ -189,6 +198,7 @@ public:
             if (s & uint8_t(~ctx.game.blockedStatuses(*p, owner))) {
                 if (s & ReplacingStatuses) p->status &= ~ReplacingStatuses;
                 p->status |= s;
+                if (s & Poisoned) p->poison = 0;  // a plain Poison: the usual amount again
             }
             if (ctx.game.logging()) ctx.game.say("  -> ", ctx.game.show(*p, owner));
         }
@@ -197,6 +207,40 @@ public:
 private:
     const Target* t_;
     uint8_t mask_;
+};
+
+// (damage-at-end-of-opp-turn TARGET N [:spot]), (knock-out-at-end-of-opp-turn TARGET [:spot]): "At the end of your
+// opponent's next turn, do 90 damage to the Defending Pokémon" (Mismagius) follows that Pokémon; with :spot, "the
+// Pokémon in the spot you chose" (Meowscarada ex, Armaldo) is whoever is in that spot then. See Game::resolveLater.
+class AtEndOfOppTurn : public Stmt {
+public:
+    AtEndOfOppTurn(const Target* t, int damage, bool spot) : t_(t), damage_(damage), spot_(spot) {}
+    void run(EffectCtx& ctx) const override {
+        Uids targets;
+        t_->select(ctx, targets);
+        GameState& s = ctx.game.state();
+        for (uint16_t uid : targets) {
+            int owner = 0;
+            PokemonSlot* p = ctx.game.find(uid, &owner);
+            if (!p || !affects(ctx, uid)) continue;
+            LaterEffect e;
+            e.damage = int16_t(damage_);
+            e.turn = s.turn + 1;
+            if (spot_) {
+                e.player = int8_t(owner);
+                e.spot = int8_t(p == &s.players[owner].active ? -1 : p->spot);
+            } else {
+                e.uid = uid;
+            }
+            // shortcut: a 9th one waiting at once is dropped; raise the capacity if a game gets there
+            if (!s.later.full()) s.later.push_back(e);
+        }
+    }
+
+private:
+    const Target* t_;
+    int damage_;  // 0: Knock Out
+    bool spot_;
 };
 
 class Dealt : public Num {  // (dealt): the damage (hit) did to the opponent's Active Pokémon
@@ -266,6 +310,22 @@ void addDamageWords(Words& w) {
     }};
     w.stmt["heal"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) { return b.make<Heal>(b.target(arg(e, 0)), b.num(arg(e, 1))); }};
     w.stmt["status"] = {2, AnyCount, [](const SExpr& e, ScriptBuilder& b) { return b.make<SetStatus>(b.target(arg(e, 0)), parseStatuses(e, 1)); }};
+    w.stmt["poison"] = {2, 2, [](const SExpr& e, ScriptBuilder& b) {
+        return b.make<SetStatus>(b.target(arg(e, 0)), uint8_t(Poisoned), intArg(arg(e, 1)));
+    }};
+    auto spot = [](const SExpr& e, std::size_t i) {
+        if (argCount(e) <= i) return false;
+        if (arg(e, i).atom != ":spot") scriptFail("expected :spot", e);
+        return true;
+    };
+    w.stmt["damage-at-end-of-opp-turn"] = {2, 3, [spot](const SExpr& e, ScriptBuilder& b) {
+        int n = intArg(arg(e, 1));
+        if (n <= 0) scriptFail("expected damage above 0", e);
+        return b.make<AtEndOfOppTurn>(b.target(arg(e, 0)), n, spot(e, 2));
+    }};
+    w.stmt["knock-out-at-end-of-opp-turn"] = {1, 2, [spot](const SExpr& e, ScriptBuilder& b) {
+        return b.make<AtEndOfOppTurn>(b.target(arg(e, 0)), 0, spot(e, 1));
+    }};
     w.cond["healed"] = {0, 0, [](const SExpr&, ScriptBuilder& b) { return b.make<Healed>(); }};
     w.stmt["cure-random"] = {1, 1, [](const SExpr& e, ScriptBuilder& b) { return b.make<Cure>(b.target(arg(e, 0)), uint8_t(0xFF), true); }};
     w.stmt["cure"] = {1, AnyCount, [](const SExpr& e, ScriptBuilder& b) {

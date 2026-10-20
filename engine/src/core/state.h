@@ -31,6 +31,9 @@ struct PokemonSlot {
     bool hasType(uint16_t mask) const { return card->hasType(mask) || (card->extraTypes & mask); }  // in play
     bool hitOnce = false;       // took damage from an attack since coming into play (Mimikyu ex)
     uint8_t baseStage = 0;      // the stage it came into play as: 1 for a Silcoon put straight onto the Bench (ruling)
+    uint8_t poison = 0;         // Poison damage at Checkup, 0 = the usual (Toxicroak: 20); the latest Poison sets it (ruling)
+    uint8_t spot = 0;           // on the Bench: which of the 3 fixed Bench spots it's in (App); unused for the Active
+    bool attacked = false;      // used an attack since coming into play; evolving keeps it (Iron Bundle ex)
 
     int energyCount() const {
         int n = 0;
@@ -45,6 +48,22 @@ struct TimedEffect {
     int8_t player = 0;  // whose Pokémon it is on, or which player it is for
     uint16_t uid = 0;   // the Pokémon it is on; 0 = the whole player (mod.scope says which of their Pokémon)
     int lastTurn = 0;   // it ends at the end of this turn
+};
+
+// "At the end of your opponent's next turn, do 90 damage to the Defending Pokémon" (Mismagius), or to "the
+// Pokémon in the spot you chose" (Meowscarada ex), or Knock it Out (Armaldo). Not a TimedEffect: it outlives
+// clearConditions and its attacker (ruling).
+struct LaterEffect {
+    uint16_t uid = 0;    // that Pokémon, wherever it is then; 0 = whoever is in the spot below
+    int8_t player = 0;   // by spot: whose side
+    int8_t spot = -1;    // by spot: -1 the Active Spot, 0..2 a Bench spot
+    int16_t damage = 0;  // plain damage, no Weakness or damage changes (ruling); 0 = Knock Out
+    int turn = 0;        // it happens at the end of this turn
+};
+
+struct AttackUse {  // how often a player's Pokémon used attacks of this name in this game (Alcremie)
+    const AttackDef* attack = nullptr;
+    uint8_t count = 0;
 };
 
 // Room for every card in the game: cards can change hands (Team Rocket's Thieving Machine).
@@ -74,6 +93,8 @@ struct PlayerState {
     int scoredTurn = -1;        // turn they last got points…
     int scored = 0;             // …and how many that turn
     int koCount = 0;            // times their Pokémon were Knocked Out this game
+    FixedVec<AttackUse, 24> attackUses;  // attacks used this game, counted by name (Alcremie)
+    int firstHeadsTurn = -1;    // turn whose next effect coin flip is heads (Will)
 };
 
 enum class Phase : uint8_t {
@@ -92,5 +113,6 @@ struct GameState {
     const CardDef* stadium = nullptr;
     int stadiumOwner = -1;
     FixedVec<TimedEffect, 16> timed;
+    FixedVec<LaterEffect, 8> later;
     uint16_t nextUid = 1;
 };

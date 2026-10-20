@@ -4,6 +4,14 @@
 #include "moves/moves.h"
 
 namespace {
+// "…for each time your Pokémon used Sweets Relay during this game" (Alcremie): counted by the attack's name.
+void countUse(PlayerState& p, const AttackDef& attack) {
+    for (AttackUse& u : p.attackUses)
+        if (u.attack->name == attack.name) return void(++u.count);
+    // shortcut: a 25th different attack name in one game isn't counted; raise the capacity if a deck gets there
+    if (!p.attackUses.full()) p.attackUses.push_back({&attack, 1});
+}
+
 class Attack : public MoveRule {
 public:
     void addMoves(Game& game, std::vector<Action>& out) const override {
@@ -24,8 +32,10 @@ public:
         game.say("P", me + 1, "'s ", attacker.card->name, " uses ", attack.name);
         // Confused, or an effect like "if the Defending Pokémon tries to use an attack, your opponent flips
         // a coin": tails, the attack doesn't happen (assumed for Confused, see DESIGN.md §10).
-        bool mustFlip = (attacker.status & Confused) || game.hasMod(ModKind::AttackFlip, attacker, me);
-        if (mustFlip && !game.flip()) {
+        // Confusion's coin isn't for an effect, so Will doesn't make it heads (ruling).
+        bool confused = attacker.status & Confused;
+        bool mustFlip = confused || game.hasMod(ModKind::AttackFlip, attacker, me);
+        if (mustFlip && !(confused ? game.flip() : game.effectFlip(me))) {
             game.say("  the attack doesn't happen");
         } else {
             EffectCtx ctx{game, me};
@@ -40,6 +50,8 @@ public:
                 hit(ctx);
             s.players[me].attackTurn = s.turn;  // after the attack, which may ask "used … during your last turn"
             s.players[me].lastAttack = &attack;
+            if (PokemonSlot* used = game.find(attackerUid)) used->attacked = true;  // "the first time … used an attack"
+            countUse(s.players[me], attack);
         }
         game.knockOutCheck(attackerUid);
         if (s.phase == Phase::Main) game.endTurn();

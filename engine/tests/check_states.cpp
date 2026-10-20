@@ -100,13 +100,18 @@ void checkState(const Game& game, const Deck* decks[2]) {
     for (int i = 0; i < 2; ++i) {
         const PlayerState& p = s.players[i];
         EXPECT(p.hand.size() <= std::size_t(rules::HandLimit));
+        unsigned spots = 0;  // the Bench has 3 fixed spots, one Pokémon each (App)
+        for (const PokemonSlot& b : p.bench) {
+            EXPECT(b.spot < rules::BenchSize && !(spots & (1u << b.spot)));
+            spots |= 1u << b.spot;
+        }
         EXPECT(s.phase == Phase::Over || p.points < rules::PointsToWin);
         for (const PokemonSlot* slot : inPlay(p)) {
             EXPECT(slot->damage >= 0 && slot->damage < game.maxHp(*slot, i));  // knocked-out Pokémon leave play at once
             EXPECT(slot->enteredTurn <= s.turn);
             EXPECT(slot->uid != 0);
             for (const CardDef* t : slot->tools) EXPECT(t->isTrainer(TrainerKind::Tool));
-            EXPECT(slot->tools.size() <= (allowsTwoTools(*slot->card) ? 2u : 1u));
+            EXPECT(slot->tools.size() <= (allowsTwoTools(*slot->card) && !game.abilitiesOff(*slot) ? 2u : 1u));
             if (slot != &p.active) EXPECT(slot->status == 0);  // Special Conditions are only on the Active Pokémon
             // An evolved Pokémon sits on its line, Basic first, each card naming the one below it. Rare Candy
             // puts a Stage 2 straight onto its Basic.
@@ -270,6 +275,11 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
         case ActionKind::Retreat: {
             const PokemonSlot& in = pb.bench[a.index];
             EXPECT(!pb.retreated && pa.retreated);
+            // Galarian Stunfisk's trap hit the new Active, maybe knocking it out: see test_effects
+            bool trap = std::any_of(before.timed.begin(), before.timed.end(), [&](const TimedEffect& t) {
+                return t.mod.kind == ModKind::RetreatTrap && t.uid == before.players[1 - me].active.uid;
+            });
+            if (trap) break;
             EXPECT(pa.active.card == in.card && pa.active.damage == in.damage && pa.active.energy == in.energy);
             if (std::size_t(a.index) >= pa.bench.size() || pa.bench[a.index].uid != pb.active.uid) {
                 EXPECT(pb.active.damage >= pb.active.card->hp);  // knocked out: its HP went with the Energy (Reuniclus)
@@ -375,13 +385,11 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
 
 int main(int argc, char** argv) {
     int row = -1;  // --row K: only deck K against every deck, so check_all.sh can run the rows in parallel
-    if (argc > 2 && std::string(argv[1]) == "--row") {
-        row = std::stoi(argv[2]);
-        argv += 2;
-        argc -= 2;
-    }
+    int games = GamesPerPairing;  // --games N: fewer games, for the slow sanitizer build
+    for (; argc > 2 && (std::string(argv[1]) == "--row" || std::string(argv[1]) == "--games"); argv += 2, argc -= 2)
+        (std::string(argv[1]) == "--row" ? row : games) = std::stoi(argv[2]);
     if (argc < 2) {
-        std::cerr << "usage: check_states [--row K] <deck.txt>...\n";
+        std::cerr << "usage: check_states [--row K] [--games N] <deck.txt>...\n";
         return 2;
     }
     try {
@@ -398,7 +406,7 @@ int main(int argc, char** argv) {
             for (const Deck& d1 : decks) {
                 const Deck* pair[2] = {&d0, &d1};
                 long wins[2] = {}, draws[2] = {}, turns = 0;  // draws: random player, any-move player
-                for (int g = 0; g < GamesPerPairing; ++g) {
+                for (int g = 0; g < games; ++g) {
                     Policy* policies[2] = {&random0, &random1};
                     if (g % 2) {
                         policies[0] = &any0;
@@ -432,7 +440,7 @@ int main(int argc, char** argv) {
                 }
                 std::cout << d0.name << " vs " << d1.name << ": P1 " << wins[0] << ", P2 " << wins[1] << ", draws "
                           << draws[0] + draws[1] << " (" << draws[0] << " random, " << draws[1]
-                          << " any-move), avg " << double(turns) / GamesPerPairing << " turns\n";
+                          << " any-move), avg " << double(turns) / games << " turns\n";
             }
         }
         std::cout << "\nmoves checked: " << st.moves << "\nevolutions: " << st.evolutions[1] << " to Stage 1, "

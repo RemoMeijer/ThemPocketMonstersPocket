@@ -18,7 +18,7 @@ LETTER = {"Grass": "G", "Fire": "R", "Water": "W", "Lightning": "L", "Psychic": 
 # Text differences already checked (2026-10-16): deckgym glitches ("Discard Fire[R] Energy") or other
 # wording ("a" vs "1", "back into") that doesn't change what the card does.
 KNOWN = {"A1-045", "A1-132", "A1-181", "A1-196", "A1-210", "A2-129", "A3-051", "A3b-066", "B1-036", "B2-014",
-         "B2-042", "B3-008", "P-A-005"}
+         "B2-042", "B3-008", "B4-022", "P-A-005"}  # B4-022 Flareon: both read "Discard Fire{R}", 1 {R} (2026-10-20)
 
 
 def norm(t):

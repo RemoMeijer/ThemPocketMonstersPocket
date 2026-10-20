@@ -384,6 +384,12 @@ Updated 2026-10-19. One row per rule: what the engine does and how we know.
 | Will: only coin flips for the effect of an attack, Ability or Trainer card count, not Checkup or Confusion | Ruling (2026-10-19) | ✓ |
 | Team Rocket's Boss: as many Basic Pokémon as the opponent's Bench has room for; they don't set off "when you play this Pokémon" Abilities | Ruling (2026-10-19) | ✓ |
 | Flareon B4-022 "Discard Fire{R} Energy" (Limitless and deckgym) means 1 {R} Energy | App (2026-10-19) | ✓ |
+| A Pokémon holding more Tools than it may (Revavroom devolved by Celebi, or its Ability switched off by Alolan Muk or Budew) discards the last one attached, right away | App (2026-10-20) | ✓ |
+| Mew B2b's "1 attack from among the Pokémon in your opponent's hand and deck": a list of every attack on those cards, one picked at random, so 2 copies make an attack twice as likely | App (2026-10-20) | ✓ |
+| Team Rocket's Boss can be played when the opponent turns out to have no Basic Pokémon in hand: looking is part of the effect | App (2026-10-20) | ✓ |
+| "Choose a spot" (Meowscarada ex, Armaldo): only a spot with a Pokémon in it can be chosen | App (2026-10-20) | ✓ |
+| A copying attack (Mew ex, Ditto) is the attack that's used, not the copied one: a copied Sweets Relay doesn't count for Alcremie, and a copied "this Pokémon can't use X during your next turn" doesn't bind the copier | App (2026-10-20) | ✓ |
+| Fossils are Item cards outside play (deck, hand, discard pile): Pokémon searches (Poké Ball, May) don't find them, Item checks (Pachirisu) count them, Team Rocket's Boss can't bench them. In play a Fossil is a Basic Pokémon | App (2026-10-20) | ✓ |
 
 ## 11. Build order
 

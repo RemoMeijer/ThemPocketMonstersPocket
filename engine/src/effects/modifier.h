@@ -45,6 +45,9 @@ enum class ModKind : uint8_t {
     NoWeakness,          // has no Weakness
     CantPlayTrainer,     // player-wide: no Trainer cards at all from the hand (Items, Supporters, Tools, Stadiums)
     CantEvolve,          // player-wide: can't play a Pokémon from the hand to evolve any of their Pokémon
+    ExtraPick,           // its attacks named in `attacks` pick a random target amount more times (Drayden: Draco Meteor)
+    AsleepOnAttach,      // an Energy from the Energy Zone attached to it while Active makes it Asleep (Gothitelle)
+    RetreatTrap,         // while it is Active and the opponent's Active retreats: amount of attack damage to the new one (Galarian Stunfisk)
 };
 
 // Who a modifier applies to, seen from the player who owns its source.
@@ -76,6 +79,8 @@ struct Modifier {
     bool withEnergy = false;          // affected Pokémon must have Energy attached…
     uint16_t withEnergyTypes = 0;     // …of one of these types (0 = any) (Comfey)
     bool flip = false;                // only when a coin flip comes up heads (Conkeldurr)
+    bool anyTarget = false;           // DamageDealt: against each of the opponent's Pokémon, not only the Active (Clemont's Backpack)
+    const NameList* attacks = nullptr;  // ExtraPick: only for attacks with one of these names
 };
 
 inline bool playerWide(ModKind k) {

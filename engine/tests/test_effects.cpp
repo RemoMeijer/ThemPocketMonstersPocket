@@ -1,5 +1,7 @@
 // Effect checks: the building blocks, modifiers, timed effects, Trainers and abilities, on hand-built
 // positions. Scripts are written inline, so this doesn't need data/effects.tsv.
+#include <algorithm>
+
 #include "effects/effect.h"
 #include "test_support.h"
 
@@ -1413,6 +1415,290 @@ static void longTailBatch() {
     }
 }
 
+// Batch 11: the one-offs, one check per new word.
+static void oneOffBatch() {
+    {   // poison N: that much at Checkup; a plain Poison afterwards is the usual amount again (ruling)
+        Table t;
+        attackScript(t, "(poison opp-active 20)");
+        GameState& s = t.position();
+        t.play(ActionKind::Attack);
+        CHECK(s.players[1].active.damage == 20);
+        EffectCtx ctx{t.game, 0};
+        stmt("(status opp-active poisoned)")->run(ctx);
+        CHECK(s.players[1].active.poison == 0);
+    }
+    {   // damage-at-end-of-opp-turn: follows the Defending Pokémon onto the Bench, at the end of the next turn
+        Table t;
+        attackScript(t, "(damage-at-end-of-opp-turn defending 50)");
+        GameState& s = t.position();
+        uint16_t mon1 = s.players[1].active.uid;
+        t.play(ActionKind::Attack);
+        CHECK(s.later.size() == 1 && s.players[1].active.damage == 0);
+        t.play(ActionKind::Retreat, 0);  // P2 (turn 6): Mon2 comes up, Mon1 goes to the Bench
+        t.play(ActionKind::EndTurn);
+        CHECK(t.game.find(mon1)->damage == 50 && s.later.empty());
+    }
+    {   // Bench spots: the lowest free one, a retreat keeps the spot on the Bench side; knock-out-at-end-of-opp-turn :spot
+        // hits whoever is in that spot then
+        Table t;
+        attackScript(t, "(knock-out-at-end-of-opp-turn (choose opp bench (name \"Mon3\")) :spot)");
+        GameState& s = t.position();
+        t.bench(1, t.cards[3]);
+        CHECK(s.players[1].bench[0].spot == 0 && s.players[1].bench[1].spot == 1);
+        t.play(ActionKind::Attack);
+        t.play(ActionKind::Retreat, 1);  // P2: Mon3 comes up, Mon1 takes its spot
+        CHECK(s.players[1].bench[1].card == &t.cards[1] && s.players[1].bench[1].spot == 1);
+        t.play(ActionKind::EndTurn);
+        CHECK(s.players[0].points == 1 && s.players[1].bench.size() == 1 && s.players[1].active.card == &t.cards[3]);
+        CHECK(t.bench(1, t.cards[4]).spot == 1);
+    }
+    {   // first-heads: the player's next effect coin this turn is heads, once
+        Table t;
+        GameState& s = t.position();
+        EffectCtx ctx{t.game, 0};
+        stmt("(first-heads)")->run(ctx);
+        stmt("(flip 1)")->run(ctx);
+        CHECK(ctx.heads == 1 && s.players[0].firstHeadsTurn == -1);
+    }
+    {   // devolve: the top card into its owner's hand; damage and Energy stay, Special Conditions end
+        Table t;
+        attackScript(t, "(seq (hit) (devolve opp-active))");
+        GameState& s = t.position();
+        PokemonSlot& a = t.active(1, t.cards[0]);
+        t.game.evolve(a, &t.cards[10]);
+        a.status = Poisoned;
+        a.energy[int(Type::Water)] = 1;
+        t.play(ActionKind::Attack);
+        const PlayerState& p = s.players[1];
+        CHECK(p.active.card == &t.cards[0] && p.active.below.empty() && p.active.damage == 30 && p.active.status == 0);
+        CHECK(p.active.energyCount() == 1 && std::count(p.hand.begin(), p.hand.end(), &t.cards[10]) == 1);
+    }
+    {   // discard-from-hand N FILTER: only matching cards, and it needs N of them
+        Table t;
+        CardDef gear = trainer(TrainerKind::Tool, "Gear");
+        GameState& s = t.position();
+        auto& hand = s.players[0].hand;
+        hand.clear();
+        hand.push_back(&t.cards[3]);
+        hand.push_back(&gear);
+        EffectCtx ctx{t.game, 0};
+        const Stmt* d = stmt("(discard-from-hand 1 tool)");
+        CHECK(d->possible(ctx));
+        d->run(ctx);
+        CHECK(hand.size() == 1 && hand[0] == &t.cards[3] && s.players[0].discard.back() == &gear && !d->possible(ctx));
+    }
+    {   // outside play a Fossil is an Item card, not a Pokémon (ruling)
+        auto onTop = [](const char* filter) {
+            Table t;
+            t.cards[5].effect = "Play this card as if it were a 40-HP Basic {C} Pokémon.";
+            attackScript(t, (std::string("(seq (set-damage (* (top-count 1 ") + filter + ") 10)) (hit))").c_str());
+            GameState& s = t.position();
+            s.players[0].deck.push_back(&t.cards[5]);
+            t.play(ActionKind::Attack);
+            return damageOn(t, 1);
+        };
+        CHECK(onTop("item") == 10 && onTop("trainer") == 10 && onTop("pokemon") == 0 && onTop("basic") == 0);
+    }
+    {   // a copied "this Pokémon can't use X during your next turn" doesn't bind the copier (ruling)
+        Table t;
+        t.cards[1].attacks[0].script = stmt("(seq (hit) (effect my-next-turn self (cant-use-attack 0)))");
+        attackScript(t, "(copy-attack opp-active)");
+        GameState& s = t.position();
+        t.play(ActionKind::Attack);
+        CHECK(damageOn(t, 1) == 30 && s.timed.empty());
+    }
+    {   // top-count with (min-retreat N): the top cards looked at in place; shuffle-deck
+        Table t;
+        t.cards[5].retreat = 3;
+        attackScript(t, "(seq (set-damage (* (top-count 2 pokemon (min-retreat 3)) 10)) (shuffle-deck my) (hit))");
+        GameState& s = t.position();
+        auto& deck = s.players[0].deck;
+        deck.clear();
+        for (int i : {5, 4, 5}) deck.push_back(&t.cards[i]);  // the top is the last: Mon5, Mon4, then Mon5
+        t.play(ActionKind::Attack);
+        CHECK(damageOn(t, 1) == 10 && deck.size() == 3);
+    }
+    {   // has-tool with a name
+        Table t;
+        CardDef mittens = trainer(TrainerKind::Tool, "Lucky Mittens"), cape = trainer(TrainerKind::Tool, "Cape");
+        GameState& s = t.position();
+        EffectCtx ctx{t.game, 0};
+        ctx.self = s.players[0].active.uid;
+        const Stmt* named = stmt("(if (has-tool self \"Lucky Mittens\") (damage opp-active 10))");
+        s.players[0].active.tools.push_back(&cape);
+        named->run(ctx);
+        CHECK(s.players[1].active.damage == 0);
+        s.players[0].active.tools[0] = &mittens;
+        named->run(ctx);
+        CHECK(s.players[1].active.damage == 10);
+    }
+    {   // hand-to-deck-random any: one card from both hands together, into its owner's deck
+        Table t;
+        GameState& s = t.position();
+        s.players[0].hand.clear();
+        s.players[1].hand.clear();
+        s.players[1].hand.push_back(&t.cards[3]);
+        std::size_t deck = s.players[1].deck.size();
+        EffectCtx ctx{t.game, 0};
+        stmt("(hand-to-deck-random any 1)")->run(ctx);
+        CHECK(s.players[1].hand.empty() && s.players[1].deck.size() == deck + 1);
+    }
+    {   // damage-dealt :any-target counts on the Bench too
+        Table t;
+        attackScript(t, "(seq (hit) (damage (each opp bench) 10))");
+        GameState& s = t.position();
+        EffectCtx ctx{t.game, 0};
+        stmt("(effect this-turn me (damage-dealt 20 :scope my-all :any-target))")->run(ctx);
+        t.play(ActionKind::Attack);
+        CHECK(s.players[1].active.damage == 50 && s.players[1].bench[0].damage == 30);
+    }
+    {   // retreat-trap: the opponent retreats while the trapper is Active: attack damage to the new Active, with Weakness
+        Table t;
+        attackScript(t, "(seq (hit) (effect opp-next-turn self (retreat-trap 40)))");
+        t.cards[2].weakness = Type::Water;
+        t.cards[2].hp = 100;
+        GameState& s = t.position();
+        t.play(ActionKind::Attack);
+        t.play(ActionKind::Retreat, 0);
+        CHECK(s.players[1].active.card == &t.cards[2] && s.players[1].active.damage == 40 + rules::WeaknessBonus);
+    }
+    {   // ko-check: the first hit knocks out the Active, the new Active takes the second hit
+        Table t;
+        attackScript(t, "(seq (hit) (ko-check) (set-damage 20) (hit))");
+        GameState& s = t.position();
+        s.players[1].active.damage = 30;
+        t.play(ActionKind::Attack);
+        CHECK(s.players[0].points == 1 && s.players[1].active.card == &t.cards[2] && s.players[1].active.damage == 20);
+    }
+    {   // asleep-on-attach: an attach from the Energy Zone to that Active Pokémon puts it to sleep
+        Table t;
+        attackScript(t, "(seq (hit) (effect opp-next-turn defending (asleep-on-attach)))");
+        GameState& s = t.position();
+        t.play(ActionKind::Attack);
+        t.play(ActionKind::AttachEnergy, 0, -1);
+        CHECK(s.players[1].active.status == Asleep);
+    }
+    {   // hand-size leaves out the Trainer being played; hand-to-deck without a filter takes any card
+        Table t;
+        CardDef maintenance = trainer(TrainerKind::Item, "Maintenance", "(if (>= (hand-size my) 2) (seq (hand-to-deck) (hand-to-deck) (draw 1)))");
+        GameState& s = t.position();
+        auto& hand = s.players[0].hand;
+        hand.clear();
+        hand.push_back(&maintenance);
+        hand.push_back(&t.cards[3]);
+        CHECK(!t.can(ActionKind::PlayTrainer));
+        hand.push_back(&t.cards[4]);
+        t.play(ActionKind::PlayTrainer, 0);
+        CHECK(hand.size() == 1);
+    }
+    {   // a timed no-abilities turns off the Defending Pokémon's Ability; a card without an Ability keeps its rule
+        auto hit = [](bool ability) {
+            Table t;
+            if (ability) t.cards[1].abilities.push_back({"Shield", "takes -20"});
+            t.cards[1].passive.push_back(mod("(damage-taken -20)"));
+            attackScript(t, "(seq (effect while-active defending (no-abilities)) (hit))");
+            t.position();
+            t.play(ActionKind::Attack);
+            return damageOn(t, 1);
+        };
+        CHECK(hit(true) == 30 && hit(false) == 10);
+    }
+    {   // first-attack: until it has used an attack since coming into play
+        Table t;
+        t.cards[1].hp = 200;
+        attackScript(t, "(seq (if (first-attack self) (bonus 20)) (hit))");
+        GameState& s = t.position();
+        t.play(ActionKind::Attack);
+        CHECK(damageOn(t, 1) == 50 && s.players[0].active.attacked);
+        t.play(ActionKind::EndTurn);
+        t.play(ActionKind::Attack);
+        CHECK(damageOn(t, 1) == 80);
+    }
+    {   // cant-use-attack -1: one of its attacks at random
+        Table t;
+        attackScript(t, "(seq (hit) (effect opp-next-turn defending (cant-use-attack -1)))");
+        GameState& s = t.position();
+        s.players[1].active.energy[int(Type::Water)] = 1;
+        t.play(ActionKind::Attack);
+        CHECK(s.timed.size() == 1 && s.timed[0].mod.amount == 0 && !t.can(ActionKind::Attack));
+    }
+    {   // tools-to-deck
+        Table t;
+        CardDef cape = trainer(TrainerKind::Tool, "Cape");
+        GameState& s = t.position();
+        s.players[1].active.tools.push_back(&cape);
+        std::size_t deck = s.players[1].deck.size();
+        EffectCtx ctx{t.game, 0};
+        stmt("(tools-to-deck (each opp all))")->run(ctx);
+        CHECK(s.players[1].active.tools.empty() && s.players[1].deck.size() == deck + 1);
+    }
+    {   // extra-pick: one more random pick, only for the attack it names
+        auto picks = [](const char* attack) {
+            Table t;
+            attackScript(t, "(hits 2 (random opp active) 10)");
+            t.cards[0].attacks[0].name = attack;
+            t.position();
+            EffectCtx ctx{t.game, 0};
+            stmt("(effect this-turn me (extra-pick 1 :attack \"Draco Meteor\"))")->run(ctx);
+            t.play(ActionKind::Attack);
+            return damageOn(t, 1);
+        };
+        CHECK(picks("Draco Meteor") == 30 && picks("Splash") == 20);
+    }
+    {   // opp-hand-to-bench: a Basic from the opponent's hand onto their Bench, while there is room
+        Table t;
+        GameState& s = t.position();
+        auto& hand = s.players[1].hand;
+        hand.clear();
+        hand.push_back(&t.cards[5]);
+        hand.push_back(&t.cards[10]);  // Evo1: not a Basic
+        EffectCtx ctx{t.game, 0};
+        const Stmt* b = stmt("(opp-hand-to-bench basic)");
+        CHECK(b->possible(ctx));
+        b->run(ctx);
+        CHECK(s.players[1].bench.size() == 2 && s.players[1].bench[1].card == &t.cards[5] && hand.size() == 1);
+        CHECK(!b->possible(ctx));
+    }
+    {   // copy-attack :energy: its own Energy must pay the copied attack's cost, else nothing; an unknown option fails;
+        // copy-attack-cards: an attack of a card in the opponent's hand or deck
+        auto copied = [](const char* script, int cost) {
+            Table t;
+            attackScript(t, script);
+            t.cards[1].attacks[0].cost[int(Type::Water)] = uint8_t(cost);
+            t.position();
+            t.play(ActionKind::Attack);
+            return damageOn(t, 1);
+        };
+        CHECK(copied("(copy-attack opp-active :energy)", 2) == 0 && copied("(copy-attack opp-active :energy)", 1) == 30);
+        Table c;
+        attackScript(c, "(copy-attack-cards opp)");
+        GameState& s = c.position();
+        s.players[1].hand.clear();
+        s.players[1].deck.clear();
+        s.players[1].deck.push_back(&c.cards[3]);  // the only card: its attack is the one
+        c.cards[3].attacks[0].damage = 40;
+        c.play(ActionKind::Attack);
+        CHECK(damageOn(c, 1) == 40);
+        bool failed = false;
+        try {
+            stmt("(copy-attack opp-active :typo)");
+        } catch (const ScriptError&) {
+            failed = true;
+        }
+        CHECK(failed);
+    }
+    {   // attack-uses: attacks used this game, by name, counted after each attack
+        Table t;
+        attackScript(t, "(seq (set-damage (* (attack-uses my \"Splash\") 10)) (hit))");
+        GameState& s = t.position();
+        t.play(ActionKind::Attack);
+        CHECK(damageOn(t, 1) == 0 && s.players[0].attackUses.size() == 1);
+        t.play(ActionKind::EndTurn);
+        t.play(ActionKind::Attack);
+        CHECK(damageOn(t, 1) == 10);
+    }
+}
+
 int main() {
     bonusAndCancel();
     recoilKnockOutScoresForTheOpponent();
@@ -1458,5 +1744,6 @@ int main() {
     knockOutTriggers();
     abilityBatch();
     longTailBatch();
+    oneOffBatch();
     return report("effects");
 }

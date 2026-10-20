@@ -2044,7 +2044,7 @@ B4-018	Sinistcha	Pokemon	Stage1	80	G	R	1		Poltchageist	Scald~GC~40~Your opponent
 B4-019	Teal Mask Ogerpon	Pokemon	Basic	90	G	R	1			Ogre's Whip~GGC~~This attack does damage to your opponent's Active Pokémon equal to this Pokémon's remaining HP.		
 B4-020	Ponyta	Pokemon	Basic	60	R	W	1			Stoke~R~~Take a {R} Energy from your Energy Zone and attach it to this Pokémon.		
 B4-021	Rapidash	Pokemon	Stage1	110	R	W	1		Ponyta	Heat Blast~RRC~80~		
-B4-022	Flareon	Pokemon	Stage1	110	R	W	2		Eevee	Bursting Tail~RR~70~Discard Fire{R} Energy from this Pokémon. Your opponent's Active Pokémon is now Burned.		
+B4-022	Flareon	Pokemon	Stage1	110	R	W	2		Eevee	Bursting Tail~RR~70~Discard a {R} Energy from this Pokémon. Your opponent's Active Pokémon is now Burned.		
 B4-023	Moltres	Pokemon	Basic	100	R	L	1			Sky Attack~RCCC~150~Flip a coin. If tails, this attack does nothing.		
 B4-024	Cyndaquil	Pokemon	Basic	60	R	W	1			Singe~R~~Your opponent's Active Pokémon is now Burned.		
 B4-025	Quilava	Pokemon	Stage1	80	R	W	1		Cyndaquil	Heat Wave~RR~30~Your opponent's Active Pokémon is now Burned.		

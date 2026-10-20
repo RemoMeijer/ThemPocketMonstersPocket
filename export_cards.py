@@ -22,7 +22,12 @@ LETTER = {"Grass": "G", "Fire": "R", "Water": "W", "Lightning": "L", "Psychic": 
 ALT_ART = ("☆", "Crown")  # Limitless lists Shiny cards as ☆ too
 FOSSIL = re.compile(r"Play this card as if it were a (\d+)-HP Basic \{(\w)\} Pokémon\.")
 # Limitless errors, checked against Serebii, TCGdex and deckgym-core.
-FIXES = {("P-A-022", "hp"): "50"}  # Jigglypuff: Limitless says 60, the other three 50
+FIXES = {
+    ("P-A-022", "hp"): "50",  # Jigglypuff: Limitless says 60, the other three 50
+    # Flareon: Limitless and deckgym say "Discard Fire{R} Energy"; it means 1 {R} Energy (App)
+    ("B4-022", "attacks"): "Bursting Tail~RR~70~Discard a {R} Energy from this Pokémon. "
+                           "Your opponent's Active Pokémon is now Burned.",
+}
 COLUMNS = "id name category stage hp type weakness retreat suffix evolves_from attacks abilities effect".split()
 CARD = re.compile(r'<div class="card-text">(.*?)<div class="card-set-info">\s*(\S+) #(\d+)\s*</div>', re.S)
 

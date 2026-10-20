@@ -19,6 +19,7 @@ public:
         // A Trainer needs something to do before it can be played: no Potion without damage (App).
         auto doable = [&](const CardDef* c) {
             EffectCtx ctx{game, me};
+            ctx.trainerInHand = true;
             return c->play && c->play->possible(ctx);
         };
         for (std::size_t h = 0; h < p.hand.size(); ++h) {

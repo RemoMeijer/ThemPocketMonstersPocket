@@ -109,11 +109,9 @@ struct Table {
     }
 
     PokemonSlot& bench(int player, const CardDef& card) {
-        auto& bench = game.state().players[player].bench;
-        bench.push_back({});
-        game.putIntoPlay(bench.back(), &card);
-        bench.back().enteredTurn = 0;
-        return bench.back();
+        PokemonSlot& slot = game.addToBench(player, &card);
+        slot.enteredTurn = 0;
+        return slot;
     }
 
     bool can(ActionKind kind) {

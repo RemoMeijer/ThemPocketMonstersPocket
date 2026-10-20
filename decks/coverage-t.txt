@@ -1,0 +1,24 @@
+# Coverage batch 11, Psychic/Darkness/Metal: one-offs. Mesprit with Uxie and Azelf, Poison for a set amount, delayed
+# damage, Sweets Relay counted over the game, copying from the hand and deck, a retreat trap and stacking attacks.
+energy: Psychic, Darkness, Metal
+
+1 A2-076   # Mesprit
+1 A2-075   # Uxie
+1 A2-077   # Azelf
+1 A2a-034  # Unown
+1 A3-084   # Tapu Lele
+1 B2b-030  # Mew (copy-attack-cards)
+1 B3a-026  # Flutter Mane ex (first-attack)
+1 B4-077   # Hoopa (tools-to-deck)
+1 P-B-091  # Team Rocket's Wobbuffet (top-count)
+1 A3b-036  # Milcery (Sweets Relay)
+1 A3b-037  # Alcremie (attack-uses)
+1 A4a-032  # Misdreavus
+1 A4a-033  # Mismagius (damage-at-end-of-opp-turn)
+1 A2a-051  # Croagunk
+1 A2a-052  # Toxicroak (poison)
+1 B1-161   # Mareanie
+1 B3b-047  # Toxapex (poison)
+1 B2-113   # Mega Mawile ex
+1 B2-117   # Galarian Stunfisk (retreat-trap)
+1 A4-156   # Will (first-heads)

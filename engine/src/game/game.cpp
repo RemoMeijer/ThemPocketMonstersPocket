@@ -40,6 +40,32 @@ void Game::step() {
     apply(actions.at(policies_[player]->choose(PlayerView(s_, player), actions)));
 }
 
+bool Game::effectFlip(int player) {
+    int& turn = s_.players[player].firstHeadsTurn;
+    if (turn != s_.turn) return flip();
+    turn = -1;
+    say("  coin: heads (first-heads)");
+    return true;
+}
+
+// A Pokémon holding more Tools than it may (a devolved Revavroom, or one whose Ability was switched off) discards the
+// last one attached (ruling). Returns whether any Tool went.
+bool Game::dropExtraTools() {
+    bool dropped = false;
+    for (int p : {0, 1}) {
+        auto drop = [&](PokemonSlot& slot) {
+            while (slot.card && int(slot.tools.size()) > 1 + sumMods(ModKind::ExtraTools, slot, p)) {
+                say(slot.card->name, "'s ", slot.tools.back()->name, " is discarded");
+                s_.players[p].discard.push_back(slot.tools.pop_back());
+                dropped = true;
+            }
+        };
+        drop(s_.players[p].active);
+        for (PokemonSlot& b : s_.players[p].bench) drop(b);
+    }
+    return dropped;
+}
+
 const std::vector<Action>& Game::legalActions() {
     actions_.clear();
     if (s_.phase == Phase::Setup) {
@@ -60,6 +86,7 @@ void Game::apply(Action action) {
     // "recovers from all Special Conditions and can't be affected…" (Comfey, Steel Apron): as soon as it holds.
     for (int p = 0; p < 2; ++p)
         if (PokemonSlot& a = s_.players[p].active; a.card && a.status) a.status &= uint8_t(~blockedStatuses(a, p));
+    if (s_.phase != Phase::Setup && dropExtraTools()) knockOutCheck();  // a lost Giant Cape can leave it at 0 HP
 }
 
 // --- Turn flow ---
@@ -117,6 +144,7 @@ void Game::startTurn() {
 
 void Game::endTurn() {
     int me = s_.current;
+    resolveLater();
     // Unused Energy Zone energy goes to the discard pile (App; the exact moment in the turn is assumed).
     if (PlayerState& p = s_.players[me]; p.energy) {
         ++p.discardEnergy[int(*p.energy)];
@@ -160,7 +188,7 @@ void Game::endTurn() {
         PokemonSlot& a = s_.players[p].active;
         if (!a.card || !a.status) continue;
         if (a.status & Poisoned) {
-            int poison = rules::PoisonDamage + sumMods(ModKind::PoisonDamage, a, p);  // Nihilego: +10
+            int poison = (a.poison ? a.poison : rules::PoisonDamage) + sumMods(ModKind::PoisonDamage, a, p);  // Nihilego: +10
             a.damage += poison;
             say(a.card->name, " takes ", poison, " Poison damage");
         }
@@ -197,6 +225,37 @@ void Game::endTurn() {
     s_.current = 1 - me;
     s_.phase = Phase::Main;
     startTurn();
+}
+
+// "At the end of your opponent's next turn…" (Mismagius, Meowscarada ex, Armaldo), first of all the end-of-turn
+// steps (ruling). A Knock Out happens at the knock-out check after Checkup, like damage.
+void Game::resolveLater() {
+    for (std::size_t i = 0; i < s_.later.size();) {
+        if (s_.later[i].turn != s_.turn) {
+            ++i;
+            continue;
+        }
+        LaterEffect e = s_.later.take(i);
+        PlayerState& side = s_.players[e.player];
+        PokemonSlot* p = nullptr;
+        if (e.uid)
+            p = find(e.uid);
+        else if (e.spot < 0)
+            p = side.active.card ? &side.active : nullptr;
+        else
+            for (PokemonSlot& b : side.bench)
+                if (b.spot == e.spot) p = &b;
+        if (!p) continue;  // it left play, or the spot is empty
+        int owner = 0;
+        find(p->uid, &owner);
+        if (e.damage) {
+            p->damage += e.damage;
+        } else {
+            p->damage = std::max(p->damage, maxHp(*p, owner));
+            p->koByEffect = true;
+        }
+        say(p->card->name, e.damage ? " takes delayed damage -> " : " is Knocked Out by a delayed effect -> ", show(*p, owner));
+    }
 }
 
 void Game::knockOutCheck(uint16_t attacker) {
@@ -325,6 +384,16 @@ void Game::putIntoPlay(PokemonSlot& slot, const CardDef* card) {
     slot.uid = s_.nextUid++;
     slot.enteredTurn = s_.turn;
     slot.baseStage = uint8_t(card->stage);
+}
+
+PokemonSlot& Game::addToBench(int player, const CardDef* card) {
+    PlayerState& p = s_.players[player];
+    unsigned used = 0;
+    for (const PokemonSlot& b : p.bench) used |= 1u << b.spot;
+    p.bench.push_back({});
+    putIntoPlay(p.bench.back(), card);
+    while (used & (1u << p.bench.back().spot)) ++p.bench.back().spot;
+    return p.bench.back();
 }
 
 void Game::evolve(PokemonSlot& slot, const CardDef* card) {
