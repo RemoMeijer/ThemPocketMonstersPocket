@@ -189,7 +189,6 @@ These are marked `shortcut:` in the code:
 - **Energy type when moving energy** (Elemental Switch, Dawn, "Move an Energy"): the engine takes the first matching type; the player should pick.
 - **Fossils:** a Fossil can't be discarded from play by choice.
 - **"Look at the top cards and put them back in any order"** (Hiker, Morty) does nothing, and Rotom Dex's "you may shuffle your deck" is dropped: nobody uses what they saw yet.
-- **Clemont's Backpack:** its "+20 to your opponent's Pokémon" isn't supported, because damage bonuses only count against the Active. The card stays unsupported.
 - **Timed effects:** at most 16 at once; past that, the oldest is dropped. This has never happened in a game.
 - **Dragonair's "attach an Energy from your discard pile":** takes the most plentiful type there; the player should pick.
 - **Professor Sada's "3 different types … in any way you like":** the types come at random; the player should pick which type goes where.
