@@ -215,12 +215,17 @@ In order. Each step gets a short plan, then tests, `check_states` at 0 violation
 1. **Card coverage is done** (batch 12): every card plays.
 2. **Effect-script checks: done** (2026-10-20). `data/golden.tsv`: 487 real cards picked so every compiler pattern appears on at least two, plus all hand-written cards, reviewed against their text by three subagents (468 scripts). The review fixed Vaporeon-style "move Energy from a Benched Pokémon" (the source must hold that Energy: 4 cards) and Polteageist (its "you may" kept). For a new set: review the `effects.tsv` diff, add a card per new pattern to `golden.tsv`, then `--accept-golden`.
 3. **Seeds: dropped for now** (2026-10-20). Training wants fresh randomness, and the gain for comparing decks is modest.
-4. **Player choices the engine makes today:** which energy type to pay, discard or move (the player should pick), and discarding a Fossil.
-5. **The simulation runner (milestone 3, AI_PLAN.md M0):** many games over threads; win, draw and loss per pairing with a confidence interval; the first player alternates. About 2,400 games per pairing give ±2%.
-6. **Finding decks (milestone 4, AI_PLAN.md M4):** generate legal decks around Pokémon lines, play them against each other, rank them, and list the top ones to try in the game.
-7. **Players:** the heuristic player is built (AI_PLAN.md M1; `tcgp --match N deckA deckB heuristic random`). Next the small learned players and the deck search of AI_PLAN.md M2–M5. AI_PLAN.md has the plan and its open questions.
-
-Dropped: R6, source tags on each constant in `rules.h`. DESIGN.md §10 already gives each rule's source.
+4. **AI_PLAN.md, phase by phase** (rewritten 2026-10-20: a player network and a deck builder that learn together).
+   In order:
+   - A0: the last choices the engine makes today go to the player (which Energy type to pay, discard or move;
+     discarding a Fossil);
+   - A1: the runner;
+   - C1–C2: deck search with the heuristic player, which gives the first deck ideas;
+   - A2–A3: the Python bridge with batched GPU decisions, and the encoding;
+   - B: the player network (cloning, then self-play);
+   - C3–C4: the deck networks;
+   - D: the loop.
+   The heuristic player is built (`tcgp --match N deckA deckB heuristic random`).
 
 ## Working agreements
 

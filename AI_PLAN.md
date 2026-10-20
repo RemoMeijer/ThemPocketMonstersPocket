@@ -1,171 +1,199 @@
-# AI plan: playing well and building decks
+# AI plan: a player and a deck builder that learn together
 
-Written 2026-10-20, after card coverage reached 100%. Built so far: the heuristic player (M1) and the choice descriptors (M0).
+Rewritten 2026-10-20. Built so far:
+- every card plays, and golden tests guard the scripts;
+- the heuristic player: about 99% wins against random, about 2% draws in a mirror;
+- choice descriptors: every choice says what its options are.
 
-The goal stays the same as in PROGRESS.md: find decks that come out on top, as ideas to try in the game. That needs two
-things, and they depend on each other:
+## The goal
 
-- **Game strategy:** a player that makes good choices. A deck is only as good as the way it's played, and the random
-  player makes every deck look like a coin toss (about 70% of its games end in a draw at the turn cap).
-- **Deck building:** searching the space of legal 20-card decks for the ones with the best win rates.
+Two networks that get better together:
+- **A player** that picks good moves from what it can see: its own hand, the board, and the discard piles.
+- **A deck builder** that puts together the 20 cards the player wins most with.
 
-So the order is: first a decent player, then deck search with that player, then improve both in turns.
+The deck builder learns from how the player plays, and the player learns to play the decks the builder makes. So the
+decks fit this player's style, the way a human builds around what they're good at.
 
-## What we have, and what's missing
+**The output** is the ideas to try in the game:
+- the top decks, with win rates and a matchup table;
+- the mix of decks that no single deck beats (the Nash equilibrium);
+- sample games showing how the player uses each deck.
 
-- **Have:**
-  - an engine that plays every card by the settled rules;
-  - `PlayerView`, which already hides the opponent's hand and both decks, so a player can't cheat;
-  - one `Policy` interface (`choose(view, legal actions)`);
-  - about 2,000 games/s per thread *with* the state checker on. The engine alone hasn't been measured; expect several
-    times that.
-- **Missing, all already on PROGRESS.md's Next list:**
-  - the runner (many games over threads, with stats);
-  - player choices. Today a choice inside an effect reaches the player as "option 0…n" with no meaning attached.
-    A learned player needs to know *what* each option is (a Pokémon, a card, an Energy type), so every choice must
-    carry a short description: the kind of choice, plus the uid or card id of each option.
+## Hardware
 
-## Milestones
-
-Each is small enough to check on its own: a test, numbers from the runner, and a commit.
-
-### M0. Foundations (Next steps 3–5)
-
-- **Runner:** `tcgp-run deckA deckB --games N --threads T`. It reports win/draw/loss with a 95% interval and
-  alternates who goes first. Seeds (replayable games, the same luck for both decks) were dropped for now (2026-10-20):
-  training wants fresh randomness anyway, and the gain for comparisons is modest.
-- **Choice descriptors (built 2026-10-20):** every `Game::choose` call passes what it's choosing (`ChoiceKind`) and what each option is (a Pokémon's uid or a card). The random
-  player ignores them; later players use them.
-- **Speed:** measure games/s with the checker off. That sets the budget for everything below.
-
-### M1. Baseline players and a ladder (no ML)
-
-- **Heuristic player** (built 2026-10-20, `players/heuristic.cpp`; it wins about 99% against random and draws about 2% against itself):
-  - evolve when possible;
-  - attach Energy to the Pokémon closest to attacking;
-  - play draw and search Trainers;
-  - attack with the strongest affordable attack;
-  - retreat a Pokémon about to be knocked out, when there's something better on the Bench.
-  
-  It's a sane opponent, and it cuts the draws.
-- **Rollout player** (flat Monte Carlo): for each legal action, play K quick games to the end with the heuristic
-  player, after first dealing the hidden cards at random from what's still unseen (*determinizing*). Pick the action
-  that wins most often. It's slow, hundreds of games per decision, but strong and needs no training. It's the
-  **teacher** for M3.
-- **Ladder:**
-  - a fixed pool of reference decks;
-  - every player gets an Elo rating against the others: random, heuristic, rollout, and later each trained version;
-  - a new player must beat the old ones on this ladder before it's used for deck search.
-
-### M2. State and action features (C++)
-
-- **State, one fixed-size vector per decision, seen from `PlayerView` only:**
-  - for each of the 8 Pokémon spots (both Actives, both Benches of 3): HP left, damage, Energy per type, Tool,
-    Special Conditions, stage, ex/Mega, retreat cost, and whether each attack is payable;
-  - your own hand as card counts;
-  - the opponent's hand size;
-  - deck sizes, discard counts, points, turn number, the Energy Zone, the Stadium, and whether the Supporter or
-    retreat was already used this turn.
-- **Cards:** described by their numbers (HP, damage, costs, type) plus a small learned embedding of the card id,
-  16 numbers per card. The numbers help the model handle cards it has rarely seen.
-- **Actions:** legal actions differ every turn, so the model scores each action separately from features of that
-  action: its kind, the card or Pokémon it involves, and the choice descriptor from M0. It then takes the best
-  score (a softmax over the legal actions). No fixed action space is needed.
-- **Data export:** `(state, legal actions, chosen action, final result)` per decision, to a binary file.
-
-### M3. Small learned players (Python training, C++ playing)
-
-- **Training:** in Python with PyTorch, on CPU. These are small MLPs: 2–3 layers of 128–256 units, about 100k
-  numbers in all.
-- **Playing:** in C++, from exported weights in a plain file, with a hand-written forward pass of about 60 lines and
-  no new dependency. One decision should take tens of microseconds, so a game takes a few milliseconds.
-- **Steps:**
-  1. **Value network:** from the final results of many heuristic-vs-heuristic games, learn "how likely am I to win
-     from here". Use it as a one-step-lookahead player: try each legal action and keep the one that leads to the
-     best value. This is cheap and already much better than random.
-  2. **Policy network by imitation:** learn to pick what the rollout player (M1) picks. Expensive search becomes
-     a cheap, fast player.
-  3. **Expert iteration:** a search (the rollouts, later a small Monte Carlo tree search over determinized deals)
-     guided by the current networks makes better choices. The networks learn from those choices, and the loop
-     repeats. This is AlphaZero's idea, scaled down, and it handles hidden cards by determinizing. Pure
-     reinforcement learning from scratch (PPO and the like) is possible later, but games are long and the reward
-     comes only at the end, so it learns slowly. Bootstrapping from search is the safer start.
-- **Many decks:** train on a broad mix of decks, both generated (M4) and reference decks, so one player works for
-  any deck. Optionally add a summary of its own deck list as input.
-- **Accepting a new version:** it goes on the ladder (M1) and must beat the previous version clearly, for example
-  55%+ over 2,000 mirrored games.
-
-### M4. Deck building
-
-- **Legal decks:**
-  - 20 cards, at most 2 of a name, at least one Basic Pokémon;
-  - Energy types chosen to match the Pokémon;
-  - Star, Crown and Shiny cards ignored.
-- **Generator, from Pokémon lines:**
-  1. Pick 1–3 lines (a Basic and what evolves from it, or a Basic ex).
-  2. Pick counts for each line, such as 2-2-1 or 2-2-2.
-  3. Set the Energy types from those lines.
-  4. Fill the rest with Trainers. Draw and search Trainers are likely; Trainers that only help one line go in only
-     with that line.
-  
-  Every generated deck is legal and makes some sense.
-- **Fitness:** win rate against an opponent pool, played by the current best player on both sides. To save games,
-  use successive halving:
-  1. Many candidates play 100 games each.
-  2. The top half play twice as many.
-  3. Repeat until a few remain with tight intervals (about 2,400 games for ±2%).
-- **Search:** an evolutionary loop.
-  - **Mutations:** swap a card, swap a whole line, change a line's counts, change an Energy type.
-  - **Crossover:** combine lines from two parents.
-  - **Selection:** by fitness.
-  - **Hall of fame:** keep the best decks of earlier generations in the opponent pool. Otherwise the search chases
-    whatever beats the current top deck and goes round in rock-paper-scissors circles.
-- **Surrogate model (small ML for decks):** a network that predicts a deck's win rate from its list (the deck as a
-  bag of card embeddings), trained on every deck already simulated. It screens mutations cheaply, and only promising
-  ones get simulated. It also shows which cards tend to lift a deck.
-- **Output:** for the top decks:
-  - the list;
-  - the win rate against the pool with its interval;
-  - the matchup table;
-  - a mix of decks that no single deck beats (the Nash equilibrium of the matchup table). This shows what's strong
-    overall, not just against one opponent.
-
-### M5. Both together
-
-Repeat this loop:
-1. Search decks with the current player.
-2. Add the top decks to the training mix.
-3. Train the next player version and check it on the ladder.
-4. Search again.
-
-Keep a fixed held-out deck pool and the older players on the ladder, so overfitting to one meta shows up.
-
-## Rough compute budget
-
-Assuming the engine runs about 10,000 games/s per thread without the checker (to be measured in M0):
-
-| Player | Games/s on 12 threads | Use |
+| Machine | GPU | Use |
 |---|---|---|
-| Random or heuristic | ~100,000 | baselines, value-network data |
-| Small network | ~3,000–10,000 | deck search, ladder |
-| Rollout teacher | a few | imitation labels only |
+| Laptop | GTX 1050 (2–4 GB) | development and short training runs; the games themselves run on the 12 CPU threads |
+| Desktop | GTX 1080 (8 GB) | long training runs, about 4× the laptop's GPU |
 
-One deck search with 200 decks per generation and 50 generations, after halving, takes about 10 million games:
-roughly half an hour to a few hours with the network player. That fits on this machine; no GPU is needed for
-networks this small.
+Both GPUs are fine for models of this size (up to a few million numbers). Two things to sort out:
+- **PyTorch support:** Pascal-generation cards like these may need a slightly older PyTorch build. To check on each
+  machine before step A2.
+- **Getting the repo to the desktop:** it's a local repo with no remote. A private GitHub repo or a `git bundle` copy
+  would do.
 
-## Order of work
+## How the pieces fit
 
-1. Golden tests for the effect scripts (Next step 2). A player can only learn the right game if the cards are right.
-2. M0, then M1 (the heuristic player alone already gives useful first deck rankings), then M4 with the heuristic
-   player, then M2–M3, then M4 again with the learned player, then M5.
+```
+             card features (HP, costs, damage, script words, learned id)  ── shared by both networks
+                      │                                   │
+   ┌──────────────────▼───────────┐       ┌───────────────▼──────────────┐
+   │ PLAYER network               │       │ DECK BUILDER                 │
+   │ tokens: hand cards, Pokémon  │       │ picks 20 cards, one by one,  │
+   │ in play, global state        │       │ only legal choices           │
+   │ → a score per legal action   │       │ → a deck                     │
+   │ → "chance I win from here"   │       │ (+ a model that guesses a    │
+   └──────────────▲───────────────┘       │   deck's win rate)           │
+                  │ trained by self-play  └───────────────▲──────────────┘
+                  │                                       │ trained on the win rates
+          ┌───────┴───────────────────────────────────────┴──────┐
+          │ C++ engine: many games at once on all CPU threads;   │
+          │ decisions batched to the GPU, answers sent back      │
+          └──────────────────────────────────────────────────────┘
+```
 
-Deck search can start early with the heuristic player, so there are deck ideas before any ML is trained.
+## Phase A: infrastructure (CPU, on the laptop)
+
+**A0. The last choices go to the player** (PROGRESS.md Next step 4). Today the engine picks which Energy type to
+pay, discard or move, and when to discard a Fossil. A learning player must make every decision itself, or it can't
+learn them.
+
+**A1. Runner.** `tcgp-run` plays many games over all threads:
+- one pairing, or a whole matrix of decks against decks;
+- each side played by `random`, `heuristic` or, later, a network;
+- results as win/draw/loss with 95% intervals, in CSV for the scripts in later phases.
+
+Seeds are dropped.
+
+**A2. A Python bridge with batched decisions.** This is the key piece of engineering.
+- **Why it's needed:** the engine asks a player for a decision deep inside a card effect (`Game::choose`), so a game
+  can't simply pause and hand control to Python.
+- **The approach:** each game runs on its own C++ thread, and a few hundred games are in flight at once. When a
+  network decision is needed, the game thread puts the observation in a queue and waits.
+- **In Python:** `env.wait_batch()` returns all waiting observations as arrays. PyTorch runs them through the network
+  on the GPU in one batch, and `env.answer(actions)` wakes the games up again.
+- **The tool:** pybind11. No engine rewrite is needed, and the heuristic player stays in C++ as an opponent.
+- **Done when:** a dummy network in Python plays complete games, and the batch throughput is measured.
+
+**A3. Encoding:** what the network sees, from `PlayerView` only.
+- **Card features**, a fixed table computed once:
+  - the printed numbers: HP, type, Weakness, Retreat Cost, stage, ex or Mega, and each attack's cost and damage;
+  - the words in its effect scripts (about 200 possible words, so `heal`, `switch-in`, `damage-dealt` … become
+    features);
+  - a small learned embedding per card.
+  
+  The script words let it handle rare cards from what they *do*.
+- **Tokens:**
+  - each card in your own hand;
+  - each Pokémon in play, with its damage, Energy, Tool and Special Conditions;
+  - the opponent's hand size, deck sizes and discard piles as counts;
+  - a global token: turn, points, the Energy Zone, the Stadium, and whether this turn's Supporter, retreat and Energy
+    were already used.
+- **Actions:** each legal action is a token. It carries its kind and points at the card or Pokémon it involves, using
+  the choice descriptors.
+
+## Phase B: the player network
+
+**B1. Copy the heuristic player first (behaviour cloning).**
+- Record millions of heuristic decisions and train the network to predict them.
+- That's fast, and it proves the whole pipeline: encoding, bridge, GPU, playing.
+- **Done when:** the network wins about 50% against the heuristic it copied.
+
+**B2. Get better than the teacher: self-play with PPO.**
+- **Model:** a small transformer over the tokens, with an action head that scores each legal action (a pointer) and
+  a value head ("how likely do I win from here"). 2–4 layers, 128–256 wide, about 0.5–2 million numbers.
+- **Reward:** +1 for a win, −1 for a loss, 0 for a draw. Early on, maybe a small bonus per point scored, removed later.
+- **League:** a light version of AlphaStar's idea. Opponents are:
+  - 50% the current network;
+  - 30% older saved versions;
+  - 20% the heuristic.
+  
+  This stops it from forgetting how to beat old styles and from going round in circles.
+- **Decks during B:** a broad mix of generated decks (C1) and reference decks, so the player can play anything.
+- **Done when:** it beats the heuristic clearly, 65%+ with the same decks on both sides, and keeps climbing the
+  Elo ladder.
+
+**B3. Search on top (later, optional):** at decision time, try each move in a few quick simulated games, with the
+hidden cards dealt at random from what's unseen. The network guides which moves get tried. This is stronger but
+slower, so it's for evaluation and as a teacher, not for the millions of training games.
+
+**B4. A fast copy for the CPU (if needed):** if the transformer is too slow for big deck searches without the GPU,
+train a small MLP to imitate it (*distillation*).
+
+## Phase C: the deck builder
+
+**C1. Generator of legal, sensible decks:**
+1. Pick 1–3 Pokémon lines.
+2. Pick counts for each line, such as 2-2-1.
+3. Set the Energy types from those lines.
+4. Fill the rest with Trainers that fit.
+
+It's used for the player's training mix and as the starting population.
+
+**C2. Evolutionary search with the current player.** This gives the first deck ideas, and it can start right after
+A1 with the heuristic player, long before the networks are ready.
+- **Mutations:** swap a card, swap a line, change counts, change Energy types.
+- **Crossover:** combine lines from two parents.
+- **Successive halving:** many candidates get 100 games, the best get more, and so on.
+- **Hall of fame:** the best decks of earlier generations stay in the opponent pool.
+
+**C3. Deck value model:** a network that guesses a deck's win rate against the pool from its 20 cards (a set of card
+embeddings). It trains on every deck C2 ever evaluated, and it screens mutations so only promising ones get
+simulated.
+
+**C4. The learned deck builder:**
+- **What it is:** a network that builds a deck card by card, choosing only legal cards each step: at most 2 of a
+  name, the evolution lines complete, the Energy types matching.
+- **Training:** reinforcement learning on the win rate its decks reach when the current player network plays them.
+  Cheap guesses come from the value model C3, and real games confirm the promising ones.
+- **Shared parts:** it uses the same card features as the player, so "what a card does" is learned once.
+
+## Phase D: together, the actual goal
+
+One cycle:
+1. **Propose:** the builder proposes new decks, both its best guesses and some exploration. The population is these
+   plus the hall of fame.
+2. **Play:** the player network plays the population against itself (both sides network), on the GPU in batches.
+3. **Learn:**
+   - **the player** trains on those games (PPO), so it learns to play the decks the builder likes;
+   - **the builder** trains on the decks' win rates, so it learns which decks this player wins with;
+   - **the population** keeps the winners.
+4. **Check:** on a fixed benchmark that the loop never trains on:
+   - reference decks played by the heuristic and by each player version (the Elo ladder);
+   - the matchup table of the current top decks, with its Nash mix.
+
+**Stop** when the top decks and their ranking stop changing for several cycles, and the player no longer improves on
+the benchmark.
+
+## Risks, and what guards against them
+
+| Risk | Guard |
+|---|---|
+| The AI finds an engine bug or shortcut and wins through it | golden tests and `check_states` stay mandatory; read the game logs of every top deck before trusting it |
+| Rock-paper-scissors cycles: deck A beats B beats C beats A | hall of fame, league opponents, and the Nash mix instead of one "best" deck |
+| The player overfits to its own decks | the fixed benchmark, the heuristic in the league, and generated decks in the training mix |
+| Long games with a reward only at the end learn slowly | start from behaviour cloning (B1); the value head; optional small shaping early on |
+| GPU or PyTorch trouble on Pascal | everything also runs on CPU, just slower; check the PyTorch version first |
+
+## Order and rough size
+
+| Step | Size | Gives |
+|---|---|---|
+| A0 last player choices | small | a player can make every decision |
+| A1 runner | small | fast matchups and matrices |
+| C1 + C2 deck search with the heuristic player | medium | **the first deck ideas** |
+| A2 bridge + A3 encoding | large | the networks can play |
+| B1 cloning | medium | a working network player |
+| B2 self-play | large | a player better than the heuristic |
+| C3 + C4 deck networks | medium | a learned deck builder |
+| D the loop | medium (mostly running) | decks that fit the player, plus the Nash mix |
+
+The early steps already give something to use: after A1 + C2 there are deck rankings with the heuristic player.
 
 ## Open questions
 
-- **Python for training:** is PyTorch on this machine fine? Is there a GPU? CPU is enough.
-- **Reference decks:** should the opponent pool include current tournament decks (Limitless publishes decklists),
-  or only decks the search finds?
-- **Owned cards:** should deck search be limited to the cards in the collection, or search everything?
-- **Match format:** single games (as in ranked) or best-of-3?
+- **Reference decks:** should the benchmark and the opponent pool include current tournament decks (Limitless
+  publishes decklists)? This anchors the results to the real meta.
+- **Owned cards:** should the builder be limited to the cards in the collection, or search every card?
+- **Match format:** single games, as in ranked, or best-of-3?
+- **The desktop:** a private GitHub repo, or copies with `git bundle`?
