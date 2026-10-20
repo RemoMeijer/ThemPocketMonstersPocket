@@ -19,7 +19,7 @@ A C++ simulator for Pokémon TCG Pocket. The goal is to play many games between 
 | Card data | Every set up to B4b: 2,319 unique cards from Limitless, cross-checked against deckgym-core |
 | Card effects | All 2,319 cards playable. Trainers: 152 of 152 |
 | Checks | 21 rule tests, 45 effect tests, 86 compiler self-test examples. `check_states`: 0 violations over 30 decks. Sanitizer build (memory and undefined behaviour) clean |
-| Replayable games (seeds) | Not yet: every game seeds itself from `random_device` |
+| Replayable games (seeds) | Dropped for now (2026-10-20): every game seeds itself from `random_device` |
 | Simulation runner (many games, threads, stats) | Not started |
 | Finding decks (generate, play, rank) | Not started |
 | Players | Random, and a rule-based heuristic player (`players/heuristic.cpp`, 2026-10-20). Heuristic vs random wins about 99%; heuristic vs heuristic ends in a draw about 2% of the time (random vs random: about 70%), at about 5,300 games/s on one thread |
@@ -214,7 +214,7 @@ In order. Each step gets a short plan, then tests, `check_states` at 0 violation
 
 1. **Card coverage is done** (batch 12): every card plays.
 2. **Effect-script checks: done** (2026-10-20). `data/golden.tsv`: 487 real cards picked so every compiler pattern appears on at least two, plus all hand-written cards, reviewed against their text by three subagents (468 scripts). The review fixed Vaporeon-style "move Energy from a Benched Pokémon" (the source must hold that Energy: 4 cards) and Polteageist (its "you may" kept). For a new set: review the `effects.tsv` diff, add a card per new pattern to `golden.tsv`, then `--accept-golden`.
-3. **Seeds:** one seed per game, from which the shuffles, coins and random player all follow. Then failures can be replayed, and two decks can be compared on the same luck.
+3. **Seeds: dropped for now** (2026-10-20). Training wants fresh randomness, and the gain for comparing decks is modest.
 4. **Player choices the engine makes today:** which energy type to pay, discard or move (the player should pick), and discarding a Fossil.
 5. **The simulation runner (milestone 3, AI_PLAN.md M0):** many games over threads; win, draw and loss per pairing with a confidence interval; the first player alternates. About 2,400 games per pairing give ±2%.
 6. **Finding decks (milestone 4, AI_PLAN.md M4):** generate legal decks around Pokémon lines, play them against each other, rank them, and list the top ones to try in the game.

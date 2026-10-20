@@ -20,7 +20,6 @@ So the order is: first a decent player, then deck search with that player, then 
   - about 2,000 games/s per thread *with* the state checker on. The engine alone hasn't been measured; expect several
     times that.
 - **Missing, all already on PROGRESS.md's Next list:**
-  - seeds (replayable games);
   - the runner (many games over threads, with stats);
   - player choices. Today a choice inside an effect reaches the player as "option 0…n" with no meaning attached.
     A learned player needs to know *what* each option is (a Pokémon, a card, an Energy type), so every choice must
@@ -32,9 +31,9 @@ Each is small enough to check on its own: a test, numbers from the runner, and a
 
 ### M0. Foundations (Next steps 3–5)
 
-- **Seeds:** one seed per game drives the shuffles, the coins and the random player.
-- **Runner:** `tcgp-run deckA deckB --games N --threads T --seed S`. It reports win/draw/loss with a 95% interval,
-  alternates who goes first, and plays mirrored seeds (the same luck with the decks swapped) to cut noise.
+- **Runner:** `tcgp-run deckA deckB --games N --threads T`. It reports win/draw/loss with a 95% interval and
+  alternates who goes first. Seeds (replayable games, the same luck for both decks) were dropped for now (2026-10-20):
+  training wants fresh randomness anyway, and the gain for comparisons is modest.
 - **Choice descriptors (built 2026-10-20):** every `Game::choose` call passes what it's choosing (`ChoiceKind`) and what each option is (a Pokémon's uid or a card). The random
   player ignores them; later players use them.
 - **Speed:** measure games/s with the checker off. That sets the budget for everything below.
@@ -54,7 +53,7 @@ Each is small enough to check on its own: a test, numbers from the runner, and a
   that wins most often. It's slow, hundreds of games per decision, but strong and needs no training. It's the
   **teacher** for M3.
 - **Ladder:**
-  - a fixed pool of reference decks, played with seeds;
+  - a fixed pool of reference decks;
   - every player gets an Elo rating against the others: random, heuristic, rollout, and later each trained version;
   - a new player must beat the old ones on this ladder before it's used for deck search.
 
