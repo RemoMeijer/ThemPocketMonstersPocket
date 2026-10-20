@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "game/game.h"
+#include "players/heuristic.h"
 
 namespace {
 
@@ -386,10 +387,15 @@ void checkMove(const GameState& before, Action a, const GameState& after, Stats&
 int main(int argc, char** argv) {
     int row = -1;  // --row K: only deck K against every deck, so check_all.sh can run the rows in parallel
     int games = GamesPerPairing;  // --games N: fewer games, for the slow sanitizer build
-    for (; argc > 2 && (std::string(argv[1]) == "--row" || std::string(argv[1]) == "--games"); argv += 2, argc -= 2)
-        (std::string(argv[1]) == "--row" ? row : games) = std::stoi(argv[2]);
-    if (argc < 2) {
-        std::cerr << "usage: check_states [--row K] [--games N] <deck.txt>...\n";
+    std::string policy = "random";  // --policy heuristic: half the games with HeuristicPolicy instead of RandomPolicy
+    for (; argc > 2 && (std::string(argv[1]) == "--row" || std::string(argv[1]) == "--games" || std::string(argv[1]) == "--policy");
+         argv += 2, argc -= 2) {
+        std::string flag = argv[1];
+        if (flag == "--policy") policy = argv[2];
+        else (flag == "--row" ? row : games) = std::stoi(argv[2]);
+    }
+    if (argc < 2 || (policy != "random" && policy != "heuristic")) {
+        std::cerr << "usage: check_states [--row K] [--games N] [--policy random|heuristic] <deck.txt>...\n";
         return 2;
     }
     try {
@@ -398,6 +404,7 @@ int main(int argc, char** argv) {
         std::vector<Deck> decks;
         for (int i = 1; i < argc; ++i) decks.push_back(loadDeck(argv[i], db));
         RandomPolicy random0, random1;
+        HeuristicPolicy heuristic0, heuristic1;
         AnyPolicy any0, any1;
         Stats st;
         for (std::size_t i = 0; i < decks.size(); ++i) {
@@ -405,9 +412,13 @@ int main(int argc, char** argv) {
             const Deck& d0 = decks[i];
             for (const Deck& d1 : decks) {
                 const Deck* pair[2] = {&d0, &d1};
-                long wins[2] = {}, draws[2] = {}, turns = 0;  // draws: random player, any-move player
+                long wins[2] = {}, draws[2] = {}, turns = 0;  // draws: the --policy player, the any-move player
                 for (int g = 0; g < games; ++g) {
                     Policy* policies[2] = {&random0, &random1};
+                    if (policy == "heuristic") {
+                        policies[0] = &heuristic0;
+                        policies[1] = &heuristic1;
+                    }
                     if (g % 2) {
                         policies[0] = &any0;
                         policies[1] = &any1;
@@ -425,7 +436,7 @@ int main(int argc, char** argv) {
                         int player = game.decider();
                         std::vector<Action> actions = game.legalActions();
                         checkActions(before, actions);
-                        Action a = actions.at(policies[player]->choose(PlayerView(before, player), actions));
+                        Action a = actions.at(policies[player]->choose(PlayerView(s, player, &game), actions));
                         where += ", move kind " + std::to_string(int(a.kind));
                         game.apply(a);
                         checkMove(before, a, s, st);
@@ -439,7 +450,7 @@ int main(int argc, char** argv) {
                     turns += s.turn;
                 }
                 std::cout << d0.name << " vs " << d1.name << ": P1 " << wins[0] << ", P2 " << wins[1] << ", draws "
-                          << draws[0] + draws[1] << " (" << draws[0] << " random, " << draws[1]
+                          << draws[0] + draws[1] << " (" << draws[0] << " " << policy << ", " << draws[1]
                           << " any-move), avg " << double(turns) / games << " turns\n";
             }
         }

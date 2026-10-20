@@ -8,6 +8,14 @@
 #include "game/game.h"
 
 namespace {
+// The cards at these positions of a pile: what a choice between them shows the player.
+template <class Pile>
+std::vector<const CardDef*> cardsAt(const Pile& pile, const std::vector<std::size_t>& at) {
+    std::vector<const CardDef*> out;
+    for (std::size_t i : at) out.push_back(pile[i]);
+    return out;
+}
+
 int sidePlayer(const EffectCtx& ctx, bool opp) { return opp ? 1 - ctx.player : ctx.player; }
 
 // Which cards in a deck qualify: pokemon, basic, stage1, stage2, mega, trainer, supporter, item, tool, stadium,
@@ -298,7 +306,10 @@ public:
         PlayerState& p = ctx.game.state().players[ctx.player];
         auto options = optionsFor(ctx);
         if (options.empty()) return;
-        auto [t, h] = options[ctx.game.choose(ctx.player, int(options.size()))];
+        std::vector<uint16_t> uids;
+        std::vector<const CardDef*> cards;
+        for (auto [t, h] : options) uids.push_back(ctx.game.slot(ctx.player, t).uid), cards.push_back(p.hand[h]);
+        auto [t, h] = options[ctx.game.choose(ctx.player, int(options.size()), ChoiceKind::Gain, uids.data(), cards.data())];
         PokemonSlot& target = ctx.game.slot(ctx.player, t);
         ctx.game.evolve(target, p.hand.take(h));
         ctx.game.say("  ", target.below.back()->name, " evolves straight into ", target.card->name);
@@ -386,7 +397,8 @@ public:
             std::vector<std::size_t> hits = matches(from);
             if (hits.empty()) return;
             std::size_t pick = random_ ? std::uniform_int_distribution<std::size_t>(0, hits.size() - 1)(ctx.game.rng())
-                                       : std::size_t(ctx.game.choose(ctx.player, int(hits.size())));
+                                       : std::size_t(ctx.game.choose(ctx.player, int(hits.size()), ChoiceKind::Gain, nullptr,
+                                                                     cardsAt(from.discard, hits).data()));
             const CardDef* card = from.discard.take(hits[pick]);
             if (bench_) {
                 ctx.game.addToBench(sidePlayer(ctx, opp_), card);
@@ -565,7 +577,9 @@ public:
         PlayerState& p = ctx.game.state().players[1 - ctx.player];
         std::vector<std::size_t> hits = matches(p);
         if (hits.empty()) return;
-        const CardDef* c = p.hand.take(hits[ctx.game.choose(ctx.player, int(hits.size()))]);
+        // The opponent's card leaves their hand: a gain for the chooser.
+        const CardDef* c =
+            p.hand.take(hits[ctx.game.choose(ctx.player, int(hits.size()), ChoiceKind::Gain, nullptr, cardsAt(p.hand, hits).data())]);
         if (to_ == Bench) {
             ctx.game.addToBench(1 - ctx.player, c);
             ctx.game.say("  ", c->name, " from the opponent's hand onto their Bench");
@@ -679,7 +693,8 @@ public:
         for (std::size_t i = 0; i < p.deck.size(); ++i)
             if (deck_.matches(p.deck[i])) inDeck.push_back(i);
         if (inHand.empty() || inDeck.empty()) return;
-        std::size_t give = inHand[ctx.game.choose(ctx.player, int(inHand.size()))];
+        std::size_t give =
+            inHand[ctx.game.choose(ctx.player, int(inHand.size()), ChoiceKind::Lose, nullptr, cardsAt(p.hand, inHand).data())];
         std::size_t take = inDeck[std::uniform_int_distribution<std::size_t>(0, inDeck.size() - 1)(ctx.game.rng())];
         const CardDef* got = p.deck.take(take);
         const CardDef* gave = p.hand.take(give);
@@ -726,7 +741,8 @@ public:
         for (std::size_t i = 0; i < p.hand.size(); ++i)
             if (f_.matches(p.hand[i])) hits.push_back(i);
         if (hits.empty()) return;
-        const CardDef* c = p.hand.take(hits[ctx.game.choose(ctx.player, int(hits.size()))]);
+        const CardDef* c =
+            p.hand.take(hits[ctx.game.choose(ctx.player, int(hits.size()), ChoiceKind::Lose, nullptr, cardsAt(p.hand, hits).data())]);
         p.deck.push_back(c);
         std::shuffle(p.deck.begin(), p.deck.end(), ctx.game.rng());
         ctx.game.say("  ", c->name, " is shuffled into the deck");
@@ -748,7 +764,7 @@ public:
         for (int player : players(ctx)) {
             PlayerState& p = ctx.game.state().players[player];
             while (p.hand.size() > std::size_t(n_)) {
-                const CardDef* c = p.hand.take(ctx.game.choose(player, int(p.hand.size())));
+                const CardDef* c = p.hand.take(ctx.game.choose(player, int(p.hand.size()), ChoiceKind::Lose, nullptr, p.hand.begin()));
                 p.discard.push_back(c);
                 ctx.game.say("  P", player + 1, " discards ", c->name);
             }
@@ -832,7 +848,8 @@ public:
         for (int i = 0; i < n_; ++i) {
             std::vector<std::size_t> hits = matches(p);
             if (hits.empty()) return;
-            const CardDef* c = p.hand.take(hits[std::size_t(ctx.game.choose(ctx.player, int(hits.size())))]);
+            std::size_t k = std::size_t(ctx.game.choose(ctx.player, int(hits.size()), ChoiceKind::Lose, nullptr, cardsAt(p.hand, hits).data()));
+            const CardDef* c = p.hand.take(hits[k]);
             p.discard.push_back(c);
             ctx.game.say("  ", c->name, " is discarded from the hand");
         }

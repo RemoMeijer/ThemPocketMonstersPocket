@@ -1,17 +1,22 @@
 // tcgp <deck.txt> [opponent-deck.txt]   plays one game and prints it (a mirror match with one deck)
 // tcgp --coverage                        how many cards the engine can play, and the commonest reasons it can't
 // tcgp --unsupported                     every card the engine can't play, with its full reason
+// tcgp --match N deckA deckB [random|heuristic] [random|heuristic]
+//                                        N games, deckA's wins, draws and losses (players default to random)
 // Run from the project folder: it reads data/cards.tsv and, when present, data/effects.tsv.
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <exception>
 #include <filesystem>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "game/game.h"
+#include "players/heuristic.h"
 
 namespace {
 CardDb loadCards() {
@@ -56,15 +61,43 @@ void coverage(const CardDb& db) {
     std::sort(top.rbegin(), top.rend());
     for (std::size_t i = 0; i < top.size() && i < 30; ++i) std::cout << "  " << top[i].first << "  " << top[i].second << "\n";
 }
+
+std::unique_ptr<Policy> makePolicy(const std::string& name) {
+    if (name == "random") return std::make_unique<RandomPolicy>();
+    if (name == "heuristic") return std::make_unique<HeuristicPolicy>();
+    throw std::runtime_error("unknown player '" + name + "' (random or heuristic)");
+}
+
+// N games of deckA against deckB, swapping seats every game (the coin still decides who goes first).
+int match(const CardDb& db, int argc, char** argv) {
+    int n = std::stoi(argv[2]);
+    Deck a = loadDeck(argv[3], db), b = loadDeck(argv[4], db);
+    std::unique_ptr<Policy> pa = makePolicy(argc > 5 ? argv[5] : "random"), pb = makePolicy(argc > 6 ? argv[6] : "random");
+    long won = 0, drawn = 0;
+    for (int g = 0; g < n; ++g) {
+        bool aFirst = g % 2 == 0;
+        Game game(aFirst ? a : b, aFirst ? b : a, aFirst ? *pa : *pb, aFirst ? *pb : *pa);
+        int w = game.run().winner;
+        if (w < 0) ++drawn;
+        else if ((w == 0) == aFirst) ++won;
+    }
+    double p = double(won) / n, half = 1.96 * std::sqrt(p * (1 - p) / n);  // normal approximation
+    std::cout << a.name << " vs " << b.name << ", " << n << " games: wins " << won << ", draws " << drawn << ", losses "
+              << n - won - drawn << "; win rate " << 100 * p << "% +- " << 100 * half << "% (95%)\n";
+    return 0;
+}
 }  // namespace
 
 int main(int argc, char** argv) {
-    if (argc < 2 || argc > 3) {
-        std::cerr << "usage: tcgp <deck.txt> [opponent-deck.txt]\n       tcgp --coverage | --unsupported\n";
+    bool isMatch = argc >= 5 && argc <= 7 && std::string(argv[1]) == "--match";
+    if ((argc < 2 || argc > 3) && !isMatch) {
+        std::cerr << "usage: tcgp <deck.txt> [opponent-deck.txt]\n       tcgp --coverage | --unsupported\n"
+                     "       tcgp --match N deckA deckB [random|heuristic] [random|heuristic]\n";
         return 2;
     }
     try {
         CardDb db = loadCards();
+        if (isMatch) return match(db, argc, argv);
         if (std::string(argv[1]) == "--unsupported") {
             for (const CardDef& c : db.all())
                 if (!c.supported) std::cout << c.id << "\t" << c.name << "\t" << c.unsupported << "\n";

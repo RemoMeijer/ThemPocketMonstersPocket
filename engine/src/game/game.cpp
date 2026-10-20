@@ -37,7 +37,7 @@ void Game::setup() {
 void Game::step() {
     int player = decider();
     const auto& actions = legalActions();
-    apply(actions.at(policies_[player]->choose(PlayerView(s_, player), actions)));
+    apply(actions.at(policies_[player]->choose(PlayerView(s_, player, this), actions)));
 }
 
 bool Game::effectFlip(int player) {
@@ -362,7 +362,9 @@ void Game::knockOut(uint16_t uid, uint16_t attacker) {
 
 void Game::promote(int player) {
     PlayerState& p = s_.players[player];
-    p.active = p.bench.take(choose(player, int(p.bench.size())));
+    Uids uids;
+    for (const PokemonSlot& b : p.bench) uids.push_back(b.uid);
+    p.active = p.bench.take(choose(player, int(p.bench.size()), ChoiceKind::NewActive, uids.begin()));
     movedToActive(player);
     say("P", player + 1, " moves ", p.active.card->name, " to the Active spot");
 }
@@ -553,11 +555,12 @@ EnergyCounts Game::attackCost(const PokemonSlot& p, int owner, int attack) const
 
 // --- Decisions and chance ---
 
-int Game::choose(int player, int options) {
+int Game::choose(int player, int options, ChoiceKind kind, const uint16_t* uids, const CardDef* const* cards) {
     if (options <= 1) return 0;
     options_.clear();
-    for (int i = 0; i < options; ++i) options_.push_back({ActionKind::Choose, int8_t(i)});
-    std::size_t pick = policies_[player]->choose(PlayerView(s_, player), options_);
+    for (int i = 0; i < options; ++i)
+        options_.push_back({ActionKind::Choose, int8_t(i), 0, uids ? uids[i] : uint16_t(0), cards ? cards[i] : nullptr, kind});
+    std::size_t pick = policies_[player]->choose(PlayerView(s_, player, this), options_);
     if (pick >= options_.size()) throw std::out_of_range("policy chose option " + std::to_string(pick));
     return int(pick);
 }
@@ -598,4 +601,19 @@ void Game::showBoard() {
     std::string hand;
     for (const CardDef* c : s_.players[s_.current].hand) hand += (hand.empty() ? "" : ", ") + c->name;
     log_->line("  P" + std::to_string(s_.current + 1) + " hand: " + (hand.empty() ? "-" : hand));
+}
+
+// --- PlayerView's rule questions ---
+
+int PlayerView::hpLeft(const PokemonSlot& p, int owner) const { return game_->maxHp(p, owner) - p.damage; }
+FixedVec<const AttackDef*, 8> PlayerView::attacks(const PokemonSlot& p, int owner) const { return game_->attacksOf(p, owner); }
+EnergyCounts PlayerView::attackCost(const PokemonSlot& p, int owner, int attack) const { return game_->attackCost(p, owner, attack); }
+bool PlayerView::canAttack(const PokemonSlot& p, int owner, int attack) const {
+    return game_->canUseAttack(p, owner, attack) && canPay(game_->energyOf(p, owner), game_->attackCost(p, owner, attack));
+}
+EnergyCounts PlayerView::energy(const PokemonSlot& p, int owner) const { return game_->energyOf(p, owner); }
+int PlayerView::retreatCost(const PokemonSlot& p, int owner) const { return game_->retreatCost(p, owner); }
+int PlayerView::koPoints(const PokemonSlot& p, int owner) const {  // as in knockOut(): +ExtraPoint of the attacker
+    const PokemonSlot& by = s_.players[1 - owner].active;
+    return p.card->points + (by.card && &p == &s_.players[owner].active ? game_->sumMods(ModKind::ExtraPoint, by, 1 - owner) : 0);
 }

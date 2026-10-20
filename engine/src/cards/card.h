@@ -65,6 +65,7 @@ struct CardDef {
     uint8_t traits = 0;            // Trait bits, from data/traits.tsv (Serebii): Ultra Beast, Ancient, Future
 
     // Built from the card's effect scripts (data/effects.tsv).
+    std::string scripts;               // the script text of all its rows, so a player can tell what a Trainer does
     std::vector<Modifier> passive;     // always on: its ability, or the Tool / Stadium card itself
     const Stmt* play = nullptr;        // Item or Supporter
     const Stmt* activated = nullptr;   // "Once during your turn, you may…"

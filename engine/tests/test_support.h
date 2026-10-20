@@ -66,11 +66,13 @@ inline Deck evolutionDeck(const std::vector<CardDef>& cards) {
 
 // A game with everything around it, ready for a hand-built position.
 // A random player that also notes, in `chosen`, which player was asked each choice inside an effect.
+// With `delegate` set, that player decides instead.
 struct TestPolicy : RandomPolicy {
     std::vector<int>* chosen = nullptr;
+    Policy* delegate = nullptr;
     std::size_t choose(const PlayerView& view, const std::vector<Action>& actions) override {
         if (chosen && actions[0].kind == ActionKind::Choose) chosen->push_back(view.me());
-        return RandomPolicy::choose(view, actions);
+        return delegate ? delegate->choose(view, actions) : RandomPolicy::choose(view, actions);
     }
 };
 

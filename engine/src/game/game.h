@@ -133,7 +133,10 @@ public:
     }
 
     // --- Decisions and chance ---
-    int choose(int player, int options);  // the player's policy picks one of `options` (0 when only one)
+    // The player's policy picks one of `options` (0 when only one). uids[i] or cards[i], when given, is the Pokémon
+    // or card option i stands for, and kind what the pick is for, so a player can tell the options apart.
+    int choose(int player, int options, ChoiceKind kind = ChoiceKind::Other, const uint16_t* uids = nullptr,
+               const CardDef* const* cards = nullptr);
     bool flip();                          // a coin: true = heads
     Type rollEnergy(const PlayerState& p);  // a random energy type from p's deck, for the Energy Zone
     std::mt19937& rng() { return rng_; }

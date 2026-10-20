@@ -166,6 +166,7 @@ void CardDb::attachScripts(const std::string& path) {
         if (it == byId_.end()) continue;  // a card no longer in cards.tsv
         CardDef& c = cards_[it->second];
         const std::string& part = f[1];
+        c.scripts += (c.scripts.empty() ? "" : " ") + f[2];
         try {
             SExpr e = parseScript(f[2]);
             if (!e.list) scriptFail("a script must be a list", e);

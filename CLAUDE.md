@@ -42,7 +42,7 @@ engine/src/
   game/     turn flow, Pokémon Checkup, knock-outs, modifiers, damage pipeline (damage.cpp)
   moves/    one class per kind of move: its legal moves and what it does
   effects/  script parser, builder, blocks_*.cpp (one file per family of words)
-  players/  Policy interface, RandomPolicy
+  players/  Policy interface, RandomPolicy, HeuristicPolicy (rule-based; recognizes Trainers by their scripts)
 engine/tests/  test_rules, test_effects, check_states (state checker over random games)
 apkm/, x/   the unpacked APK: unused
 ```
@@ -75,7 +75,7 @@ Run the tests:
 engine/build/test_rules && engine/build/test_effects
 ```
 
-Run the state checker over every deck, one process per deck on all cores (about 1 minute; it prints the violations and their total):
+Run the state checker over every deck, one process per deck on all cores (about 5 minutes for 31 decks; it prints the violations and their total; `--policy heuristic` on `check_states` plays the heuristic player instead of the random one):
 
 ```bash
 ./check_all.sh
@@ -99,6 +99,12 @@ Play and print one game:
 engine/build/tcgp decks/pikachu.txt decks/gardevoir.txt
 ```
 
+Win rate of one deck against another, with a player for each (`random` or `heuristic`; the first player alternates):
+
+```bash
+engine/build/tcgp --match 2000 decks/pikachu.txt decks/charizard.txt heuristic heuristic
+```
+
 See which cards are supported and why the rest aren't (`--unsupported` lists each card left, with its reason):
 
 ```bash
@@ -120,7 +126,7 @@ For memory and undefined-behaviour checks, `engine/build-debug` is configured wi
   - rule numbers live in `core/rules.h`;
   - DESIGN.md §10 lists every rule; anything still guessed is marked "assumed" there and is an open question in PROGRESS.md;
   - don't present guesses as facts.
-- **Players:** the random player, or at most a minimal one, is enough for now. No real bots yet: games only have to follow the rules and use the right actions.
+- **Players:** the random player and the rule-based heuristic player. Learned players come later (AI_PLAN.md).
 - **Ignore Star, Crown and Shiny cards.** They're alt-art reprints.
 - **Card data:**
   - it comes from Limitless (pocket.limitlesstcg.com), cross-checked with `check_cards.py` against deckgym-core;

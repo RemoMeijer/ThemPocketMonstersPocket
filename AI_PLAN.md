@@ -1,6 +1,6 @@
 # AI plan: playing well and building decks
 
-Written 2026-10-20, after card coverage reached 100%. A plan, not built yet.
+Written 2026-10-20, after card coverage reached 100%. Built so far: the heuristic player (M1) and the choice descriptors (M0).
 
 The goal stays the same as in PROGRESS.md: find decks that come out on top, as ideas to try in the game. That needs two
 things, and they depend on each other:
@@ -35,13 +35,13 @@ Each is small enough to check on its own: a test, numbers from the runner, and a
 - **Seeds:** one seed per game drives the shuffles, the coins and the random player.
 - **Runner:** `tcgp-run deckA deckB --games N --threads T --seed S`. It reports win/draw/loss with a 95% interval,
   alternates who goes first, and plays mirrored seeds (the same luck with the decks swapped) to cut noise.
-- **Choice descriptors:** every `Game::choose` call passes what it's choosing and what each option is. The random
+- **Choice descriptors (built 2026-10-20):** every `Game::choose` call passes what it's choosing (`ChoiceKind`) and what each option is (a Pokémon's uid or a card). The random
   player ignores them; later players use them.
 - **Speed:** measure games/s with the checker off. That sets the budget for everything below.
 
 ### M1. Baseline players and a ladder (no ML)
 
-- **Heuristic player** (Next step 7):
+- **Heuristic player** (built 2026-10-20, `players/heuristic.cpp`; it wins about 99% against random and draws about 2% against itself):
   - evolve when possible;
   - attach Energy to the Pokémon closest to attacking;
   - play draw and search Trainers;

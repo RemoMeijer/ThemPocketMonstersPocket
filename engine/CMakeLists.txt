@@ -22,9 +22,13 @@ target_link_libraries(test_rules tcgp_engine)
 add_executable(test_effects tests/test_effects.cpp)
 target_link_libraries(test_effects tcgp_engine)
 
+add_executable(test_players tests/test_players.cpp)
+target_link_libraries(test_players tcgp_engine)
+
 add_executable(check_states tests/check_states.cpp)
 target_link_libraries(check_states tcgp_engine)
 
 enable_testing()
 add_test(NAME rules COMMAND test_rules)
 add_test(NAME effects COMMAND test_effects)
+add_test(NAME players COMMAND test_players)

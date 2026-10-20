@@ -22,7 +22,7 @@ A C++ simulator for Pokémon TCG Pocket. The goal is to play many games between 
 | Replayable games (seeds) | Not yet: every game seeds itself from `random_device` |
 | Simulation runner (many games, threads, stats) | Not started |
 | Finding decks (generate, play, rank) | Not started |
-| Players | Random only. About 70% of random-vs-random games end in a draw at the turn cap; that's accepted for now |
+| Players | Random, and a rule-based heuristic player (`players/heuristic.cpp`, 2026-10-20). Heuristic vs random wins about 99%; heuristic vs heuristic ends in a draw about 2% of the time (random vs random: about 70%), at about 5,300 games/s on one thread |
 
 - **Code size:** about 4,550 lines of C++ in the engine, 2,125 in tests, and 1,130 of Python (card data, plus the 900-line effect compiler).
 - **Script language:** about 200 words.
@@ -218,7 +218,7 @@ In order. Each step gets a short plan, then tests, `check_states` at 0 violation
 4. **Player choices the engine makes today:** which energy type to pay, discard or move (the player should pick), and discarding a Fossil.
 5. **The simulation runner (milestone 3, AI_PLAN.md M0):** many games over threads; win, draw and loss per pairing with a confidence interval; the first player alternates. About 2,400 games per pairing give ±2%.
 6. **Finding decks (milestone 4, AI_PLAN.md M4):** generate legal decks around Pokémon lines, play them against each other, rank them, and list the top ones to try in the game.
-7. **Players:** a heuristic player first (AI_PLAN.md M1), then the small learned players and the deck search of AI_PLAN.md M2–M5. AI_PLAN.md has the plan and its open questions.
+7. **Players:** the heuristic player is built (AI_PLAN.md M1; `tcgp --match N deckA deckB heuristic random`). Next the small learned players and the deck search of AI_PLAN.md M2–M5. AI_PLAN.md has the plan and its open questions.
 
 Dropped: R6, source tags on each constant in `rules.h`. DESIGN.md §10 already gives each rule's source.
 

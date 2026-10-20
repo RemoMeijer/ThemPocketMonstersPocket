@@ -105,7 +105,7 @@ public:
         }
         int chooser = mode_ == OwnerChooses && side_ == 1 ? 1 - ctx.player : ctx.player;
         int i = mode_ == Random ? std::uniform_int_distribution<int>(0, int(pool.size()) - 1)(ctx.game.rng())
-                                : ctx.game.choose(chooser, int(pool.size()));
+                                : ctx.game.choose(chooser, int(pool.size()), ChoiceKind::Target, pool.begin());
         out.push_back(pool[i]);
         if (pool.size() > 1) ctx.game.say(mode_ == Random ? "  at random: " : "  chosen: ", ctx.game.find(pool[i])->card->name);
     }
