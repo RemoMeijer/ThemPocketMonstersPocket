@@ -215,8 +215,8 @@ These are marked `shortcut:` in the code:
 
 In order. Each step gets a short plan, then tests, `check_states` at 0 violations, a sanitizer run and a commit. For coverage batches (2026-10-19): commit freely, run batches back to back, and report every two batches or so. Rule questions are asked first. **Big batches** work best: survey many cards, ask all rule questions at once, build them all with only the quick checks (tests, self-test), then run `./check_all.sh` and the sanitizer once and fix everything together.
 
-1. **Batch 11, in progress (paused 2026-10-19): the one-offs.** Remco asked for as many of the 50 leftover cards as is manageable, then golden tests over all of them.
-   - Done and committed: `tcgp --unsupported` (lists every unplayable card with its full reason); `data/effects_manual.tsv` (hand-written scripts; a card listed there skips the patterns in `compile_effects.py`; still empty); Remco's answers in DESIGN.md §10 "One-offs (batch 11)".
+1. **Batch 11, in progress (paused 2026-10-19): the one-offs.** The plan: as many of the 50 leftover cards as is manageable, then golden tests over all of them.
+   - Done and committed: `tcgp --unsupported` (lists every unplayable card with its full reason); `data/effects_manual.tsv` (hand-written scripts; a card listed there skips the patterns in `compile_effects.py`; still empty); the rule answers in DESIGN.md §10 "One-offs (batch 11)".
    - Scope: 46 cards. Left out: Penny and Smeargle (they use a Supporter's effect), Victini and Gholdengo (re-flip choices).
    - Write their scripts in `effects_manual.tsv`, not as new patterns. 16 need only existing words: Mesprit, Unown, Tapu Lele, Gyarados, Boltund, Miltank, Archeops, May, Mega Mawile ex, Arboliva, Veluza, Camerupt, Toxtricity, Vespiquen ex, Flareon (fix it in `FIXES`), Delcatty.
    - New words to build, one small hook each:
