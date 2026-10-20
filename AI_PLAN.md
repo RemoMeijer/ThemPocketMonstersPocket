@@ -108,7 +108,13 @@ Seeds are dropped.
   - 30% older saved versions;
   - 20% the heuristic.
   
-  This stops it from forgetting how to beat old styles and from going round in circles.
+  This stops it from forgetting how to beat old styles and from going round in circles. Among the older versions,
+  the ones the current network loses to get picked more often (prioritized fictitious self-play, from AlphaStar), so
+  training goes where the weaknesses are.
+- **Why the reward stays plain win/loss and not Elo:** an Elo change per game is the same win/loss signal, scaled and
+  shifted by the opponent's rating, and PPO's value head already does that shift. Elo would only add noise, because
+  the ratings move during training. Elo is for measuring (the ladder) and for picking opponents, as above. Decks get
+  no Elo: matchups aren't transitive, so decks are ranked by the matchup table and the Nash mix.
 - **Decks during B:** a broad mix of generated decks (C1) and reference decks, so the player can play anything.
 - **Done when:** it beats the heuristic clearly, 65%+ with the same decks on both sides, and keeps climbing the
   Elo ladder.
