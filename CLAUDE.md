@@ -43,7 +43,11 @@ engine/src/
   moves/    one class per kind of move: its legal moves and what it does
   effects/  script parser, builder, blocks_*.cpp (one file per family of words)
   players/  Policy interface, RandomPolicy, HeuristicPolicy (rule-based; recognizes Trainers by their scripts)
-engine/tests/  test_rules, test_effects, check_states (state checker over random games)
+  ml/       what a network sees (encode.*), many games waiting for batched decisions (batch_env.*), tcgp-record
+engine/python/tcgp_py.cpp  the pybind11 module `tcgp` (built only when CMake finds pybind11)
+ml/                 setup.sh (the .venv with PyTorch), check_gpu.py; the training code goes here (AI_PLAN.md step 4)
+tools/load_record.py  loads a tcgp-record recording with numpy, gives padded batches
+engine/tests/  test_rules, test_effects, test_players, test_encode, test_batch_env, check_states (state checker over random games)
 apkm/, x/   the unpacked APK: unused
 ```
 
@@ -72,7 +76,7 @@ cmake -S engine -B engine/build && cmake --build engine/build -j
 Run the tests:
 
 ```bash
-engine/build/test_rules && engine/build/test_effects
+for t in test_rules test_effects test_players test_encode test_batch_env; do engine/build/$t || break; done
 ```
 
 Run the state checker over every deck, one process per deck on all cores (about 5 minutes for 31 decks; it prints the violations and their total; `--policy heuristic` on `check_states` plays the heuristic player instead of the random one):
@@ -157,10 +161,23 @@ For memory and undefined-behaviour checks, `engine/build-debug` is configured wi
   - `python3 compile_effects.py --test` passes: the self-test and the golden test (`data/golden.tsv`, 487 reviewed real cards). No existing script in `data/effects.tsv` changed unless that was the point; after an intended change, review the diff and run `--accept-golden`;
   - after a data change, `check_cards.py` reports 0 differences;
   - when adding patterns, check every new script against its card text.
-- **Keeping the context small** (a long session fills up fast):
-  - one session per batch or milestone; PROGRESS.md is the handoff, so a fresh session starts from it, not from the chat;
-  - print only what's needed: counts and the failing lines (`tail`, `grep`, `head`), never whole files or full logs;
-  - hand bulk reading to a subagent that reports only the result, e.g. "check these 150 new scripts against their card text, list only the mismatches";
-  - write longer edits as a script file in the scratchpad and run it, instead of repeating code in the chat;
-  - keep reasoning to short notes.
+- **Keeping the context small** (a long session fills up fast). What worked best (2026-10-20):
+  - **The main session coordinates; subagents build.** Give a subagent a complete spec: files, decisions already made,
+    rules (no names, which docs it may not touch, don't commit), the checks to run, and "report in ≤ 40 lines, no code
+    dumps". The main session then verifies cheaply (build, tests, one quick run) instead of reading the diff.
+  - **Resume the same subagent** (SendMessage to its id) for the next piece in the same area: it keeps its knowledge of
+    the code, so the spec can be short.
+  - **Bulk reviews in parallel chunks:** split the rows into 3 files and start 3 read-only reviewers that report only
+    mismatches. 468 scripts took about 4 minutes this way.
+  - **Edits as small Python scripts** (a heredoc with `assert old in s` before each replace) instead of reading a big
+    file and editing it; read only the lines you change (`grep -n`, `sed -n 'a,bp'`, `cut -c1-150`).
+  - **Print counts and failing lines only:** `| tail -1`, `grep -c`, and for violations
+    `sed -E 's/.*move kind ([0-9]+): /k\1: /' | sort | uniq -c`. Send big outputs to a scratch file and grep it. A
+    script that prints differences caps them (the golden test shows at most 10).
+  - **Long runs in the background** (`check_all.sh`, sanitizer runs, searches) and wait for the notification; don't
+    poll, and do other work meanwhile. Never `pkill -f` a pattern that also matches your own shell.
+  - **Fast checks:** the sanitizer build is `-O1` and runs with `GAMES=200`, or a single deck's `--row`. The release
+    `./check_all.sh` keeps the full 2,000 games.
+  - One session per batch or milestone; PROGRESS.md is the handoff, so a fresh session starts from it, not from the
+    chat. Keep reasoning to short notes.
 - **Known shortcuts:** marked `shortcut:` in the code and listed in PROGRESS.md.

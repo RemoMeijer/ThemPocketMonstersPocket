@@ -219,10 +219,32 @@ In order. Each step gets a short plan, then tests, `check_states` at 0 violation
      top 10, their matchup table and the Nash mix). First run: Mega Sableye ex walls, Mimikyu ex, Hisuian Goodra and
      Mismagius ex lead; one of each is in `decks/found/`. The reference decks are weak test decks, so these results
      say more about them than about the real meta;
-   - **step 3, next:** the Python bridge with batched GPU decisions, and the encoding (first: PyTorch on the GTX 1050);
+   - step 3, the C++ side done 2026-10-20: the encoder (`engine/src/ml/encode.*`), the batch environment where games
+     wait on threads for batched decisions (`batch_env.*`), the recorder `tcgp-record`, and the pybind11 module source
+     (`engine/python/tcgp_py.cpp`, built only where pybind11 is installed). The Python side continues on the PC;
+   - **next, on the PC:** the checklist below, then step 4a (behaviour cloning). AI_PLAN.md step 4 has the exact
+     commands, the model and the training settings;
    - step 4: the player network (cloning the heuristic, then self-play);
    - step 5: the deck networks;
    - step 6: the loop.
+
+## Start here on the PC (2026-10-20)
+
+The ML work moves to a desktop with a GTX 1080. This laptop has a GTX 1050 and no PyTorch.
+1. Get the repo onto the PC (it had no remote until now; that's done by hand).
+2. Read this file, CLAUDE.md (especially "Keeping the context small") and AI_PLAN.md steps 3–4.
+3. Build and test: `cmake -S engine -B engine/build && cmake --build engine/build -j`, then `test_rules`,
+   `test_effects`, `test_players`, `test_encode` and `test_batch_env` in `engine/build`, then
+   `python3 compile_effects.py --test`.
+4. Run `ml/setup.sh`: it creates `.venv` with PyTorch (the CUDA 12.6 build, which should still support Pascal),
+   numpy, scipy and pybind11, builds the `tcgp` module and runs `ml/check_gpu.py`. If PyTorch lacks sm_61, the script's
+   header lists older builds to try.
+5. Check what was never tested here:
+   - the module's CMake build with a current pybind11;
+   - `torch.from_numpy` on `wait_batch`'s arrays;
+   - several Python threads calling the module.
+6. Step 4a: generate decks, record heuristic games, write `ml/model.py`, `ml/train_bc.py` and `ml/evaluate.py` as
+   AI_PLAN.md step 4a describes.
 
 ## Working agreements
 

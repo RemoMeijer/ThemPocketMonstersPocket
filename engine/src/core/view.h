@@ -26,6 +26,15 @@ public:
     std::size_t deckSize(int player) const { return s_.players[player].deck.size(); }
     const CardDef* stadium() const { return s_.stadium; }
     int stadiumOwner() const { return s_.stadiumOwner; }
+    int current() const { return s_.current; }  // whose turn it is (during Setup: who is placing)
+    bool ownFirstTurn() const { return s_.turn == (me_ == s_.first ? 1 : 2); }
+    // Own flags for this turn.
+    bool supporterPlayed() const { return s_.players[me_].supporterTurn == s_.turn; }
+    bool retreated() const { return s_.current == me_ && s_.players[me_].retreated; }
+    bool stadiumUsed() const {
+        const PlayerState& p = s_.players[me_];
+        return p.stadiumUseTurn == s_.turn && p.stadiumUsed == s_.stadium;
+    }
 
     // Rule questions about Pokémon in play (public anyway), with every modifier counted (game/game.cpp). Only for a
     // view a Game made, and p must be a slot read from this view: the game tells the Active apart by its address.

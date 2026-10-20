@@ -86,41 +86,87 @@ heuristic player, long before the networks are ready.
 - **Successive halving:** many candidates get 100 games, the best get more, and so on.
 - **Hall of fame:** the best decks of earlier generations stay in the opponent pool.
 
-## Step 3: networks can play (CPU and GPU)
+## Step 3: networks can play (C++ side done 2026-10-20; the Python side is set up on the PC)
 
-**3a. A Python bridge with batched decisions.** This is the key piece of engineering.
-- **Why it's needed:** the engine asks a player for a decision deep inside a card effect (`Game::choose`), so a game
- can't simply pause and hand control to Python.
-- **The approach:** each game runs on its own C++ thread, and a few hundred games are in flight at once. When a
- network decision is needed, the game thread puts the observation in a queue and waits.
-- **In Python:** `env.wait_batch()` returns all waiting observations as arrays. PyTorch runs them through the network
- on the GPU in one batch, and `env.answer(actions)` wakes the games up again.
-- **The tool:** pybind11. No engine rewrite is needed, and the heuristic player stays in C++ as an opponent.
-- **Done when:** a dummy network in Python plays complete games, and the batch throughput is measured.
+**3a. Batch environment and Python module.**
+- **The problem:** the engine asks a player for a decision deep inside a card effect (`Game::choose`), so a game can't
+  simply pause and hand control to Python.
+- **Built** (`engine/src/ml/batch_env.*`): each game runs on a C++ thread, with a few hundred games in flight. A
+  network decision puts the encoded observation in a queue and waits. `waitBatch()` returns everything waiting;
+  `answer()` wakes those games up. Games restart by themselves, and `takeResults()` drains the finished ones, each
+  with its game id and seat.
+- **Options:** the external side is player 0 or both; the opponent is `heuristic` or `random`. Two decks make a fixed
+  pairing, more decks random pairs. Forced moves (a single legal action) are played without asking.
+- **Speed:** about 220,000 decisions/s and 3,100 games/s from C++ (random answers, 8 threads, 128 in flight), and
+  about 148,000 decisions/s through Python.
+- **The Python module** (`engine/python/tcgp_py.cpp`, module `tcgp`) is built by CMake only when pybind11 is found.
+  - **Exports:** `ENCODING_VERSION`, `SIZES`, `load_cards(cards=…, effects=…)`, `load_deck(path, db)`,
+    `card_table(db)` → `{"values", "words", "ids"}`, and
+    `BatchEnv(db, decks, threads, games_in_flight, side=tcgp.Side.PLAYER0|BOTH, opponent="heuristic")` with
+    `wait_batch(min_batch, timeout_ms)` (a dict of numpy views), `answer(actions)`, `take_results()` and `stop()`.
+  - **Tested:** a hand build played 500 games from Python.
+  - **Untested:** the CMake path, a current pybind11, `torch.from_numpy` on the views, and the GIL under several
+    Python threads. These are the first things to check on the PC.
 
-**3b. Encoding:** what the network sees, from `PlayerView` only.
-- **Card features**, a fixed table computed once:
- - the printed numbers: HP, type, Weakness, Retreat Cost, stage, ex or Mega, and each attack's cost and damage;
- - the words in its effect scripts (about 200 possible words, so `heal`, `switch-in`, `damage-dealt` … become
-  features);
- - a small learned embedding per card.
- 
- The script words let it handle rare cards from what they *do*.
-- **Tokens:**
- - each card in your own hand;
- - each Pokémon in play, with its damage, Energy, Tool and Special Conditions;
- - the opponent's hand size, deck sizes and discard piles as counts;
- - a global token: turn, points, the Energy Zone, the Stadium, and whether this turn's Supporter, retreat and Energy
-  were already used.
-- **Actions:** each legal action is a token. It carries its kind and points at the card or Pokémon it involves, using
- the choice descriptors.
+**3b. Encoding** (`engine/src/ml/encode.*`, `EncodingVersion = 1`). It's built from `PlayerView` only, so a player
+never sees the opponent's hand or either deck. Sizes: T=20 tokens × D=54 floats, A=64 actions × Da=24 floats, and
+static card features F=369.
+
+| Part | Layout |
+|---|---|
+| Token slots | 0 global · 1–10 my hand · 11 my Active, 12–14 my Bench spots 0–2 · 15 opp Active, 16–18 opp Bench spots 0–2 · 19 Stadium |
+| Token ints | type (0 pad, 1 global, 2 hand, 3/4 my Active/Bench, 5/6 opp Active/Bench, 7 Stadium), card index, Tool card index |
+| Pokémon floats | HP left/100 · damage/100 · Energy per type/5 (10) · status bits (5) · attack 0/1 payable · entered this turn · evolved this turn · Ability used · is Active |
+| Global floats | turn/30 · points/3 (both) · hand/10 · deck/20 · discard/20 · discard Energy per type/10 (both) · Energy Zone now and next (one-hot) · Supporter played · retreated · no Energy left in the zone · own first turn · my turn |
+| Stadium floats | mine · its action used |
+| Action ints | kind+1 (0 pad), card index, pointer to a token, second pointer |
+| Pointers by kind | Place / PlayTrainer: hand token · Evolve / AttachTool: hand token, then the target Pokémon · AttachEnergy / UseAbility: target · Retreat: the Pokémon coming in · Attack: my Active · UseStadium: Stadium · Choose: the Pokémon (by uid), or -1 with the option's card · EndTurn: -1 |
+| Action floats | attack one-hot (8) · ChoiceKind one-hot (5) · Energy type one-hot (10) · option index/10 |
+| Static card table | [cards+1 × 369]: category, stage, ex, Mega, HP, type, Weakness, retreat, points, both attacks' costs/damage/text kind, Ability, traits, and counts of 299 script words |
+
+Card index 0 is padding. The vocabulary and the card ids in index order come with every recording (meta.json).
+
+**3c. Recorder for behaviour cloning:** `tcgp-record --games N --threads T --out DIR deck…` plays random deck pairs
+with the heuristic on both sides and saves every real decision: the observation, the chosen action, the seat, the
+game, and the final result for that seat (+1/−1/0). Record format 2:
+- floats are stored as float16 and actions ragged (only the legal ones, with `action_offsets`): about 2.5 KB per
+  decision, so 2.5 million decisions take about 6.5 GB;
+- it records about 70,000–400,000 decisions/s on 12 threads; the high end comes when the files are cached;
+- `tools/load_record.py`: `load(dir)`, `batch(rec, indices)` (padded float32/int64 arrays with masks) and
+  `check(rec)`.
 
 ## Step 4: the player network
 
+**On the PC, first:**
+1. Pull the repo.
+2. Build the engine: `cmake -S engine -B engine/build && cmake --build engine/build -j`.
+3. Run the tests: `engine/build/test_rules`, `test_effects`, `test_players`, `test_encode`, `test_batch_env`.
+4. Run `ml/setup.sh`. It creates `.venv`, installs PyTorch (the CUDA 12.6 build, for Pascal), numpy, scipy and
+   pybind11, builds the `tcgp` module, and runs `ml/check_gpu.py` (the GPU check plus the module import).
+
 **4a. Copy the heuristic player first (behaviour cloning).**
-- Record millions of heuristic decisions and train the network to predict them.
-- That's fast, and it proves the whole pipeline: encoding, bridge, GPU, playing.
-- **Done when:** the network wins about 50% against the heuristic it copied.
+- **Decks for the data:** the reference decks, `decks/found/`, and a few hundred generated ones
+  (`python3 deckgen.py 300 ml/data/decks`).
+- **Data:** `engine/build/tcgp-record --games 50000 --threads 12 --out ml/data/bc1 decks/*.txt decks/found/*.txt
+  ml/data/decks/*.txt`. That's about 2.1 million decisions and 5–6 GB. Check it with `python3 tools/load_record.py ml/data/bc1`.
+- **Model** (`ml/model.py`), small to start:
+  - **Card vectors:** a learned embedding of the card index (64) plus a linear layer over the static card features
+    (369 → 64), added together.
+  - **Tokens:** an embedding of the token type, the card vector, the Tool card's vector, and a linear layer over the
+    54 floats, into width 128.
+  - **Encoder:** a 3-layer transformer (4 heads, padding masked).
+  - **Actions:** an embedding of the kind, the card vector, the encoded tokens the two pointers gather, and a linear
+    layer over the 24 floats. An MLP scores each action against the global token's state. Padding is masked, then a
+    softmax over the legal actions.
+  - **Value:** from the global token, tanh.
+- **Training** (`ml/train_bc.py`):
+  - loss: cross-entropy on the chosen action, plus 0.5 × the MSE of the value against the final result;
+  - AdamW at lr 3e-4, batch 1024, about 5 epochs, with 5% of the games held out.
+  - Watch the held-out accuracy: how often the network picks the heuristic's move.
+- **Playing** (`ml/evaluate.py`): a `BatchEnv` with the network as player 0 against the heuristic, over the
+  reference decks, 2,000 games or more, reporting the win rate with its interval.
+- **Done when:** it wins about 50% against the heuristic, and the held-out accuracy is high (90%+ is plausible, since
+  the heuristic is deterministic).
 
 **4b. Get better than the teacher: self-play with PPO.**
 - **Model:** a small transformer over the tokens, with an action head that scores each legal action (a pointer) and
@@ -141,6 +187,17 @@ heuristic player, long before the networks are ready.
 - **Decks during step 4:** a broad mix of generated decks (2a) and reference decks, so the player can play anything.
 - **Done when:** it beats the heuristic clearly, 65%+ with the same decks on both sides, and keeps climbing the
  Elo ladder.
+
+**4b, build notes:**
+- **Self-play:** run self-play through a `BatchEnv` with both sides external. Each pending decision carries its game
+  id and seat (`batchGames`, `batchSeats`), so its log probability and value are stored per (game, seat), and the
+  final result from `take_results()` becomes that trajectory's reward.
+- **Opponents from the league:** run several environments, or several model versions, and send each game's seat to
+  the right network.
+- **PPO settings:** γ = 1 (the game is short and only the end counts), GAE λ = 0.95, clip 0.2, entropy 0.01,
+  rollouts of about 50,000 decisions per update, 4 epochs over them.
+- **Start** from the 4a weights. Save a snapshot every few updates for the league. The Elo ladder uses `tcgp-run`
+  for the C++ players and `evaluate.py` for the networks.
 
 **4c. Search on top (later, optional):** at decision time, try each move in a few quick simulated games, with the
 hidden cards dealt at random from what's unseen. The network guides which moves get tried. This is stronger but

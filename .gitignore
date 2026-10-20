@@ -9,3 +9,7 @@ data/cards.json
 data/raw/
 # deck search runs (search_decks.py)
 results/
+# ML: the virtual environment, recordings and checkpoints (ml/setup.sh, tcgp-record, training)
+.venv/
+ml/data/
+ml/runs/

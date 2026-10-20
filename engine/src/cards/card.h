@@ -63,6 +63,7 @@ struct CardDef {
     std::string effect;            // a Trainer's (or Fossil's) text
     int points = 1;                // points the opponent scores for knocking it out
     uint8_t traits = 0;            // Trait bits, from data/traits.tsv (Serebii): Ultra Beast, Ancient, Future
+    int index = -1;                // position in CardDb::all(); -1 for a card outside a CardDb (tests)
 
     // Built from the card's effect scripts (data/effects.tsv).
     std::string scripts;               // the script text of all its rows, so a player can tell what a Trainer does

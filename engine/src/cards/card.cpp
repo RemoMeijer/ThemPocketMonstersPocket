@@ -167,6 +167,7 @@ CardDb CardDb::load(const std::string& cards, const std::string& scripts) {
     std::getline(in, line);  // header
     while (std::getline(in, line)) {
         CardDef c = readCard(line);
+        c.index = int(db.cards_.size());
         db.byId_[c.id] = db.cards_.size();
         db.cards_.push_back(std::move(c));
     }
