@@ -137,6 +137,9 @@ public:
     // or card option i stands for, and kind what the pick is for, so a player can tell the options apart.
     int choose(int player, int options, ChoiceKind kind = ChoiceKind::Other, const uint16_t* uids = nullptr,
                const CardDef* const* cards = nullptr);
+    // The player picks one of these Energy types (Type bits) for Pokémon uid; asked only when there are two or more.
+    // Returns the Type number, -1 for none.
+    int chooseEnergy(int player, uint16_t types, ChoiceKind kind, uint16_t uid);
     bool flip();                          // a coin: true = heads
     Type rollEnergy(const PlayerState& p);  // a random energy type from p's deck, for the Energy Zone
     std::mt19937& rng() { return rng_; }
@@ -182,6 +185,7 @@ private:
     GameState s_;
     std::vector<Action> actions_;  // reused between decisions
     std::vector<Action> options_;  // reused by choose()
+    std::size_t ask(int player);   // the player picks one of options_
     std::mt19937 rng_{std::random_device{}()};
 };
 

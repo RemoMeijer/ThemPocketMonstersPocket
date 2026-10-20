@@ -20,12 +20,14 @@ public:
     void apply(Game& game, Action a) const override {
         int me = game.state().current;
         PlayerState& p = game.state().players[me];
-        // shortcut: retreat pays with the most plentiful energy type, no choice; make it a choice once multi-type decks matter.
         int cost = game.retreatCost(p.active, me);
         EnergyCounts counted = game.energyOf(p.active, me);
         EnergyCounts real = p.active.energy;
-        for (int left = cost; left > 0;) {
-            int t = int(std::max_element(p.active.energy.begin(), p.active.energy.end()) - p.active.energy.begin());
+        for (int left = cost; left > 0;) {  // the player picks each Energy that pays
+            uint16_t types = 0;
+            for (int t = 0; t < TypeCount; ++t)
+                if (p.active.energy[t]) types |= typeBit(Type(t));
+            int t = game.chooseEnergy(me, types, ChoiceKind::Lose, p.active.uid);
             left -= counted[t] > real[t] ? 2 : 1;  // a doubled Energy pays 2 (Serperior)
             --p.active.energy[t];
             ++p.discardEnergy[t];  // paid energy goes to the discard pile (App)

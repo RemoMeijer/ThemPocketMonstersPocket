@@ -7,6 +7,29 @@
 namespace {
 std::vector<std::shared_ptr<const Node>> arena;
 
+const Stmt* stmt(const std::string& script) {
+    ScriptBuilder b(arena);
+    return b.stmt(parseScript(script));
+}
+
+// A Fossil as effects.tsv gives it: a 40-HP Basic that can't retreat and may be discarded from play.
+CardDef fossil() {
+    CardDef c;
+    c.id = "T-fossil";
+    c.name = "Test Fossil";
+    c.hp = 40;
+    c.type = Type::Colorless;
+    c.effect = "Play this card as if it were a 40-HP Basic {C} Pokemon.";
+    c.supported = true;
+    ScriptBuilder b(arena);
+    c.passive.push_back(b.modifier(parseScript("(cant-retreat)"), ModScope::Self));
+    c.activated = b.stmt(parseScript("(discard-pokemon self)"));
+    c.activatedRepeat = true;
+    return c;
+}
+
+int energy(const PokemonSlot& p, Type t) { return p.energy[int(t)]; }
+
 // A Trainer as effects.tsv gives it: its play statement, and the script text the heuristic reads.
 CardDef trainer(TrainerKind kind, const char* name, const std::string& play) {
     CardDef c;
@@ -93,11 +116,121 @@ static void newActiveIsTheReadyAttacker() {
     CHECK(s.players[0].active.card == &t.cards[3]);
 }
 
+// The Energy-type choices go to the player. Each position is one where the engine's old fixed pick (the most plentiful
+// type, or the first matching one) differs from the type the heuristic should pick.
+static void retreatPaysWithTheUnneededEnergy() {
+    Table t;
+    HeuristicPolicy h;
+    t.cards[0].retreat = 1;
+    GameState& s = heuristicPosition(t, h);
+    s.players[0].active.energy = {};
+    s.players[0].active.energy[int(Type::Water)] = 2;  // Splash needs 1 Water
+    s.players[0].active.energy[int(Type::Fire)] = 1;
+    t.bench(0, t.cards[2]);
+    t.play(ActionKind::Retreat, 0);
+    const PokemonSlot& out = s.players[0].bench[0];
+    CHECK(energy(out, Type::Water) == 2 && energy(out, Type::Fire) == 0 && s.players[0].discardEnergy[int(Type::Fire)] == 1);
+}
+
+static void discardEnergyKeepsTheNeededType() {
+    Table t;
+    HeuristicPolicy h;
+    t.cards[0].attacks[0].script = stmt("(seq (hit) (discard-energy self any 1))");
+    GameState& s = heuristicPosition(t, h);
+    s.players[0].active.energy[int(Type::Water)] = 2;
+    s.players[0].active.energy[int(Type::Fire)] = 1;
+    t.play(ActionKind::Attack);
+    CHECK(energy(s.players[0].active, Type::Water) == 2 && energy(s.players[0].active, Type::Fire) == 0);
+}
+
+static void moveEnergyTakesTheNeededType() {
+    Table t;
+    HeuristicPolicy h;
+    CardDef item = trainer(TrainerKind::Item, "Mover", "(move-energy (choose my bench (has-energy 1)) my-active any 1)");
+    GameState& s = heuristicPosition(t, h, {&item});
+    s.players[0].active.energy = {};
+    PokemonSlot& from = t.bench(0, t.cards[2]);
+    from.energy[int(Type::Water)] = 1;
+    from.energy[int(Type::Fire)] = 2;
+    t.play(ActionKind::PlayTrainer, 0);
+    CHECK(energy(s.players[0].active, Type::Water) == 1 && energy(s.players[0].bench[0], Type::Fire) == 2);
+}
+
+static void attachFromDiscardTakesTheNeededType() {
+    Table t;
+    HeuristicPolicy h;
+    CardDef item = trainer(TrainerKind::Item, "Recycler", "(attach-from-discard my-active any 1)");
+    GameState& s = heuristicPosition(t, h, {&item});
+    s.players[0].active.energy = {};
+    s.players[0].discardEnergy[int(Type::Fire)] = 3;
+    s.players[0].discardEnergy[int(Type::Water)] = 1;
+    t.play(ActionKind::PlayTrainer, 0);
+    CHECK(energy(s.players[0].active, Type::Water) == 1 && s.players[0].discardEnergy[int(Type::Fire)] == 3);
+}
+
+static void differentTypesStartWithTheNeededOne() {  // Professor Sada
+    Table t;
+    HeuristicPolicy h;
+    CardDef sada = trainer(TrainerKind::Supporter, "Sada", "(attach-from-discard (choose my all) different 2)");
+    GameState& s = heuristicPosition(t, h, {&sada});
+    s.players[0].active.energy = {};
+    for (Type type : {Type::Grass, Type::Fire, Type::Water, Type::Lightning, Type::Psychic}) s.players[0].discardEnergy[int(type)] = 1;
+    t.play(ActionKind::PlayTrainer, 0);
+    CHECK(energy(s.players[0].active, Type::Water) == 1 && s.players[0].active.energyCount() == 2);
+}
+
+// "At any time during your turn, you may discard this card from play": no points, and not an Ability.
+static void fossilsCanBeDiscardedFromPlay() {
+    Table t;
+    CardDef f = fossil();
+    GameState& s = t.position();
+    PokemonSlot& benched = t.bench(0, f);
+    s.timed.push_back({Modifier{ModKind::NoAbilities}, 0, benched.uid, 99});  // "loses all Abilities" (Budew): no matter
+    CHECK(t.can(ActionKind::UseAbility));
+    t.play(ActionKind::UseAbility, 0, 0);
+    CHECK(s.players[0].bench.empty() && s.players[0].discard.back() == &f && s.players[1].points == 0);
+
+    t.active(0, f);  // from the Active Spot: a new Active comes up
+    t.bench(0, t.cards[2]);
+    t.play(ActionKind::UseAbility, 0, -1);
+    CHECK(s.players[0].active.card == &t.cards[2] && s.players[1].points == 0 && s.phase == Phase::Main);
+
+    t.active(0, f);  // with no other Pokémon in play, its owner loses
+    s.players[0].bench.clear();
+    t.play(ActionKind::UseAbility, 0, -1);
+    CHECK(s.phase == Phase::Over && s.winner == 1);
+}
+
+static void heuristicDiscardsOnlyAStuckActiveFossil() {
+    Table t;
+    HeuristicPolicy h;
+    CardDef f = fossil();
+    GameState& s = heuristicPosition(t, h);
+    t.bench(0, f);
+    t.game.step();  // the Bench Fossil stays; Mon0 attacks
+    CHECK(s.players[0].bench.size() == 1 && s.current == 1);
+
+    Table u;
+    HeuristicPolicy h2;
+    GameState& su = heuristicPosition(u, h2);
+    u.active(0, f);
+    u.bench(0, u.cards[2]).energy[int(Type::Water)] = 1;  // ready to attack
+    u.game.step();
+    CHECK(su.players[0].active.card == &u.cards[2] && su.players[1].points == 0);
+}
+
 int main() {
     takesTheWinningAttack();
     gustsForTheWinAndPicksThePlannedTarget();
     healsTheDamagedActive();
     energyToTheActiveThatNeedsIt();
     newActiveIsTheReadyAttacker();
+    retreatPaysWithTheUnneededEnergy();
+    discardEnergyKeepsTheNeededType();
+    moveEnergyTakesTheNeededType();
+    attachFromDiscardTakesTheNeededType();
+    differentTypesStartWithTheNeededOne();
+    fossilsCanBeDiscardedFromPlay();
+    heuristicDiscardsOnlyAStuckActiveFossil();
     return report("player");
 }

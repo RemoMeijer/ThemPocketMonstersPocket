@@ -1061,9 +1061,8 @@ FOSSIL = (r"Play this card as if it were a \d+-HP Basic \{C\} Pokemon\. At any t
 
 def compile_card(kind, text, ctx):
     text = normalize(text)
-    if re.fullmatch(FOSSIL, text):
-        # shortcut: a Fossil can't be discarded from play by choice; add that once a player would want to.
-        return "(passive (cant-retreat))"
+    if re.fullmatch(FOSSIL, text):  # can't retreat; "at any time during your turn" it may be discarded from play
+        return ["(passive (cant-retreat))", "(activated :repeat (discard-pokemon self))"]
     m = re.fullmatch(r"At the end of your turn, if the (?:" + E + r" )?Pokemon this card is attached to is in the Active Spot, (.+)", text)
     if kind == "Tool" and m:
         body = seq([s for _, s in statements(m.group(2).replace("that Pokemon", "this Pokemon"), ctx)])

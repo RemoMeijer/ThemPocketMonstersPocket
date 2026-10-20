@@ -18,7 +18,8 @@ enum class ActionKind : uint8_t {
 constexpr int ActionKindCount = 12;
 
 // What a Choose is for, seen from the chooser: Gain = a card they take (or one of the opponent's they take away),
-// Lose = one of their own cards they give up. Only players read it; the engine never does.
+// Lose = one of their own cards they give up. For an Energy type: Gain = it lands on one of their Pokémon or leaves
+// one of the opponent's, Lose = the other way round. Only players read it; the engine never does.
 enum class ChoiceKind : uint8_t { Other, Target, NewActive, Gain, Lose };
 
 struct CardDef;
@@ -31,4 +32,5 @@ struct Action {
     uint16_t uid = 0;
     const CardDef* card = nullptr;
     ChoiceKind choice = ChoiceKind::Other;
+    int8_t type = -1;  // an Energy type option: which Type; uid is the Pokémon it leaves or lands on
 };

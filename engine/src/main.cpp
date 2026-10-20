@@ -62,12 +62,6 @@ void coverage(const CardDb& db) {
     for (std::size_t i = 0; i < top.size() && i < 30; ++i) std::cout << "  " << top[i].first << "  " << top[i].second << "\n";
 }
 
-std::unique_ptr<Policy> makePolicy(const std::string& name) {
-    if (name == "random") return std::make_unique<RandomPolicy>();
-    if (name == "heuristic") return std::make_unique<HeuristicPolicy>();
-    throw std::runtime_error("unknown player '" + name + "' (random or heuristic)");
-}
-
 // N games of deckA against deckB, swapping seats every game (the coin still decides who goes first).
 int match(const CardDb& db, int argc, char** argv) {
     int n = std::stoi(argv[2]);

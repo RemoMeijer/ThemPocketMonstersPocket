@@ -560,9 +560,21 @@ int Game::choose(int player, int options, ChoiceKind kind, const uint16_t* uids,
     options_.clear();
     for (int i = 0; i < options; ++i)
         options_.push_back({ActionKind::Choose, int8_t(i), 0, uids ? uids[i] : uint16_t(0), cards ? cards[i] : nullptr, kind});
+    return int(ask(player));
+}
+
+int Game::chooseEnergy(int player, uint16_t types, ChoiceKind kind, uint16_t uid) {
+    options_.clear();
+    for (int t = 0; t < TypeCount; ++t)
+        if (types & typeBit(Type(t))) options_.push_back({ActionKind::Choose, int8_t(options_.size()), 0, uid, nullptr, kind, int8_t(t)});
+    if (options_.size() <= 1) return options_.empty() ? -1 : options_[0].type;
+    return options_[ask(player)].type;
+}
+
+std::size_t Game::ask(int player) {
     std::size_t pick = policies_[player]->choose(PlayerView(s_, player, this), options_);
     if (pick >= options_.size()) throw std::out_of_range("policy chose option " + std::to_string(pick));
-    return int(pick);
+    return pick;
 }
 
 bool Game::flip() {

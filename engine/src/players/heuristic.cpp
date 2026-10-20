@@ -28,7 +28,7 @@ uint16_t classify(const std::string& s) {
     if (has("(heal")) k |= Heal;
     if (has("damage-dealt") && has("this-turn")) k |= Boost;
     if (has("retreat-cost -") || has("no-retreat-cost")) k |= RetreatHelp;
-    if (has("attach-energy") || has("move-energy")) k |= EnergyHelp;
+    if (has("attach-energy") || has("move-energy") || has("attach-from-discard")) k |= EnergyHelp;
     if (has("(draw") || has("(search") || has("(dig") || has("shuffle-hand-draw")) k |= Draw;
     if (has("(rare-candy")) k |= RareCandy;
     return k;
@@ -108,6 +108,21 @@ double attackerScore(const PlayerView& v, const PokemonSlot& p, int owner) {
     return best;
 }
 
+// How much one `type` Energy matters to p's attacks: how many more Energy they would miss without it (adding: how
+// many fewer with one more), its biggest attack weighing most; a type a cost names counts a little more.
+int energyWorth(const PlayerView& v, const PokemonSlot& p, int owner, int type, bool adding) {
+    auto atk = v.attacks(p, owner);
+    int big = biggest(v, p, owner), worth = 0;
+    EnergyCounts have = v.energy(p, owner), changed = have;
+    if (adding) ++changed[type];
+    else if (changed[type]) --changed[type];
+    for (std::size_t i = 0; i < atk.size(); ++i) {
+        EnergyCounts cost = v.attackCost(p, owner, int(i));
+        worth += (int(i) == big ? 100 : 10) * std::abs(missing(changed, cost) - missing(have, cost)) + (cost[type] > 0);
+    }
+    return worth;
+}
+
 // My main attacker: -1 for the Active, else its Bench position. The Active wins a tie.
 int mainAttacker(const PlayerView& v) {
     int me = v.me(), main = -1;
@@ -171,6 +186,12 @@ std::size_t argmax(std::size_t n, Score score) {
 
 constexpr std::size_t None = std::size_t(-1);
 }  // namespace
+
+std::unique_ptr<Policy> makePolicy(const std::string& name) {
+    if (name == "random") return std::make_unique<RandomPolicy>();
+    if (name == "heuristic") return std::make_unique<HeuristicPolicy>();
+    throw std::runtime_error("unknown player '" + name + "' (random or heuristic)");
+}
 
 uint16_t HeuristicPolicy::kinds(const CardDef* c) {
     auto [it, fresh] = kinds_.try_emplace(c, 0);
@@ -307,12 +328,26 @@ std::size_t HeuristicPolicy::act(const PlayerView& v, const std::vector<Action>&
                 for (std::size_t b = 0; b < v.bench(me).size() && to < 0; ++b)
                     if (needs(v, v.bench(me)[b], me, zone)) to = int(b);
         }
+        if (to < 0 && mine.card->isFossil() && main >= 0) to = main;  // a Fossil has no attacks to pay for
         if ((i = attachTo(to)) != None || (i = attachTo(-1)) != None) return i;
     }
 
+    // A Fossil in the Active Spot can't retreat: discard it from play once a Benched Pokémon can attack now.
+    // Otherwise a Fossil is never discarded.
+    int benchBest = -1, to = -1;
+    for (std::size_t b = 0; b < v.bench(me).size(); ++b)
+        if (int e = bestPayable(v, v.bench(me)[b], me, theirs); e > benchBest) benchBest = e, to = int(b);
+    auto useAbility = [&](int target) {
+        return first([&](const Action& a) { return a.kind == ActionKind::UseAbility && a.target == target; });
+    };
+    if (mine.card->isFossil() && benchBest >= 0 && (i = useAbility(-1)) != None) return i;
+
     // 9. Abilities, the Stadium's action, and a Stadium when none is in play or it's the opponent's.
     if (moves_ < 40) {
-        if ((i = first([](const Action& a) { return a.kind == ActionKind::UseAbility || a.kind == ActionKind::UseStadium; })) != None)
+        if ((i = first([&](const Action& a) {
+                 return (a.kind == ActionKind::UseAbility && !(a.target < 0 ? mine : v.bench(me)[std::size_t(a.target)]).card->isFossil()) ||
+                        a.kind == ActionKind::UseStadium;
+             })) != None)
             return i;
     }
     if ((!v.stadium() || v.stadiumOwner() != me) &&
@@ -322,9 +357,6 @@ std::size_t HeuristicPolicy::act(const PlayerView& v, const std::vector<Action>&
     // 10. Retreat or switch, to a Benched Pokémon that can attack now: when my Active can't attack and that one does
     // 10 more than the Active's biggest attack would, or when my Active is worth 2 points or more and could be
     // knocked out next turn.
-    int benchBest = -1, to = -1;
-    for (std::size_t b = 0; b < v.bench(me).size(); ++b)
-        if (int e = bestPayable(v, v.bench(me)[b], me, theirs); e > benchBest) benchBest = e, to = int(b);
     int big = biggest(v, mine, me);
     int activeBig = big < 0 ? 0 : expected(mine, atk[std::size_t(big)], theirs);
     bool move = benchBest >= 0 && ((myBest < 0 && benchBest >= activeBig + 10) || (koThreat && v.koPoints(mine, me) >= 2));
@@ -345,6 +377,17 @@ std::size_t HeuristicPolicy::answer(const PlayerView& v, const std::vector<Actio
     for (std::size_t i = 0; i < opts.size(); ++i)
         if (plan_ && opts[i].uid == plan_) return i;
     const PokemonSlot &mine = v.active(me), &theirs = v.active(opp);
+    if (opts[0].type >= 0) {  // an Energy type for Pokémon uid: Gain wants the type that matters most, Lose the least
+        int owner = 0;
+        if (const PokemonSlot* p = locate(v, opts[0].uid, &owner)) {
+            bool gain = opts[0].choice == ChoiceKind::Gain;
+            bool adding = gain == (owner == me);  // mine gains it, or theirs loses it
+            return argmax(opts.size(), [&](std::size_t i) {
+                int w = energyWorth(v, *p, owner, opts[i].type, adding);
+                return gain ? w : -w;
+            });
+        }
+    }
     auto slotOf = [&](std::size_t i) {
         int owner = 0;
         return locate(v, opts[i].uid, &owner);

@@ -9,12 +9,16 @@ endif()
 add_compile_options(-Wall -Wextra)
 
 file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS src/*.cpp)
-list(REMOVE_ITEM ENGINE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
+list(REMOVE_ITEM ENGINE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/run.cpp)
 add_library(tcgp_engine ${ENGINE_SOURCES})
 target_include_directories(tcgp_engine PUBLIC src)
 
 add_executable(tcgp src/main.cpp)
 target_link_libraries(tcgp tcgp_engine)
+
+find_package(Threads REQUIRED)
+add_executable(tcgp-run src/run.cpp)
+target_link_libraries(tcgp-run tcgp_engine Threads::Threads)
 
 add_executable(test_rules tests/test_rules.cpp)
 target_link_libraries(test_rules tcgp_engine)

@@ -391,6 +391,8 @@ Updated 2026-10-19. One row per rule: what the engine does and how we know.
 | Mew B2b's "1 attack from among the Pokémon in your opponent's hand and deck": a list of every attack on those cards, one picked at random, so 2 copies make an attack twice as likely | App (2026-10-20) | ✓ |
 | Team Rocket's Boss can be played when the opponent turns out to have no Basic Pokémon in hand: looking is part of the effect | App (2026-10-20) | ✓ |
 | "Choose a spot" (Meowscarada ex, Armaldo): only a spot with a Pokémon in it can be chosen | App (2026-10-20) | ✓ |
+| A Fossil discarded from play ("at any time during your turn") isn't knocked out: no points, no knock-out triggers. An Active Fossil is replaced from the Bench; with no Pokémon left in play its owner loses | Card; the rest assumed (2026-10-20) | ✓ |
+| The player picks every Energy type that is paid (retreat), discarded, moved or taken from the discard pile, unless the text says random | Card ("in any way you like", "an Energy") | ✓ |
 | A copying attack (Mew ex, Ditto) is the attack that's used, not the copied one: a copied Sweets Relay doesn't count for Alcremie, and a copied "this Pokémon can't use X during your next turn" doesn't bind the copier | App (2026-10-20) | ✓ |
 | Fossils are Item cards outside play (deck, hand, discard pile): Pokémon searches (Poké Ball, May) don't find them, Item checks (Pachirisu) count them, Team Rocket's Boss can't bench them. In play a Fossil is a Basic Pokémon | App (2026-10-20) | ✓ |
 | **The last four (batch 12)** | | |

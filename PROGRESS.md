@@ -185,13 +185,8 @@ DESIGN.md §10 lists every rule the engine follows, with its source:
 
 These are marked `shortcut:` in the code:
 - **Capacities (batch 11):** at most 8 delayed end-of-turn effects waiting at once, and 24 different attack names counted per player per game. Timed effects hold 16 and drop the oldest, so a Miltank or Mega Mawile ex used many turns in a row could push others out.
-- **Energy type when paying for a retreat or discarding:** the engine picks the most plentiful type. The player should pick.
-- **Energy type when moving energy** (Elemental Switch, Dawn, "Move an Energy"): the engine takes the first matching type; the player should pick.
-- **Fossils:** a Fossil can't be discarded from play by choice.
 - **"Look at the top cards and put them back in any order"** (Hiker, Morty) does nothing, and Rotom Dex's "you may shuffle your deck" is dropped: nobody uses what they saw yet.
 - **Timed effects:** at most 16 at once; past that, the oldest is dropped. This has never happened in a game.
-- **Dragonair's "attach an Energy from your discard pile":** takes the most plentiful type there; the player should pick.
-- **Professor Sada's "3 different types … in any way you like":** the types come at random; the player should pick which type goes where.
 - **"During your next turn, this Pokémon's X attack does +N":** the bonus has no per-attack filter, so the compiler only accepts it on cards with one attack (all of them today).
 
 ## Known weak spots and risks
@@ -224,7 +219,9 @@ In order. Each step gets a short plan, then tests, `check_states` at 0 violation
    - B: the player network (cloning, then self-play);
    - C3–C4: the deck networks;
    - D: the loop.
-   The heuristic player is built (`tcgp --match N deckA deckB heuristic random`).
+   Built: the heuristic player; A0 (2026-10-20: the player picks every Energy type paid, discarded, moved or taken from
+   the discard pile, and may discard a Fossil from play); A1 (`tcgp-run`: one pairing or a deck matrix on all threads,
+   about 28,000 heuristic games/s, CSV out). Next: C1–C2, deck search with the heuristic player.
 
 ## Working agreements
 

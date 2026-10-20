@@ -1,4 +1,6 @@
 #pragma once
+#include <memory>
+#include <string>
 #include <unordered_map>
 
 #include "players/policy.h"
@@ -23,3 +25,5 @@ private:
     std::unordered_map<const CardDef*, uint16_t> kinds_;
     std::mt19937 rng_{std::random_device{}()};
 };
+
+std::unique_ptr<Policy> makePolicy(const std::string& name);  // a player by name: "random" or "heuristic"

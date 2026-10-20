@@ -26,7 +26,7 @@ public:
         int me = game.state().current;
         PokemonSlot& p = game.slot(me, a.target);
         p.abilityTurn = game.state().turn;
-        game.say("P", me + 1, "'s ", p.card->name, " uses ", p.card->abilities.empty() ? "its ability" : p.card->abilities[0].name);
+        game.say("P", me + 1, "'s ", p.card->name, " uses ", p.card->abilities.empty() ? "its card text" : p.card->abilities[0].name);
         EffectCtx ctx{game, me};
         ctx.self = p.uid;
         p.card->activated->run(ctx);

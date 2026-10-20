@@ -1,5 +1,6 @@
 // Energy: extra energy from the Energy Zone, and discarding attached energy.
 #include <algorithm>
+#include <bit>
 #include <random>
 
 #include "effects/effect.h"
@@ -12,6 +13,16 @@ int matching(const PokemonSlot& p, uint16_t types) {  // energy of these types a
         if (!types || (types & typeBit(Type(t)))) n += p.energy[t];
     return n;
 }
+
+uint16_t present(const EnergyCounts& e, uint16_t types) {  // the types among these (0 = any type) that e has (Type bits)
+    uint16_t out = 0;
+    for (int t = 0; t < TypeCount; ++t)
+        if (e[t] && (!types || (types & typeBit(Type(t))))) out |= typeBit(Type(t));
+    return out;
+}
+
+ChoiceKind gainFor(const EffectCtx& ctx, int owner) { return owner == ctx.player ? ChoiceKind::Gain : ChoiceKind::Lose; }
+ChoiceKind lossFor(const EffectCtx& ctx, int owner) { return owner == ctx.player ? ChoiceKind::Lose : ChoiceKind::Gain; }
 
 bool hasEnergy(const PokemonSlot& p, uint16_t types) {  // any energy of these types (0 = any type)
     for (int t = 0; t < TypeCount; ++t)
@@ -50,14 +61,16 @@ public:
         t_->select(ctx, targets);
         EnergyCounts& piles = ctx.game.state().players[ctx.player].discardEnergy;
         if (type_ <= -2) return randomOrDifferent(ctx, targets, piles);
-        // shortcut: "an Energy" takes the most plentiful type in the discard pile; the player should pick.
-        int type = type_ >= 0 ? type_ : int(std::max_element(piles.begin(), piles.end()) - piles.begin());
-        auto& pile = piles[type];
         for (uint16_t uid : targets) {
             int owner = 0;
             PokemonSlot* p = ctx.game.find(uid, &owner);
+            if (!p) continue;
+            // "an Energy": the player picks its type among those in the discard pile
+            int type = type_ >= 0 ? type_ : ctx.game.chooseEnergy(ctx.player, present(piles, 0), gainFor(ctx, owner), uid);
+            if (type < 0) continue;
+            auto& pile = piles[type];
             int k = std::min<int>(n_, pile);
-            if (!p || !k) continue;
+            if (!k) continue;
             pile -= k;
             p->energy[type] += k;
             if (ctx.game.logging()) ctx.game.say("  ", k, " ", typeName(Type(type)), " energy from the discard pile -> ", ctx.game.show(*p, owner));
@@ -70,21 +83,27 @@ public:
     }
 
 private:
+    // random: each Energy at random from the pile, onto the target. different: for each Energy the player picks where
+    // it goes ("in any way you like"), then its type among those not used yet.
     void randomOrDifferent(EffectCtx& ctx, const Uids& first, EnergyCounts& piles) const {
         uint16_t used = 0;
         for (int i = 0; i < n_; ++i) {
-            std::vector<int> units;  // one entry per Energy in the pile (random), or per type not used yet (different)
-            for (int t = 0; t < TypeCount; ++t)
-                for (int k = 0; k < (type_ == -2 ? piles[t] : (piles[t] && !(used & typeBit(Type(t))))); ++k) units.push_back(t);
-            if (units.empty()) return;
-            // shortcut: the different types come at random; the player should pick which type goes where
-            int t = units[std::uniform_int_distribution<std::size_t>(0, units.size() - 1)(ctx.game.rng())];
+            uint16_t open = present(piles, 0) & (type_ == -2 ? 0xFFFF : ~used);
+            if (!open) return;
             Uids targets;
-            if (type_ == -2) targets = first;
-            else t_->select(ctx, targets);  // "in any way you like": a choice for each Energy
+            if (type_ == -2 || i == 0) targets = first;
+            else t_->select(ctx, targets);
             int owner = 0;
             PokemonSlot* p = targets.empty() ? nullptr : ctx.game.find(targets[0], &owner);
             if (!p) return;
+            int t = 0;
+            if (type_ == -2) {  // each Energy in the pile equally likely
+                int total = 0;
+                for (auto n : piles) total += n;
+                for (int k = std::uniform_int_distribution<int>(0, total - 1)(ctx.game.rng()); k >= piles[t]; ++t) k -= piles[t];
+            } else {
+                t = ctx.game.chooseEnergy(ctx.player, open, gainFor(ctx, owner), p->uid);
+            }
             --piles[t];
             ++p->energy[t];
             used |= typeBit(Type(t));
@@ -125,7 +144,7 @@ public:
             if (!p || !affects(ctx, uid)) continue;
             int removed = 0;
             for (int i = 0; count_ < 0 || i < count_; ++i) {
-                int t = pick(ctx, *p);
+                int t = pick(ctx, *p, owner);
                 if (t < 0) break;
                 --p->energy[t];
                 ++ctx.game.state().players[owner].discardEnergy[t];  // to its owner's discard pile
@@ -139,16 +158,12 @@ public:
     }
 
 private:
-    // Which energy goes: a random one, or else the most plentiful matching type.
-    // shortcut: the player doesn't choose which energy to discard; make it a choice once multi-type decks matter.
-    int pick(EffectCtx& ctx, const PokemonSlot& p) const {
-        int total = 0, best = -1;
-        for (int t = 0; t < TypeCount; ++t) {
-            if (types_ && !(types_ & typeBit(Type(t)))) continue;
-            total += p.energy[t];
-            if (p.energy[t] && (best < 0 || p.energy[t] > p.energy[best])) best = t;
-        }
-        return random_ && total ? randomEnergy(ctx, p, types_) : best;
+    // Which energy goes: a random one, or the player's pick among the matching types ("all" needs no pick).
+    int pick(EffectCtx& ctx, const PokemonSlot& p, int owner) const {
+        if (random_) return randomEnergy(ctx, p, types_);
+        uint16_t open = present(p.energy, types_);
+        if (count_ < 0) return open ? std::countr_zero(open) : -1;
+        return ctx.game.chooseEnergy(ctx.player, open, lossFor(ctx, owner), p.uid);
     }
 
     const Target* t_;
@@ -158,7 +173,7 @@ private:
 };
 // (move-energy FROM TO TYPE…|any N|all): move up to N energy (of those types) from the FROM Pokémon to TO.
 // (move-random-energy FROM TO N): the same with random energy.
-// shortcut: move-energy takes the first matching type, not the player's pick (ruling: the player picks); see PROGRESS.md step 4.
+// The player picks the type of each Energy that moves (ruling), unless all of them move.
 class MoveEnergy : public Stmt {
 public:
     MoveEnergy(const Target* from, const Target* to, uint16_t types, int count, bool random = false)
@@ -175,9 +190,10 @@ public:
             PokemonSlot* from = ctx.game.find(uid);
             if (!from || from == to) continue;
             while (count_ < 0 || moved < count_) {
-                int t = random_ ? randomEnergy(ctx, *from, types_) : -1;
-                for (int k = 0; !random_ && k < TypeCount && t < 0; ++k)
-                    if (from->energy[k] && (!types_ || (types_ & typeBit(Type(k))))) t = k;
+                uint16_t open = present(from->energy, types_);
+                int t = random_ ? randomEnergy(ctx, *from, types_)
+                        : count_ < 0 ? (open ? std::countr_zero(open) : -1)
+                                     : ctx.game.chooseEnergy(ctx.player, open, gainFor(ctx, owner), to->uid);
                 if (t < 0) break;
                 --from->energy[t];
                 ++to->energy[t];

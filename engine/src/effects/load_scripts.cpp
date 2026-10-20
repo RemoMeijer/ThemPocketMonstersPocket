@@ -26,6 +26,7 @@
 //              (stadium-action STMT)       a Stadium: "Once during each player's turn, that player may…" (player = them)
 //              (stadium-end-of-turn STMT)  a Stadium: "At the end of each player's turn, that player…" (player = them)
 //              (passive MOD…)  a Fossil played as a Pokémon
+//              (activated …)   a Fossil: "you may discard this card from play", as for abilities but not one (never off)
 #include <fstream>
 #include <stdexcept>
 #include <string>
@@ -148,6 +149,8 @@ void readCardText(CardDef& c, const SExpr& e, ScriptBuilder& b) {
     }
     else if (form == "passive" && c.isPokemon())
         modifiers(c, e, b, ModScope::Self);
+    else if (form == "activated" && c.isFossil())  // "you may discard this card from play": not an Ability, so never off
+        readAbility(c, e, b);
     else
         scriptFail("'" + form + "' doesn't fit this card", e);
 }

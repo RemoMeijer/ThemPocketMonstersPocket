@@ -97,7 +97,13 @@ Play and print one game:
 engine/build/tcgp decks/pikachu.txt decks/gardevoir.txt
 ```
 
-Win rate of one deck against another, with a player for each (`random` or `heuristic`; the first player alternates):
+Many games on all threads: one pairing, or with more decks the full matrix (`--games N`, `--p0`/`--p1 random|heuristic`, `--csv FILE`):
+
+```bash
+engine/build/tcgp-run --games 1000 decks/pikachu.txt decks/charizard.txt decks/gardevoir.txt
+```
+
+Win rate of one deck against another on one thread, with a player for each (`random` or `heuristic`; the first player alternates):
 
 ```bash
 engine/build/tcgp --match 2000 decks/pikachu.txt decks/charizard.txt heuristic heuristic

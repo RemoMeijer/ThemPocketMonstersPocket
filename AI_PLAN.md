@@ -3,7 +3,8 @@
 Rewritten 2026-10-20. Built so far:
 - every card plays, and golden tests guard the scripts;
 - the heuristic player: about 99% wins against random, about 2% draws in a mirror;
-- choice descriptors: every choice says what its options are.
+- choice descriptors: every choice says what its options are;
+- A0 (every Energy-type choice and the Fossil discard go to the player) and A1 (`tcgp-run`).
 
 ## The goal
 
