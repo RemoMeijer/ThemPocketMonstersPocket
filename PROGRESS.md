@@ -175,7 +175,6 @@ DESIGN.md §10 lists every rule the engine follows, with its source:
 - Evolving ends other effects on the Pokémon.
 
 **Open questions:**
-- **Unown POWER (A4-085):** +10 per POWER Unown in play, so two give +20. Does it stack in the game?
 - **Necrozma:** Serebii lists Dawn Wings Necrozma, Dusk Mane Necrozma and Ultra Necrozma ex (P-A promos) as Ultra Beasts; `data/traits.tsv` follows it. Are they Ultra Beasts in the app?
 - **Team Rocket's Thieving Machine:** once you play the Item it took, does it go to your discard pile (assumed) or back to your opponent's?
 - **Will and "your opponent flips a coin" effects** (an attack that says "if the Defending Pokémon tries to use an attack, your opponent flips a coin"): when the Will player then attacks, built as the next effect coin, so it comes up heads. Confusion doesn't count. Confirm.
