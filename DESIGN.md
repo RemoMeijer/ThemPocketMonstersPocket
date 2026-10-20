@@ -157,13 +157,16 @@ argument count):
 What guards against it today:
 - `data/effects.tsv` is in git, so every regenerated script shows as a diff;
 - the compiler has a self-test (86 examples);
+- **golden tests** (2026-10-20): `data/golden.tsv` holds 487 real cards, each with its text and its reviewed scripts.
+  They were picked so that every sentence pattern the compiler uses (384 of them, the inline ones included) appears on
+  at least two of them, plus every hand-written card. `compile_effects.py --test` fails when a script or a card's text
+  changes. After an intended change, review the diff and take it with `--accept-golden`;
+- `data/effects_manual.tsv` for odd cards, so the patterns don't grow ever more specific;
 - the coverage report;
 - unit tests for the blocks.
 
-`check_states` doesn't help: it checks the rules, not whether a script matches its card. Proposed additions:
-- real-card golden tests (actual card text and its expected script, a few per sentence family);
-- a review of the `effects.tsv` diff for each new set;
-- `effects_manual.tsv` for odd cards, so the patterns don't grow ever more specific.
+`check_states` doesn't help here: it checks the rules, not whether a script matches its card. For each new set, also
+review the `effects.tsv` diff.
 
 **C++ side:** each script is parsed once when the cards load, into a tree of small block objects, one class per word. An unknown word makes the card unsupported and names the word. Nothing gets parsed during a game.
 

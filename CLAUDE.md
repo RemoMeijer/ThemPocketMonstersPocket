@@ -18,7 +18,6 @@ The current focus is a correct engine: the right cards and the right rules. Stat
   - coverage batches 0–12 (batches 11–12: the one-offs, hand-written in `data/effects_manual.tsv`; Trainers: 144 of 152 now; all 13 Stadiums and all 26 Tools; memory of the last turn; knock-out triggers; about 70 Abilities; the long tail; Ultra Beast, Ancient and Future traits in `data/traits.tsv`).
 - **Next** (PROGRESS.md, "Next"):
   - card coverage is done: every card plays;
-  - effect-script checks (golden tests);
   - seeds;
   - player choices;
   - the simulation runner (milestone 3);
@@ -136,7 +135,7 @@ For memory and undefined-behaviour checks, `engine/build-debug` is configured wi
 - **Before calling something done:**
   - the tests pass;
   - `./check_all.sh` reports 0 violations, and the sanitizer build is clean on the new decks;
-  - `compile_effects.py`'s self-test passes, and no existing script in `data/effects.tsv` changed unless that was the point;
+  - `python3 compile_effects.py --test` passes: the self-test and the golden test (`data/golden.tsv`, 487 reviewed real cards). No existing script in `data/effects.tsv` changed unless that was the point; after an intended change, review the diff and run `--accept-golden`;
   - after a data change, `check_cards.py` reports 0 differences;
   - when adding patterns, check every new script against its card text.
 - **Keeping the context small** (a long session fills up fast):

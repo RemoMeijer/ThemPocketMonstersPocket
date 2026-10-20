@@ -175,6 +175,7 @@ DESIGN.md §10 lists every rule the engine follows, with its source:
 - Evolving ends other effects on the Pokémon.
 
 **Open questions:**
+- **Unown POWER (A4-085):** +10 per POWER Unown in play, so two give +20. Does it stack in the game?
 - **Necrozma:** Serebii lists Dawn Wings Necrozma, Dusk Mane Necrozma and Ultra Necrozma ex (P-A promos) as Ultra Beasts; `data/traits.tsv` follows it. Are they Ultra Beasts in the app?
 - **Team Rocket's Thieving Machine:** once you play the Item it took, does it go to your discard pile (assumed) or back to your opponent's?
 - **Will and "your opponent flips a coin" effects** (an attack that says "if the Defending Pokémon tries to use an attack, your opponent flips a coin"): when the Will player then attacks, built as the next effect coin, so it comes up heads. Confusion doesn't count. Confirm.
@@ -188,7 +189,7 @@ These are marked `shortcut:` in the code:
 - **Energy type when paying for a retreat or discarding:** the engine picks the most plentiful type. The player should pick.
 - **Energy type when moving energy** (Elemental Switch, Dawn, "Move an Energy"): the engine takes the first matching type; the player should pick.
 - **Fossils:** a Fossil can't be discarded from play by choice.
-- **"Look at the top cards and put them back in any order"** (Hiker, Morty) does nothing.
+- **"Look at the top cards and put them back in any order"** (Hiker, Morty) does nothing, and Rotom Dex's "you may shuffle your deck" is dropped: nobody uses what they saw yet.
 - **Clemont's Backpack:** its "+20 to your opponent's Pokémon" isn't supported, because damage bonuses only count against the Active. The card stays unsupported.
 - **Timed effects:** at most 16 at once; past that, the oldest is dropped. This has never happened in a game.
 - **Dragonair's "attach an Energy from your discard pile":** takes the most plentiful type there; the player should pick.
@@ -199,7 +200,7 @@ These are marked `shortcut:` in the code:
 
 - **Card text → scripts is pattern-based.** A pattern that matches but means something slightly different makes a card play wrong without any check noticing. That's how three of the four review bugs got in.
   - Guards today: the `effects.tsv` diff reviewed per change, the self-test examples, the argument-count check, the engine tests and `check_states`.
-  - Missing: real-card golden tests (step 2 under Next).
+  - Golden tests (2026-10-20): 487 reviewed real cards in `data/golden.tsv` cover every sentence pattern at least twice; `compile_effects.py --test` checks them.
 - **Alolan Muk's check scans the board** each time a modifier is read from a card with an Ability. Speed looked fine in the 21-deck check, but it hasn't been measured.
 - **A modifier's `:if` condition is asked while the rules ask about modifiers.** A condition that asks a player to choose, or that asks about HP while an HP modifier has its own `:if`, would go wrong. The compiler only writes simple "this Pokémon has…" tests there today.
 - **Numbers and tests look at the first Pokémon only.** Words like `has-damage` and `is-ex` read only the first Pokémon a target picks. With a `(choose …)` target, they would even ask for a choice in the middle of an evaluation. No script does that today.
@@ -213,7 +214,7 @@ These are marked `shortcut:` in the code:
 In order. Each step gets a short plan, then tests, `check_states` at 0 violations, a sanitizer run and a commit. For coverage batches (2026-10-19): commit freely, run batches back to back, and report every two batches or so. Rule questions are asked first. **Big batches** work best: survey many cards, ask all rule questions at once, build them all with only the quick checks (tests, self-test), then run `./check_all.sh` and the sanitizer once and fix everything together.
 
 1. **Card coverage is done** (batch 12): every card plays.
-2. **Effect-script checks:** real-card golden tests, meaning card text plus its expected script, a few per sentence family; a review of the `effects.tsv` diff for each new set; and `data/effects_manual.tsv` for odd cards. This is next: golden tests over all cards, the hand-written ones included.
+2. **Effect-script checks: done** (2026-10-20). `data/golden.tsv`: 487 real cards picked so every compiler pattern appears on at least two, plus all hand-written cards, reviewed against their text by three subagents (468 scripts). The review fixed Vaporeon-style "move Energy from a Benched Pokémon" (the source must hold that Energy: 4 cards) and Polteageist (its "you may" kept). For a new set: review the `effects.tsv` diff, add a card per new pattern to `golden.tsv`, then `--accept-golden`.
 3. **Seeds:** one seed per game, from which the shuffles, coins and random player all follow. Then failures can be replayed, and two decks can be compared on the same luck.
 4. **Player choices the engine makes today:** which energy type to pay, discard or move (the player should pick), and discarding a Fossil.
 5. **The simulation runner (milestone 3, AI_PLAN.md M0):** many games over threads; win, draw and loss per pairing with a confidence interval; the first player alternates. About 2,400 games per pairing give ±2%.

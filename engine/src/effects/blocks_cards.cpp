@@ -313,7 +313,7 @@ public:
         PokemonSlot& target = ctx.game.slot(ctx.player, t);
         ctx.game.evolve(target, p.hand.take(h));
         ctx.game.say("  ", target.below.back()->name, " evolves straight into ", target.card->name);
-        if (target.card->onEvolve) {
+        if (target.card->onEvolve && !ctx.game.abilitiesOff(target)) {
             EffectCtx inner{ctx.game, ctx.player};
             inner.self = target.uid;
             target.card->onEvolve->run(inner);

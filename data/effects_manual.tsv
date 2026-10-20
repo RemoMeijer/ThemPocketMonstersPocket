@@ -100,3 +100,5 @@ B2-130	ability:0	(activated :active (use-supporter opp hand))
 B3-025	ability:0	(passive (reflip-attack :type fire))
 # Gholdengo: once a turn, flip again the coins of your Trainer card's effect
 B4a-051	ability:0	(passive (reflip-trainer))
+# Polteageist: "you may" kept, since a refill for the opponent can hurt (golden review)
+B2-075	ability:0	(on-evolve (one-of (shuffle-hand-draw opp (points-needed opp)) (nothing)))

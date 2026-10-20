@@ -6,7 +6,8 @@ matches becomes one script; anything else is left out, and the engine then treat
 unsupported. The script language is described in DESIGN.md §4 and engine/src/effects/load_scripts.cpp.
 
   python3 compile_effects.py          compile, and list the sentences that matched nothing
-  python3 compile_effects.py --test   only run the self-test
+  python3 compile_effects.py --test   only run the self-test and the golden test (data/golden.tsv)
+  python3 compile_effects.py --accept-golden   take the current output into data/golden.tsv, after reviewing the diff
 data/effects_manual.tsv holds hand-written scripts for one-off cards; a card listed there skips the patterns.
 """
 import csv
@@ -225,7 +226,10 @@ def move_energy(m):
             return m.group("f_" + g) if isinstance(g, str) else m.group(g)
     types = " ".join(t(x) for x in re.findall(E, m.group(2))) or "any"
     count = "all" if m.group(1) == "all" else num(m.group(1))
-    return f"(move-energy {target(From())} {target(m)} {types} {count})"
+    source = target(From())
+    if source.startswith("(choose"):  # only a Pokémon with that Energy is worth picking
+        source = source[:-1] + (" (has-energy 1)" if types == "any" else f" (has-energy 1 {types})") + ")"
+    return f"(move-energy {source} {target(m)} {types} {count})"
 
 
 def attack_index(ctx, name):
@@ -1234,7 +1238,7 @@ EXAMPLES = [
     ("Supporter", "", "Heal 30 damage from 1 of your Pokémon, and it recovers from all Special Conditions.",
      "(play (pick (choose my all) (seq (heal picked 30) (cure picked))))"),
     ("Supporter", "", "Move an Energy from 1 of your Benched Pokémon to your Active Pokémon.",
-     "(play (move-energy (choose my bench) my-active any 1))"),
+     "(play (move-energy (choose my bench (has-energy 1)) my-active any 1))"),
     ("Supporter", "", "Move all {L} Energy from your Benched Pokémon to your Raichu, Electrode, or Electabuzz in the Active Spot.",
      '(play (move-energy (each my bench) (choose my active (name "Raichu" "Electrode" "Electabuzz")) lightning all))'),
     ("Item", "", "Flip a coin. If heads, take a Lightning Energy from your Energy Zone and attach it to 1 of your Benched Lightning Pokémon.",
@@ -1376,17 +1380,66 @@ def self_test():
     print(f"self-test: {len(EXAMPLES)} examples ok")
 
 
-def main():
-    self_test()
-    if "--test" in sys.argv:
-        return
-    rows = list(csv.DictReader((DATA / "cards.tsv").open(), delimiter="\t", quoting=csv.QUOTE_NONE))
+def part_text(row, part):
+    """The card text a script part comes from, as golden.tsv shows it."""
+    kind, _, n = part.partition(":")
+    if kind == "attack":
+        name, cost, damage, effect = row["attacks"].split("|")[int(n)].split("~")
+        return f"attack {name} {cost} {damage}: {effect}"
+    if kind == "ability":
+        if not row["abilities"]:  # a hand-written passive for a rule in the attack text (Mesprit, Boltund)
+            return "ability (none on the card: a rule from its attack text)"
+        name, effect = row["abilities"].split("|")[int(n)].split("~")
+        return f"ability {name}: {effect}"
+    return f"{row['stage'] or row['category']}: {row['effect']}"
+
+
+def golden_test(rows, manual, accept=False):
+    """Real cards with their reviewed scripts (data/golden.tsv): the compiler must still write exactly these, from exactly
+    this text. After an intended change, review the differences and take them with --accept-golden."""
+    path = DATA / "golden.tsv"
+    golden = {}  # card id -> its rows in order: (part, text, script)
+    for line in path.read_text().splitlines()[1:]:
+        if line and not line.startswith("#"):
+            card, part, text, script = line.split("\t")
+            golden.setdefault(card, []).append((part, text, script))
+    by_id = {r["id"]: r for r in rows}
+    out, bad = [], 0
+    for card, want in golden.items():
+        row = by_id.get(card)
+        scripts = (manual[card] if card in manual else compile_row(row)[0]) if row else []
+        now = [(part, part_text(row, part), script) for part, script in scripts]
+        if now != want:
+            bad += 1
+            if not accept and bad <= 10:
+                print(f"golden: {card}\n  was {want}\n  now {now}")
+        out += [f"{card}\t{part}\t{text}\t{script}" for part, text, script in now]
+    if accept:
+        path.write_text(path.read_text().splitlines()[0] + "\n" + "\n".join(out) + "\n")
+        print(f"golden: {len(golden)} cards taken from the current output")
+    elif bad:
+        sys.exit(f"golden: {bad} of {len(golden)} cards differ")
+    else:
+        print(f"golden: {len(golden)} real cards ok")
+
+
+def load_manual(rows):
     manual = {}  # hand-written scripts for one-off cards: they replace every compiled script of that card
     for line in (DATA / "effects_manual.tsv").read_text().splitlines()[1:]:
         if line and not line.startswith("#"):
             card, part, script = line.split("\t")
             manual.setdefault(card, []).append((part, script))
     assert not set(manual) - {r["id"] for r in rows}, f"unknown ids in effects_manual.tsv: {set(manual) - {r['id'] for r in rows}}"
+    return manual
+
+
+def main():
+    self_test()
+    rows = list(csv.DictReader((DATA / "cards.tsv").open(), delimiter="\t", quoting=csv.QUOTE_NONE))
+    manual = load_manual(rows)
+    golden_test(rows, manual, accept="--accept-golden" in sys.argv)
+    if "--test" in sys.argv or "--accept-golden" in sys.argv:
+        return
     lines, failures, complete = ["id\tpart\tscript"], Counter(), 0
     for row in rows:
         scripts, failed = (manual[row["id"]], []) if row["id"] in manual else compile_row(row)
